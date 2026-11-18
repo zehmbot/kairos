@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router";
 import type { Note } from "../../shared/types.ts";
 import { useAddNote, useFilm, useHealth, useNotes, useOpenFilmFolder } from "../api.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
+import { FrameRateDialog } from "../components/FrameRateDialog.tsx";
 import { MarksLayer } from "../components/MarksLayer.tsx";
 import { MarkTools } from "../components/MarkTools.tsx";
 import { NoteForm } from "../components/NoteForm.tsx";
@@ -38,6 +39,7 @@ export function FilmPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [showMarks, setShowMarks] = useState(true);
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [rateOpen, setRateOpen] = useState(false);
 
   // Live reload: any saved file in this film reloads the preview.
   useHubEvent((event) => {
@@ -140,7 +142,8 @@ export function FilmPage() {
     preview = (
       <div className="stack">
         <Player
-          key={film.data.id}
+          // A new frame rate starts the player over (frame numbers mean other times now).
+          key={`${film.data.id}@${config.fps}`}
           ref={playerRef}
           src={`${filmOrigin}${previewPath}`}
           title={config.title}
@@ -170,9 +173,23 @@ export function FilmPage() {
           <h1>{config?.title ?? film.data.id}</h1>
           {config && <span className="px-tag">{config.status}</span>}
           <p className="film-meta">
-            {config
-              ? `${config.width} × ${config.height} · ${config.fps} fps · ${formatLength(config.duration)} · ${frameCount(config.duration, config.fps)} frames`
-              : path}
+            {config ? (
+              <>
+                {config.width} × {config.height} ·{" "}
+                <button
+                  type="button"
+                  className="film-meta-button"
+                  title="Change the frame rate"
+                  onClick={() => setRateOpen(true)}
+                >
+                  {config.fps} fps
+                  <PixelIcon name="pen" size={16} />
+                </button>{" "}
+                · {formatLength(config.duration)} · {frameCount(config.duration, config.fps)} frames
+              </>
+            ) : (
+              path
+            )}
           </p>
           <PixelButton
             variant="ghost"
@@ -238,6 +255,15 @@ export function FilmPage() {
           </div>
         )}
       </div>
+
+      {config && (
+        <FrameRateDialog
+          open={rateOpen}
+          onClose={() => setRateOpen(false)}
+          filmId={film.data.id}
+          fps={config.fps}
+        />
+      )}
     </div>
   );
 }

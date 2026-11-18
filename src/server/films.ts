@@ -1,7 +1,15 @@
 import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
 import { z } from "zod";
-import { FILM_SHAPES, type FilmConfig, FilmConfigSchema, type NewFilm } from "../shared/types.ts";
+import {
+  DEFAULT_FPS,
+  FILM_SHAPES,
+  type FilmChange,
+  type FilmConfig,
+  FilmConfigSchema,
+  type NewFilm,
+} from "../shared/types.ts";
+import { writeFileAtomic } from "./atomic-write.ts";
 import { isSafeFilmId, resolveInside } from "./workspace.ts";
 
 export const CONFIG_FILE = "kairos.json";
@@ -182,7 +190,7 @@ export async function createFilm(
       title: input.title,
       width: shape.width,
       height: shape.height,
-      fps: 30,
+      fps: input.fps ?? DEFAULT_FPS,
       duration: 5,
       status: "draft",
       page: "index.html",
@@ -194,4 +202,36 @@ export async function createFilm(
   }
 
   return id;
+}
+
+/** `kairos.json` can't be changed because it is broken. Kairos leaves it alone, so nothing is lost. */
+export class FilmConfigError extends Error {}
+
+/**
+ * Changes settings in a film's `kairos.json` (`filmDir` must be a film folder).
+ * Every other field, even ones Kairos doesn't know, is kept as it was, in the same order.
+ */
+export async function changeFilm(filmDir: string, change: FilmChange): Promise<FilmConfig> {
+  const file = join(filmDir, CONFIG_FILE);
+  const text = await readFile(file, "utf8");
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch (error) {
+    throw new FilmConfigError(
+      `${CONFIG_FILE} is not valid JSON, so Kairos won't change it. Fix it first: ${(error as Error).message}`,
+    );
+  }
+  if (typeof json !== "object" || json === null || Array.isArray(json)) {
+    throw new FilmConfigError(`${CONFIG_FILE} must hold an object, so Kairos won't change it.`);
+  }
+  const next = { ...json, ...change };
+  const parsed = FilmConfigSchema.safeParse(next);
+  if (!parsed.success) {
+    throw new FilmConfigError(
+      `${CONFIG_FILE} has a problem, so Kairos won't change it. Fix it first:\n${z.prettifyError(parsed.error)}`,
+    );
+  }
+  await writeFileAtomic(file, `${JSON.stringify(next, null, 2)}\n`);
+  return parsed.data;
 }

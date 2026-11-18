@@ -1,9 +1,10 @@
-import { type InputHTMLAttributes, useId } from "react";
+import { type InputHTMLAttributes, type Ref, useId } from "react";
 
 interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
   hint?: string;
   error?: string | null;
+  ref?: Ref<HTMLInputElement>;
 }
 
 export function TextField({ label, hint, error, id, ...rest }: TextFieldProps) {

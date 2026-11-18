@@ -15,6 +15,16 @@ export type Health = z.infer<typeof HealthSchema>;
 export const FilmStatusSchema = z.enum(["draft", "review", "approved", "published", "archived"]);
 export type FilmStatus = z.infer<typeof FilmStatusSchema>;
 
+/** Frames per second a film may use, and the one new films start with. */
+export const MIN_FPS = 1;
+export const MAX_FPS = 120;
+export const DEFAULT_FPS = 30;
+
+export const FpsSchema = z
+  .number({ error: "The frame rate must be a number." })
+  .min(MIN_FPS, `The frame rate must be at least ${MIN_FPS} frame per second.`)
+  .max(MAX_FPS, `The frame rate can be at most ${MAX_FPS} frames per second.`);
+
 /**
  * `kairos.json` at the root of every film folder.
  * The film page itself exposes `window.renderOut(t)`, `window.READY` and `window.KAIROS_SCENES`.
@@ -23,7 +33,7 @@ export const FilmConfigSchema = z.object({
   title: z.string().min(1),
   width: z.number().int().positive().default(1920),
   height: z.number().int().positive().default(1080),
-  fps: z.number().positive().default(30),
+  fps: FpsSchema.default(DEFAULT_FPS),
   /** Length in seconds. */
   duration: z.number().positive(),
   status: FilmStatusSchema.default("draft"),
@@ -55,8 +65,14 @@ export const NewFilmSchema = z.object({
     .min(1, "Give your film a name.")
     .max(80, "Keep the name under 80 letters."),
   shape: FilmShapeSchema,
+  fps: FpsSchema.default(DEFAULT_FPS),
 });
-export type NewFilm = z.infer<typeof NewFilmSchema>;
+/** What the client sends (`fps` may be left out). */
+export type NewFilm = z.input<typeof NewFilmSchema>;
+
+/** PATCH /api/films/:id: film settings the app can change in `kairos.json`. */
+export const FilmChangeSchema = z.object({ fps: FpsSchema });
+export type FilmChange = z.infer<typeof FilmChangeSchema>;
 
 /** One film folder, as the hub sees it. */
 export const FilmSummarySchema = z.object({

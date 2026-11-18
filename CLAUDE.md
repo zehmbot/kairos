@@ -35,11 +35,13 @@ public/       Static files copied as-is into the UI build
 
 ## Films
 
-A film is a folder in `<workspace>/films/` with `kairos.json` (title, size, fps, duration, status, page) and a page
-that defines `window.renderOut(t)`, a pure function of `t` that may return a Promise. The film server serves it
-on its own origin (so film code can't reach the API), never caches, and injects `src/film/bridge.js`. The player
-talks to the bridge with `postMessage` (`src/shared/film-protocol.ts`): it sends `seek`, the film answers
-`frame`. File changes reach the UI as Server-Sent Events on `/api/events` and reload the preview.
+A film is a folder in `<workspace>/films/` with `kairos.json` (title, size, fps 1 to 120, duration, status,
+page) and a page that defines `window.renderOut(t)`, a pure function of `t` that may return a Promise. The film
+server serves it on its own origin (so film code can't reach the API), never caches, and injects
+`src/film/bridge.js`. The player talks to the bridge with `postMessage` (`src/shared/film-protocol.ts`): it sends
+`seek`, the film answers `frame`. File changes reach the UI as Server-Sent Events on `/api/events` and reload the
+preview. The app changes `kairos.json` only through `changeFilm` in `src/server/films.ts`, which keeps unknown
+fields and never touches a broken file.
 
 **Frame notes** live in the film folder: `.kairos/notes.json` and `.kairos/notes/<id>.png` (live reload ignores
 `.kairos/`). Times are in seconds and marks are in film pixels. Only the hub writes notes (`src/server/notes.ts`:

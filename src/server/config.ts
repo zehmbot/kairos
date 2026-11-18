@@ -1,7 +1,8 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { type AppConfig, AppConfigSchema } from "../shared/types.ts";
+import { writeFileAtomic } from "./atomic-write.ts";
 
 /** Folder for Kairos' own settings: `~/.kairos`, or `KAIROS_HOME` when set. */
 export function kairosHome(): string {
@@ -32,8 +33,5 @@ export async function loadConfig(home: string): Promise<AppConfig> {
 
 export async function saveConfig(home: string, config: AppConfig): Promise<void> {
   await mkdir(home, { recursive: true });
-  const file = configFile(home);
-  const temp = `${file}.tmp`;
-  await writeFile(temp, `${JSON.stringify(config, null, 2)}\n`, "utf8");
-  await rename(temp, file);
+  await writeFileAtomic(configFile(home), `${JSON.stringify(config, null, 2)}\n`);
 }

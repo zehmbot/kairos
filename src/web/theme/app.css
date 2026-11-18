@@ -432,24 +432,27 @@ code {
   color: var(--accent);
 }
 
-.shape-picker {
+.choice-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
 }
 
-.shape-picker legend {
+.choice-picker legend {
   margin-bottom: 8px;
 }
 
-.shape-options {
+.choice-cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
-.shape-option {
+.choice-card {
   --option-line: var(--line);
   display: flex;
   flex-direction: column;
@@ -467,16 +470,16 @@ code {
     var(--px) 0 0 0 var(--option-line);
 }
 
-.shape-option:hover {
+.choice-card:hover {
   --option-line: var(--text-muted);
 }
 
-.shape-option:has(input:checked) {
+.choice-card:has(input:checked) {
   --option-line: var(--accent);
   color: var(--accent);
 }
 
-.shape-option:has(input:focus-visible) {
+.choice-card:has(input:focus-visible) {
   outline: var(--px) solid var(--highlight);
   outline-offset: 2px;
 }
@@ -493,14 +496,33 @@ code {
   box-shadow: 0 0 0 var(--px) currentColor;
 }
 
-.shape-label {
+.choice-label {
   font-family: var(--font-pixel);
   font-size: 10px;
+  line-height: 1.6;
+  text-align: center;
   text-transform: uppercase;
 }
 
-.shape-ratio {
+.choice-sub {
   font-size: 16px;
+}
+
+.rate-cards {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.rate-value {
+  display: grid;
+  place-items: center;
+  height: 40px;
+  font-family: var(--font-pixel);
+  font-size: 18px;
+}
+
+.rate-hint {
+  font-size: 16px;
+  color: var(--text-muted);
 }
 
 /* ---------- Film cards ---------- */
@@ -926,6 +948,28 @@ code {
   overflow-wrap: anywhere;
 }
 
+/* The frame rate in the details line opens "Change frame rate". */
+.film-meta-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.film-meta-button:hover {
+  color: var(--highlight);
+}
+
+.film-meta-button:focus-visible {
+  outline: var(--px) solid var(--highlight);
+  outline-offset: 2px;
+}
+
 .film-title-row > .px-btn {
   margin-left: auto;
 }
@@ -1040,8 +1084,12 @@ code {
     --stage-max: 50vh;
   }
 
-  .shape-options {
+  .choice-cards {
     gap: 8px;
+  }
+
+  .rate-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .note-row {

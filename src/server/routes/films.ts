@@ -1,6 +1,13 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { type FilmSummary, NewFilmSchema } from "../../shared/types.ts";
-import { createFilm, type Film, readFilm, scanFilms } from "../films.ts";
+import { FilmChangeSchema, type FilmSummary, NewFilmSchema } from "../../shared/types.ts";
+import {
+  changeFilm,
+  createFilm,
+  type Film,
+  FilmConfigError,
+  readFilm,
+  scanFilms,
+} from "../films.ts";
 import { openFolder } from "../open-folder.ts";
 import type { Studio } from "../studio.ts";
 import { sendError } from "./errors.ts";
@@ -43,6 +50,27 @@ export function filmRoutes(app: FastifyInstance, studio: Studio): void {
       return sendError(reply, 500, "create-failed", "The film was made but can't be read.");
     }
     return reply.code(201).send(summary(film));
+  });
+
+  app.patch<{ Params: IdParams }>("/api/films/:id", async (request, reply) => {
+    const dir = studio.filmsDir;
+    if (!dir) return noWorkspace(reply);
+    const body = FilmChangeSchema.safeParse(request.body);
+    if (!body.success) {
+      return sendError(reply, 400, "bad-request", body.error.issues[0]?.message ?? "Bad request.");
+    }
+    const film = await readFilm(dir, request.params.id);
+    if (!film) return notFound(reply);
+    try {
+      await changeFilm(film.path, body.data);
+    } catch (error) {
+      if (error instanceof FilmConfigError) {
+        return sendError(reply, 409, "film-config", error.message);
+      }
+      throw error;
+    }
+    const changed = await readFilm(dir, film.id);
+    return changed ? summary(changed) : notFound(reply);
   });
 
   app.post<{ Params: IdParams }>("/api/films/:id/open-folder", async (request, reply) => {

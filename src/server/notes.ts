@@ -3,7 +3,7 @@
  * Writes are atomic (temp file + rename) and run one at a time per film, so notes are never lost.
  */
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import {
@@ -14,6 +14,7 @@ import {
   NotesFileSchema,
   type NoteUpdate,
 } from "../shared/types.ts";
+import { writeFileAtomic } from "./atomic-write.ts";
 
 export const KAIROS_DIR = ".kairos";
 const NOTES_FILE = "notes.json";
@@ -67,24 +68,8 @@ async function readNotes(filmDir: string): Promise<Note[]> {
 }
 
 async function writeNotes(filmDir: string, notes: Note[]): Promise<void> {
-  const file = notesFile(filmDir);
   await mkdir(join(filmDir, KAIROS_DIR), { recursive: true });
-  const temp = `${file}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
-  await writeFile(temp, `${JSON.stringify({ version: 1, notes }, null, 2)}\n`, "utf8");
-  // Windows can briefly lock a file (antivirus, sync tools): try the swap a few times.
-  for (let attempt = 1; ; attempt++) {
-    try {
-      await rename(temp, file);
-      return;
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (attempt >= 5 || (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES")) {
-        await rm(temp, { force: true });
-        throw error;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 40 * attempt));
-    }
-  }
+  await writeFileAtomic(notesFile(filmDir), `${JSON.stringify({ version: 1, notes }, null, 2)}\n`);
 }
 
 const queues = new Map<string, Promise<unknown>>();

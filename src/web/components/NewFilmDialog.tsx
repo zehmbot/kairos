@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { FILM_SHAPES, type FilmShape } from "../../shared/types.ts";
+import { DEFAULT_FPS, FILM_SHAPES, type FilmShape } from "../../shared/types.ts";
 import { useCreateFilm } from "../api.ts";
+import { FrameRatePicker, useFrameRate } from "./FrameRatePicker.tsx";
 import { PixelButton } from "./PixelButton.tsx";
 import { TextField } from "./TextField.tsx";
 
@@ -19,9 +20,11 @@ export function NewFilmDialog({ open, onClose }: NewFilmDialogProps) {
   const headingId = useId();
   const [title, setTitle] = useState("");
   const [shape, setShape] = useState<FilmShape>("wide");
+  const rate = useFrameRate(DEFAULT_FPS);
   const create = useCreateFilm();
   const navigate = useNavigate();
   const { reset } = create;
+  const resetRate = rate.reset;
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -29,12 +32,13 @@ export function NewFilmDialog({ open, onClose }: NewFilmDialogProps) {
     if (open && !dialog.open) {
       setTitle("");
       setShape("wide");
+      resetRate(DEFAULT_FPS);
       reset();
       dialog.showModal();
     } else if (!open && dialog.open) {
       dialog.close();
     }
-  }, [open, reset]);
+  }, [open, reset, resetRate]);
 
   return (
     <dialog
@@ -47,8 +51,9 @@ export function NewFilmDialog({ open, onClose }: NewFilmDialogProps) {
         className="form"
         onSubmit={(event) => {
           event.preventDefault();
+          if (rate.fps === null) return;
           create.mutate(
-            { title, shape },
+            { title, shape, fps: rate.fps },
             {
               onSuccess: (film) => {
                 onClose();
@@ -70,13 +75,13 @@ export function NewFilmDialog({ open, onClose }: NewFilmDialogProps) {
           autoComplete="off"
           error={create.error?.message}
         />
-        <fieldset className="shape-picker">
+        <fieldset className="choice-picker">
           <legend className="field-label">Shape</legend>
-          <div className="shape-options">
+          <div className="choice-cards">
             {SHAPES.map(([key, info]) => {
               const fit = SHAPE_BOX / Math.max(info.width, info.height);
               return (
-                <label key={key} className="shape-option">
+                <label key={key} className="choice-card">
                   <input
                     type="radio"
                     name="shape"
@@ -94,18 +99,23 @@ export function NewFilmDialog({ open, onClose }: NewFilmDialogProps) {
                       }}
                     />
                   </span>
-                  <span className="shape-label">{info.label}</span>
-                  <span className="shape-ratio">{info.ratio}</span>
+                  <span className="choice-label">{info.label}</span>
+                  <span className="choice-sub">{info.ratio}</span>
                 </label>
               );
             })}
           </div>
         </fieldset>
+        <FrameRatePicker state={rate} />
         <div className="form-actions">
           <PixelButton variant="ghost" onClick={onClose}>
             Cancel
           </PixelButton>
-          <PixelButton type="submit" icon="plus" disabled={create.isPending || !title.trim()}>
+          <PixelButton
+            type="submit"
+            icon="plus"
+            disabled={create.isPending || !title.trim() || rate.fps === null}
+          >
             Create film
           </PixelButton>
         </div>

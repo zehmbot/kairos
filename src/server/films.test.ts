@@ -1,9 +1,9 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createFilm, readFilm, scanFilms, slugify } from "./films.ts";
+import { changeFilm, createFilm, FilmConfigError, readFilm, scanFilms, slugify } from "./films.ts";
 
 const templateDir = fileURLToPath(new URL("../../templates/starter/", import.meta.url));
 
@@ -98,5 +98,52 @@ describe("createFilm", () => {
   it("uses the size of each shape", async () => {
     const id = await createFilm(filmsDir, templateDir, { title: "Square", shape: "square" });
     expect((await readFilm(filmsDir, id))?.config).toMatchObject({ width: 1080, height: 1080 });
+  });
+});
+
+describe("frame rate", () => {
+  it("makes new films at the chosen rate, or 30 when none is given", async () => {
+    const fast = await createFilm(filmsDir, templateDir, { title: "Fast", shape: "wide", fps: 60 });
+    expect((await readFilm(filmsDir, fast))?.config?.fps).toBe(60);
+    const plain = await createFilm(filmsDir, templateDir, { title: "Plain", shape: "wide" });
+    expect((await readFilm(filmsDir, plain))?.config?.fps).toBe(30);
+  });
+
+  it("flags rates outside 1 to 120 in plain words", async () => {
+    await makeFilm("too-fast", { title: "Too fast", duration: 5, fps: 500 });
+    await makeFilm("too-slow", { title: "Too slow", duration: 5, fps: 0.5 });
+    await makeFilm("ntsc", { title: "NTSC", duration: 5, fps: 29.97 });
+    expect((await readFilm(filmsDir, "too-fast"))?.problem).toContain("at most 120");
+    expect((await readFilm(filmsDir, "too-slow"))?.problem).toContain("at least 1");
+    expect((await readFilm(filmsDir, "ntsc"))?.config?.fps).toBe(29.97);
+  });
+});
+
+describe("changeFilm", () => {
+  it("changes the rate and keeps everything else as it was", async () => {
+    await makeFilm("intro", { title: "Intro", duration: 5, fps: 30, extra: { keep: true } });
+    const dir = join(filmsDir, "intro");
+    const config = await changeFilm(dir, { fps: 60 });
+    expect(config.fps).toBe(60);
+    const saved = JSON.parse(await readFile(join(dir, "kairos.json"), "utf8"));
+    expect(saved).toEqual({ title: "Intro", duration: 5, fps: 60, extra: { keep: true } });
+    expect(Object.keys(saved)).toEqual(["title", "duration", "fps", "extra"]);
+  });
+
+  it("adds the rate when kairos.json has none", async () => {
+    await makeFilm("bare", { title: "Bare", duration: 5 });
+    await changeFilm(join(filmsDir, "bare"), { fps: 24 });
+    expect((await readFilm(filmsDir, "bare"))?.config?.fps).toBe(24);
+  });
+
+  it("never touches a broken kairos.json", async () => {
+    await makeFilm("broken", "{ not json");
+    await makeFilm("bad", { title: "", duration: 5 });
+    await expect(changeFilm(join(filmsDir, "broken"), { fps: 60 })).rejects.toThrow(
+      FilmConfigError,
+    );
+    await expect(changeFilm(join(filmsDir, "bad"), { fps: 60 })).rejects.toThrow(FilmConfigError);
+    expect(await readFile(join(filmsDir, "broken", "kairos.json"), "utf8")).toBe("{ not json");
+    expect(await readdir(join(filmsDir, "broken"))).toEqual(["index.html", "kairos.json"]);
   });
 });

@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   ApiErrorSchema,
   CameraSchema,
+  type FilmChange,
   FilmSummarySchema,
   HealthSchema,
   type NewFilm,
@@ -122,6 +123,23 @@ export function useCreateFilm() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (film: NewFilm) => call(FilmSummarySchema, "/api/films", sendJson("POST", film)),
+    onSuccess: (film) => {
+      queryClient.setQueryData(queryKeys.film(film.id), film);
+      queryClient.invalidateQueries({ queryKey: queryKeys.films, exact: true });
+    },
+  });
+}
+
+/** Changes settings in a film's `kairos.json` (the frame rate). The preview reloads by itself. */
+export function useChangeFilm(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (change: FilmChange) =>
+      call(
+        FilmSummarySchema,
+        `/api/films/${encodeURIComponent(filmId)}`,
+        sendJson("PATCH", change),
+      ),
     onSuccess: (film) => {
       queryClient.setQueryData(queryKeys.film(film.id), film);
       queryClient.invalidateQueries({ queryKey: queryKeys.films, exact: true });

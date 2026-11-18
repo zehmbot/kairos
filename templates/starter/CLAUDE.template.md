@@ -5,7 +5,8 @@ time a file here is saved.
 
 ## Files
 
-- `kairos.json`: `title`, `width` and `height` in pixels, `fps`, `duration` in seconds, `status`.
+- `kairos.json`: `title`, `width` and `height` in pixels, `fps` (frames per second, 1 to 120), `duration` in
+  seconds, `status`.
 - `index.html`: the page that holds the film. It uses a canvas here, but any HTML, CSS, SVG or WebGL works.
   Build it at the exact size in `kairos.json`; Kairos scales the preview itself.
 - `film.js`: defines `window.renderOut(t)`, which draws the frame at time `t` (in seconds, from 0 to
