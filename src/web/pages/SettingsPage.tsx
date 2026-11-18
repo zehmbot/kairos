@@ -1,10 +1,12 @@
-import { useHealth, useWorkspace } from "../api.ts";
+import { useCamera, useHealth, useWorkspace } from "../api.ts";
+import { Notice } from "../components/Notice.tsx";
 import { PixelPanel } from "../components/PixelPanel.tsx";
 import { WorkspacePicker } from "../components/WorkspacePicker.tsx";
 
 export function SettingsPage() {
   const health = useHealth();
   const workspace = useWorkspace();
+  const camera = useCamera();
 
   return (
     <div className="page">
@@ -39,6 +41,29 @@ export function SettingsPage() {
           </div>
         ) : (
           <p>{workspace.isPending ? "Checking..." : "The hub is not reachable."}</p>
+        )}
+      </PixelPanel>
+      <PixelPanel title="Frame camera">
+        {camera.data?.browser ? (
+          <div className="stack">
+            <p>
+              Kairos takes the pictures of your notes with this browser, hidden in the background.
+            </p>
+            <dl className="kv">
+              <dt>Browser</dt>
+              <dd>{camera.data.browser.name}</dd>
+              <dt>Path</dt>
+              <dd>{camera.data.browser.path}</dd>
+            </dl>
+          </div>
+        ) : camera.data ? (
+          <Notice title="No browser found">
+            Kairos could not find Google Chrome or Microsoft Edge on this computer. Notes still
+            work, but without pictures. Install one of them (or set KAIROS_BROWSER to a browser's
+            path), then restart Kairos.
+          </Notice>
+        ) : (
+          <p>{camera.isPending ? "Checking..." : "The hub is not reachable."}</p>
         )}
       </PixelPanel>
     </div>

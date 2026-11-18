@@ -1,4 +1,13 @@
-import { type MouseEvent, type RefObject, useEffect, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  type ReactNode,
+  type Ref,
+  type RefObject,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { formatTimecode, frameAt, sceneAt, timeOf } from "../player/time.ts";
 import { useFilmPlayer } from "../player/useFilmPlayer.ts";
 import { Notice } from "./Notice.tsx";
@@ -14,6 +23,19 @@ interface PlayerProps {
   duration: number;
   /** Changes whenever the film's files change, to reload the page. */
   reloadKey: number;
+  /** Drawn over the film, at the film's scaled size (note marks). Gets the current frame. */
+  overlay?: (frame: number) => ReactNode;
+  /** Notes to show on the scrub bar: a marker for one frame, a bar for a range. */
+  noteMarks?: readonly { id: string; t: number; until: number | null }[];
+  ref?: Ref<PlayerHandle>;
+}
+
+/** Lets the film page drive the player (jump to a note, pause to add one). */
+export interface PlayerHandle {
+  /** Time of the frame showing now, in seconds. */
+  time(): number;
+  seekTime(t: number): void;
+  pause(): void;
 }
 
 function useElementSize(ref: RefObject<HTMLElement | null>) {
@@ -34,9 +56,20 @@ function useElementSize(ref: RefObject<HTMLElement | null>) {
 /** Keeps focus where it was when a control is clicked, so Space keeps meaning play/pause. */
 const keepFocus = (event: MouseEvent) => event.preventDefault();
 
-export function Player({ src, title, width, height, fps, duration, reloadKey }: PlayerProps) {
+export function Player({
+  src,
+  title,
+  width,
+  height,
+  fps,
+  duration,
+  reloadKey,
+  overlay,
+  noteMarks = [],
+  ref,
+}: PlayerProps) {
   const player = useFilmPlayer({ src, fps, duration });
-  const { frame, total, toggle, step, seek } = player;
+  const { frame, total, toggle, step, seek, pause, currentFrame } = player;
   const stageRef = useRef<HTMLDivElement>(null);
   const stage = useElementSize(stageRef);
 
@@ -46,6 +79,19 @@ export function Player({ src, title, width, height, fps, duration, reloadKey }: 
   const scene = sceneAt(player.scenes, t);
   const progress = total > 1 ? frame / (total - 1) : 0;
   const markerAt = (start: number) => (total > 1 ? frameAt(start, fps, total) / (total - 1) : 0);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      time: () => timeOf(currentFrame(), fps),
+      seekTime: (time) => {
+        pause();
+        seek(frameAt(time, fps, total));
+      },
+      pause,
+    }),
+    [currentFrame, fps, pause, seek, total],
+  );
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -84,7 +130,8 @@ export function Player({ src, title, width, height, fps, duration, reloadKey }: 
 
   return (
     <div className="player">
-      <div className="stage" ref={stageRef}>
+      {/* The stage takes the film's shape; CSS caps its height so the controls stay in view. */}
+      <div className="stage" ref={stageRef} style={{ aspectRatio: `${width} / ${height}` }}>
         <div className="stage-frame" style={{ width: width * scale, height: height * scale }}>
           <iframe
             key={reloadKey}
@@ -98,6 +145,7 @@ export function Player({ src, title, width, height, fps, duration, reloadKey }: 
             style={{ transform: `scale(${scale})` }}
             onLoad={player.onLoad}
           />
+          {overlay?.(frame)}
         </div>
         {player.loading && !player.error && <span className="px-tag stage-tag">Loading</span>}
         {player.error && (
@@ -120,6 +168,24 @@ export function Player({ src, title, width, height, fps, duration, reloadKey }: 
               style={{ left: `${markerAt(s.start) * 100}%` }}
             />
           ))}
+          {noteMarks.map((note) =>
+            note.until === null ? (
+              <span
+                key={note.id}
+                className="scrub-note"
+                style={{ left: `${markerAt(note.t) * 100}%` }}
+              />
+            ) : (
+              <span
+                key={note.id}
+                className="scrub-note-range"
+                style={{
+                  left: `${markerAt(note.t) * 100}%`,
+                  width: `${(markerAt(note.until) - markerAt(note.t)) * 100}%`,
+                }}
+              />
+            ),
+          )}
         </div>
         <input
           type="range"

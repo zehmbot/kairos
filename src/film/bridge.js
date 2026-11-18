@@ -95,16 +95,21 @@
       }));
   }
 
-  async function render(id, t) {
+  /** Draws frame `t` once the film is ready. Throws the film's own errors. */
+  async function draw(t) {
     await ready;
+    if (typeof window.renderOut !== "function") {
+      throw new Error(
+        "window.renderOut is missing. The film must define window.renderOut = (t) => {...}.",
+      );
+    }
+    await window.renderOut(t);
+  }
+
+  async function render(id, t) {
     const started = performance.now();
     try {
-      if (typeof window.renderOut !== "function") {
-        throw new Error(
-          "window.renderOut is missing. The film must define window.renderOut = (t) => {...}.",
-        );
-      }
-      await window.renderOut(t);
+      await draw(t);
       post({ type: "frame", id, t, ms: performance.now() - started });
     } catch (error) {
       post({ type: "frame", id, t, ms: performance.now() - started, error: describe(error) });
@@ -113,6 +118,15 @@
 
   // Frames are drawn one at a time, in the order they were asked for.
   let queue = Promise.resolve();
+
+  // For Kairos' frame camera and renderer, which open the film page directly (not in the player).
+  window.__kairos = Object.freeze({
+    render(t) {
+      const done = queue.then(() => draw(t));
+      queue = done.catch(() => undefined);
+      return done;
+    },
+  });
 
   window.addEventListener("message", (event) => {
     if (event.source !== window.parent || !parents.includes(event.origin)) return;

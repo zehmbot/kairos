@@ -93,6 +93,9 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
   );
 
   const toggle = useCallback(() => setPlaying((value) => !value), []);
+  const pause = useCallback(() => setPlaying(false), []);
+  /** The frame showing right now (also between renders). */
+  const currentFrame = useCallback(() => live.current.frame, []);
 
   /** The iframe finished loading a (new) page: forget the old one and say hello. */
   const onLoad = useCallback(() => {
@@ -170,7 +173,9 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
     scenes,
     error: pageError ?? frameError,
     toggle,
+    pause,
     seek,
     step,
+    currentFrame,
   };
 }

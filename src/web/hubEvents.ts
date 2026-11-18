@@ -39,6 +39,8 @@ export function useHubEventStream(): void {
       if (event.type === "workspace-changed") {
         queryClient.invalidateQueries({ queryKey: queryKeys.workspace });
         queryClient.invalidateQueries({ queryKey: queryKeys.films });
+      } else if (event.type === "notes-changed") {
+        queryClient.invalidateQueries({ queryKey: queryKeys.notes(event.id) });
       } else {
         // Covers the list and each changed film (["films", id]).
         queryClient.invalidateQueries({ queryKey: queryKeys.films });

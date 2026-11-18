@@ -1,14 +1,21 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useParams } from "react-router";
-import { useFilm, useHealth, useOpenFilmFolder } from "../api.ts";
+import type { Note } from "../../shared/types.ts";
+import { useAddNote, useFilm, useHealth, useNotes, useOpenFilmFolder } from "../api.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
+import { MarksLayer } from "../components/MarksLayer.tsx";
+import { MarkTools } from "../components/MarkTools.tsx";
+import { NoteForm } from "../components/NoteForm.tsx";
+import { NotesPanel } from "../components/NotesPanel.tsx";
 import { Notice } from "../components/Notice.tsx";
 import { PixelButton } from "../components/PixelButton.tsx";
 import { PixelIcon } from "../components/PixelIcon.tsx";
 import { PixelPanel } from "../components/PixelPanel.tsx";
-import { Player } from "../components/Player.tsx";
+import { Player, type PlayerHandle } from "../components/Player.tsx";
 import { useHubEvent } from "../hubEvents.ts";
-import { formatLength, frameCount } from "../player/time.ts";
+import { noteCovers } from "../player/marks.ts";
+import { formatLength, frameCount, timeOf } from "../player/time.ts";
+import { useNoteDraft } from "../player/useNoteDraft.ts";
 
 function BackLink() {
   return (
@@ -24,7 +31,13 @@ export function FilmPage() {
   const film = useFilm(id);
   const health = useHealth();
   const openFolder = useOpenFilmFolder();
+  const notes = useNotes(id, Boolean(film.data?.config));
+  const addNote = useAddNote(id);
+  const { draft, ...draftActions } = useNoteDraft();
+  const playerRef = useRef<PlayerHandle>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [showMarks, setShowMarks] = useState(true);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
 
   // Live reload: any saved file in this film reloads the preview.
   useHubEvent((event) => {
@@ -57,6 +70,37 @@ export function FilmPage() {
   const filmOrigin = health.data
     ? `${window.location.protocol}//${window.location.hostname}:${health.data.filmPort}`
     : null;
+  const allNotes = notes.data ?? [];
+  const openNotes = allNotes.filter((note) => note.status === "open");
+
+  const now = () => playerRef.current?.time() ?? 0;
+  const pause = () => playerRef.current?.pause();
+  const showTime = (t: number) => playerRef.current?.seekTime(t);
+
+  const openNote = (note: Note) => {
+    setFocusedId(note.id);
+    showTime(note.t);
+    // On narrow screens the video is above the list; bring it back into view.
+    document.querySelector(".player")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  };
+
+  const saveNote = () => {
+    if (draft.t === null) return;
+    addNote.mutate(
+      {
+        text: draft.text,
+        t: draft.t,
+        until: draft.range ? draft.until : null,
+        shapes: draft.shapes,
+      },
+      {
+        onSuccess: (note) => {
+          draftActions.clear();
+          setFocusedId(note.id);
+        },
+      },
+    );
+  };
 
   let preview = <p>Connecting to the hub...</p>;
   if (problem) {
@@ -67,72 +111,133 @@ export function FilmPage() {
       </Notice>
     );
   } else if (config && previewPath && filmOrigin) {
+    // While a note is being written, only its own marks show. Otherwise: open notes (and the one opened).
+    const overlay = (frame: number) => {
+      const t = timeOf(frame, config.fps);
+      const shapes =
+        draft.t !== null
+          ? draft.shapes
+          : showMarks
+            ? allNotes
+                .filter((note) => note.status === "open" || note.id === focusedId)
+                .filter((note) => noteCovers(note, t, config.fps))
+                .flatMap((note) => note.shapes)
+            : [];
+      return (
+        <MarksLayer
+          width={config.width}
+          height={config.height}
+          shapes={shapes}
+          drawing={{
+            tool: draft.tool,
+            onStart: pause,
+            onShape: (shape) => draftActions.addShape(shape, now()),
+          }}
+        />
+      );
+    };
+
     preview = (
-      <Player
-        key={film.data.id}
-        src={`${filmOrigin}${previewPath}`}
-        title={config.title}
-        width={config.width}
-        height={config.height}
-        fps={config.fps}
-        duration={config.duration}
-        reloadKey={reloadKey}
-      />
+      <div className="stack">
+        <Player
+          key={film.data.id}
+          ref={playerRef}
+          src={`${filmOrigin}${previewPath}`}
+          title={config.title}
+          width={config.width}
+          height={config.height}
+          fps={config.fps}
+          duration={config.duration}
+          reloadKey={reloadKey}
+          overlay={overlay}
+          noteMarks={openNotes}
+        />
+        <p className="hint preview-hint">
+          To change this film, run <code>claude</code> in its folder. The preview updates every time
+          Claude saves a file.
+        </p>
+      </div>
     );
   }
 
+  const canReview = Boolean(config && !problem);
+
   return (
-    <div className="page">
-      <div className="page-head">
+    <div className="page film-page">
+      <div className="film-head">
         <BackLink />
-        <h1>{config?.title ?? film.data.id}</h1>
-      </div>
-
-      <PixelPanel title="Preview" actions={!problem && <span className="px-tag">Live</span>}>
-        {preview}
-      </PixelPanel>
-
-      <PixelPanel
-        title="Film"
-        actions={
+        <div className="film-title-row">
+          <h1>{config?.title ?? film.data.id}</h1>
+          {config && <span className="px-tag">{config.status}</span>}
+          <p className="film-meta">
+            {config
+              ? `${config.width} × ${config.height} · ${config.fps} fps · ${formatLength(config.duration)} · ${frameCount(config.duration, config.fps)} frames`
+              : path}
+          </p>
           <PixelButton
             variant="ghost"
             icon="folder"
+            title={path}
             disabled={openFolder.isPending}
             onClick={() => openFolder.mutate(film.data.id)}
           >
             Open folder
           </PixelButton>
-        }
-      >
-        <div className="stack">
-          <dl className="kv">
-            {config && (
-              <>
-                <dt>Size</dt>
-                <dd>
-                  {config.width} × {config.height}
-                </dd>
-                <dt>Frame rate</dt>
-                <dd>{config.fps} fps</dd>
-                <dt>Length</dt>
-                <dd>
-                  {formatLength(config.duration)} ({frameCount(config.duration, config.fps)} frames)
-                </dd>
-                <dt>Status</dt>
-                <dd>{config.status}</dd>
-              </>
-            )}
-            <dt>Folder</dt>
-            <dd>{path}</dd>
-          </dl>
-          <p className="hint">
-            To change this film, open a terminal in its folder and run <code>claude</code>. The
-            preview updates every time Claude saves a file.
-          </p>
-          {openFolder.isError && <p className="field-error">{openFolder.error.message}</p>}
         </div>
-      </PixelPanel>
+        {openFolder.isError && <p className="field-error">{openFolder.error.message}</p>}
+      </div>
+
+      <div className={canReview ? "review" : "stack"}>
+        <div className="review-main">
+          <PixelPanel
+            title="Preview"
+            actions={
+              !problem && (
+                <div className="panel-actions">
+                  {canReview && (
+                    <MarkTools
+                      tool={draft.tool}
+                      onTool={draftActions.setTool}
+                      marks={draft.shapes.length}
+                      onUndo={draftActions.undo}
+                    />
+                  )}
+                  <span className="px-tag">Live</span>
+                </div>
+              )
+            }
+          >
+            {preview}
+          </PixelPanel>
+        </div>
+
+        {canReview && (
+          <div className="review-side">
+            <PixelPanel title="New note">
+              <NoteForm
+                draft={draft}
+                actions={draftActions}
+                now={now}
+                onPause={pause}
+                onShowTime={showTime}
+                onSave={saveNote}
+                saving={addNote.isPending}
+                error={addNote.error?.message ?? null}
+              />
+            </PixelPanel>
+            <NotesPanel
+              filmId={film.data.id}
+              notes={notes.data}
+              loading={notes.isPending}
+              error={notes.error}
+              focusedId={focusedId}
+              onOpen={openNote}
+              showMarks={showMarks}
+              onShowMarks={setShowMarks}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

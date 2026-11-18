@@ -23,11 +23,11 @@ http://127.0.0.1:7342 (`KAIROS_FILM_PORT`). App settings live in `~/.kairos/conf
 
 ```
 src/server/   Fastify hub: index.ts (entry), security.ts (request guard), studio.ts (workspace + watcher),
-              films.ts (scan/create), film-server.ts (serves film pages),
-              folder-picker.ts/.ps1 (system "choose folder" window), routes/
+              films.ts (scan/create), film-server.ts (serves film pages), notes.ts (frame notes),
+              camera.ts (frame pictures), folder-picker.ts/.ps1 (system "choose folder" window), routes/
 src/web/      React UI: components/, pages/, player/, icons/, theme/
 src/film/     bridge.js: plain JS the film server adds to every film page
-src/shared/   Code used by both sides (zod schemas, ports, film-protocol.ts)
+src/shared/   Code used by both sides (zod schemas, ports, film-protocol.ts, marks.ts)
 templates/    Starter film copied by "New film" ({{placeholders}} are filled in)
 scripts/      Small maintenance scripts
 public/       Static files copied as-is into the UI build
@@ -40,6 +40,13 @@ that defines `window.renderOut(t)`, a pure function of `t` that may return a Pro
 on its own origin (so film code can't reach the API), never caches, and injects `src/film/bridge.js`. The player
 talks to the bridge with `postMessage` (`src/shared/film-protocol.ts`): it sends `seek`, the film answers
 `frame`. File changes reach the UI as Server-Sent Events on `/api/events` and reload the preview.
+
+**Frame notes** live in the film folder: `.kairos/notes.json` and `.kairos/notes/<id>.png` (live reload ignores
+`.kairos/`). Times are in seconds and marks are in film pixels. Only the hub writes notes (`src/server/notes.ts`:
+one write at a time, atomic, and it never overwrites a broken file). The **frame camera** (`src/server/camera.ts`,
+puppeteer-core with the installed Chrome or Edge, or `KAIROS_BROWSER`) opens the film page headless, calls
+`window.__kairos.render(t)` from the bridge, adds the marks SVG from `src/shared/marks.ts` and takes a PNG.
+The player overlay draws marks from the same `markGeometry`, so both look the same.
 
 ## Conventions
 

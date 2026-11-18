@@ -100,10 +100,87 @@ export const SetWorkspaceSchema = z.object({
   path: z.string().trim().min(1, "Type a folder path."),
 });
 
+/** Coordinates of marks, in the film's own pixels. */
+const coord = z.number().min(-100_000).max(100_000);
+
+/** One mark drawn on a frame. */
+export const NoteShapeSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("point"), x: coord, y: coord }),
+  z.object({ type: z.literal("box"), x: coord, y: coord, w: coord, h: coord }),
+  z.object({ type: z.literal("arrow"), x1: coord, y1: coord, x2: coord, y2: coord }),
+  z.object({
+    type: z.literal("pen"),
+    points: z
+      .array(z.tuple([coord, coord]))
+      .min(2)
+      .max(2000),
+  }),
+]);
+export type NoteShape = z.infer<typeof NoteShapeSchema>;
+export type NoteTool = NoteShape["type"];
+
+export const NoteStatusSchema = z.enum(["open", "fixed"]);
+export type NoteStatus = z.infer<typeof NoteStatusSchema>;
+
+/** `n_` + 6 lowercase letters or digits. */
+export const NOTE_ID_PATTERN = /^n_[a-z0-9]{6}$/;
+
+/** A frame note. Times are in seconds, like `renderOut(t)`. */
+export const NoteSchema = z.object({
+  id: z.string().regex(NOTE_ID_PATTERN),
+  text: z.string().max(2000),
+  status: NoteStatusSchema,
+  /** The frame the note is about (the start, for a range). */
+  t: z.number().min(0),
+  /** End of a range, or `null` for a single frame. */
+  until: z.number().min(0).nullable(),
+  shapes: z.array(NoteShapeSchema).max(50),
+  /** Picture of the marked frame, relative to the film's `.kairos` folder. */
+  image: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type Note = z.infer<typeof NoteSchema>;
+
+/** `.kairos/notes.json` in a film folder. */
+export const NotesFileSchema = z.object({ version: z.literal(1), notes: z.array(NoteSchema) });
+
+/** POST /api/films/:id/notes */
+export const NewNoteSchema = z
+  .object({
+    text: z
+      .string()
+      .trim()
+      .min(1, "Write what should change.")
+      .max(2000, "Keep the note under 2000 letters."),
+    t: z.number().min(0),
+    until: z.number().min(0).nullable().default(null),
+    shapes: z.array(NoteShapeSchema).max(50, "That's a lot of marks. Use at most 50.").default([]),
+  })
+  .refine((note) => note.until === null || note.until > note.t, {
+    message: "The range must end after it starts.",
+    path: ["until"],
+  });
+export type NewNote = z.input<typeof NewNoteSchema>;
+
+/** PATCH /api/films/:id/notes/:noteId */
+export const NoteUpdateSchema = z.object({
+  text: z.string().trim().min(1, "Write what should change.").max(2000).optional(),
+  status: NoteStatusSchema.optional(),
+});
+export type NoteUpdate = z.infer<typeof NoteUpdateSchema>;
+
+/** GET /api/camera: the browser that takes pictures of notes, if any. */
+export const CameraSchema = z.object({
+  browser: z.object({ name: z.string(), path: z.string() }).nullable(),
+});
+export type CameraInfo = z.infer<typeof CameraSchema>;
+
 /** Messages on GET /api/events (Server-Sent Events). */
 export const HubEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("films-changed"), ids: z.array(z.string()) }),
   z.object({ type: z.literal("workspace-changed") }),
+  z.object({ type: z.literal("notes-changed"), id: z.string() }),
 ]);
 export type HubEvent = z.infer<typeof HubEventSchema>;
 

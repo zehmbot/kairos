@@ -31,6 +31,7 @@
   --highlight: var(--c-yellow);
   --danger: var(--c-red);
   --ok: var(--c-lime);
+  --note: var(--c-red);
   --icon-accent: var(--accent);
 
   /* One "big pixel": the unit for borders and steps */
