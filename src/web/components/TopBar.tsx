@@ -1,0 +1,23 @@
+import { Link } from "react-router";
+import { useHealth } from "../api.ts";
+import { PixelIcon } from "./PixelIcon.tsx";
+
+export function TopBar() {
+  const health = useHealth();
+  const state = health.isPending ? "checking" : health.isSuccess ? "online" : "offline";
+  const label = { checking: "Checking hub", online: "Hub online", offline: "Hub offline" }[state];
+
+  return (
+    <header className="topbar">
+      <Link to="/" className="logo">
+        <PixelIcon name="hourglass" size={32} />
+        <span className="logo-word">KAIROS</span>
+      </Link>
+      <div className="topbar-spacer" />
+      <output className="status" data-state={state}>
+        <span className="status-dot" />
+        {label}
+      </output>
+    </header>
+  );
+}

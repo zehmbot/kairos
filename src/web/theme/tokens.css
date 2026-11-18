@@ -1,0 +1,142 @@
+/* Kairos "Night console" theme, built on the free Sweetie-16 palette. */
+
+:root {
+  /* Palette */
+  --c-night: #1a1c2c;
+  --c-plum: #5d275d;
+  --c-red: #b13e53;
+  --c-orange: #ef7d57;
+  --c-yellow: #ffcd75;
+  --c-lime: #a7f070;
+  --c-green: #38b764;
+  --c-teal: #257179;
+  --c-navy: #29366f;
+  --c-blue: #3b5dc9;
+  --c-sky: #41a6f6;
+  --c-mint: #73eff7;
+  --c-white: #f4f4f4;
+  --c-silver: #94b0c2;
+  --c-slate: #566c86;
+  --c-steel: #333c57;
+
+  /* Roles: components use these, never raw palette colors */
+  --bg: var(--c-night);
+  --bar: var(--c-navy);
+  --surface: var(--c-steel);
+  --line: var(--c-slate);
+  --text: var(--c-white);
+  --text-muted: var(--c-silver);
+  --accent: var(--c-mint);
+  --primary: var(--c-orange);
+  --highlight: var(--c-yellow);
+  --danger: var(--c-red);
+  --ok: var(--c-lime);
+  --icon-accent: var(--accent);
+
+  /* One "big pixel": the unit for borders and steps */
+  --px: 4px;
+
+  --font-pixel: "Press Start 2P", ui-monospace, monospace;
+  --font-body: "Pixelify Sans", system-ui, sans-serif;
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 18px;
+  line-height: 1.45;
+  -webkit-font-smoothing: none;
+  /* Pixelify Sans' "fi" ligature reads like an "A" ("films" -> "Alms"). */
+  font-variant-ligatures: none;
+}
+
+img,
+svg,
+canvas,
+video {
+  image-rendering: pixelated;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--font-pixel);
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+h1 {
+  font-size: 18px;
+}
+
+h2 {
+  font-size: 12px;
+}
+
+p {
+  margin: 0;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--c-night);
+}
+
+:focus-visible {
+  outline: var(--px) solid var(--highlight);
+  outline-offset: 2px;
+}
+
+/* Box with a stepped, notched pixel border (no rounded corners anywhere). */
+.px-box {
+  --box-line: var(--line);
+  background: var(--surface);
+  margin: var(--px);
+  box-shadow:
+    0 calc(var(--px) * -1) 0 0 var(--box-line),
+    0 var(--px) 0 0 var(--box-line),
+    calc(var(--px) * -1) 0 0 0 var(--box-line),
+    var(--px) 0 0 0 var(--box-line);
+}
+
+.px-icon {
+  flex-shrink: 0;
+  display: block;
+}
+
+.px-tag {
+  display: inline-block;
+  padding: 6px 8px;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--highlight);
+  background: var(--c-plum);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
