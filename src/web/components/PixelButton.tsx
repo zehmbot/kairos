@@ -11,7 +11,7 @@ export function PixelButton({ icon, variant = "primary", children, ...rest }: Pi
   return (
     <button type="button" className="px-btn" data-variant={variant} {...rest}>
       {icon && <PixelIcon name={icon} size={16} />}
-      <span>{children}</span>
+      {children != null && <span>{children}</span>}
     </button>
   );
 }

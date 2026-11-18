@@ -2,44 +2,46 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import fastifyStatic from "@fastify/static";
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import pkg from "../../package.json" with { type: "json" };
-import { DEFAULT_HUB_PORT, DEV_WEB_PORT, HOST } from "../shared/ports.ts";
+import { DEFAULT_FILM_PORT, DEFAULT_HUB_PORT, DEV_WEB_PORT, HOST } from "../shared/ports.ts";
+import { kairosHome } from "./config.ts";
+import { buildFilmServer } from "./film-server.ts";
+import { eventRoutes } from "./routes/events.ts";
+import { filmRoutes } from "./routes/films.ts";
 import { healthRoutes } from "./routes/health.ts";
-import { allowedHostsFor, checkRequest } from "./security.ts";
+import { workspaceRoutes } from "./routes/workspace.ts";
+import { allowedHostsFor, requestGuard } from "./security.ts";
+import { Studio } from "./studio.ts";
 
 const { values: args } = parseArgs({
   options: {
     dev: { type: "boolean", default: false },
     port: { type: "string" },
+    "film-port": { type: "string" },
   },
 });
 
 const dev = args.dev;
 const port = Number(args.port ?? process.env.KAIROS_PORT ?? DEFAULT_HUB_PORT);
+const filmPort = Number(args["film-port"] ?? process.env.KAIROS_FILM_PORT ?? DEFAULT_FILM_PORT);
 const url = `http://${HOST}:${port}`;
 const webDir = fileURLToPath(new URL("../../dist/web/", import.meta.url));
-
-const app = Fastify({ logger: false });
+const templateDir = fileURLToPath(new URL("../../templates/starter/", import.meta.url));
 
 // In dev, the Vite UI on DEV_WEB_PORT calls this API through its proxy.
-const allowedHosts = allowedHostsFor(dev ? [port, DEV_WEB_PORT] : [port]);
-app.addHook("onRequest", async (request, reply) => {
-  const secFetchSite = request.headers["sec-fetch-site"];
-  const result = checkRequest(
-    {
-      host: request.headers.host,
-      origin: request.headers.origin,
-      secFetchSite: typeof secFetchSite === "string" ? secFetchSite : undefined,
-    },
-    allowedHosts,
-  );
-  if (!result.ok) {
-    return reply.code(403).send({ error: "forbidden", reason: result.reason });
-  }
-});
+const uiHosts = allowedHostsFor(dev ? [port, DEV_WEB_PORT] : [port]);
+const uiOrigins = [...uiHosts].map((host) => `http://${host}`);
 
-healthRoutes(app, { version: pkg.version, url, dev });
+const studio = await Studio.open({ home: kairosHome(), templateDir });
+
+const app = Fastify({ logger: false, forceCloseConnections: true });
+app.addHook("onRequest", requestGuard(uiHosts));
+
+healthRoutes(app, { version: pkg.version, url, dev, filmPort });
+workspaceRoutes(app, studio);
+filmRoutes(app, studio);
+eventRoutes(app, studio.events);
 
 if (existsSync(webDir)) {
   await app.register(fastifyStatic, { root: webDir });
@@ -62,20 +64,33 @@ if (existsSync(webDir)) {
   );
 }
 
-try {
-  await app.listen({ host: HOST, port });
-  console.log(`Kairos hub running at ${url}${dev ? " (dev)" : ""}`);
-} catch (error) {
-  if ((error as NodeJS.ErrnoException).code === "EADDRINUSE") {
-    console.error(`Port ${port} is already in use. Close the other app or set KAIROS_PORT.`);
-  } else {
-    console.error(error);
+const filmServer = await buildFilmServer({
+  filmsDir: () => studio.filmsDir,
+  port: filmPort,
+  parentOrigins: uiOrigins,
+});
+
+async function listen(server: FastifyInstance, serverPort: number, envName: string): Promise<void> {
+  try {
+    await server.listen({ host: HOST, port: serverPort });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EADDRINUSE") {
+      console.error(`Port ${serverPort} is already in use. Close the other app or set ${envName}.`);
+    } else {
+      console.error(error);
+    }
+    process.exit(1);
   }
-  process.exit(1);
 }
+
+await listen(app, port, "KAIROS_PORT");
+await listen(filmServer, filmPort, "KAIROS_FILM_PORT");
+console.log(`Kairos hub running at ${url}${dev ? " (dev)" : ""}`);
+if (studio.workspace) console.log(`Workspace: ${studio.workspace}`);
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
-    app.close().finally(() => process.exit(0));
+    studio.close();
+    Promise.allSettled([app.close(), filmServer.close()]).finally(() => process.exit(0));
   });
 }

@@ -1,8 +1,10 @@
-import { useHealth } from "../api.ts";
+import { useHealth, useWorkspace } from "../api.ts";
 import { PixelPanel } from "../components/PixelPanel.tsx";
+import { WorkspacePicker } from "../components/WorkspacePicker.tsx";
 
 export function SettingsPage() {
   const health = useHealth();
+  const workspace = useWorkspace();
 
   return (
     <div className="page">
@@ -26,8 +28,18 @@ export function SettingsPage() {
           <p>{health.isPending ? "Checking the hub..." : "The hub is not reachable."}</p>
         )}
       </PixelPanel>
-      <PixelPanel title="Workspace" actions={<span className="px-tag">Coming soon</span>}>
-        <p>Choose the folder where your films are saved.</p>
+      <PixelPanel title="Workspace">
+        {workspace.data ? (
+          <div className="stack">
+            <p>The folder where Kairos keeps your films. Films already in it show up right away.</p>
+            <WorkspacePicker
+              workspace={workspace.data}
+              chooseLabel={workspace.data.path ? "Change folder" : "Choose folder"}
+            />
+          </div>
+        ) : (
+          <p>{workspace.isPending ? "Checking..." : "The hub is not reachable."}</p>
+        )}
       </PixelPanel>
     </div>
   );

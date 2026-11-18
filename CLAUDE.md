@@ -16,17 +16,30 @@ Claude, and renders video files. The app UI is pixel art. The videos themselves 
 | `npm run typecheck`               | `tsc --noEmit`                                                                                  |
 | `npm run favicon`                 | Regenerate `public/favicon.svg` from the hourglass icon                                         |
 
-Requires Node.js 24+ and, from the render milestone on, ffmpeg on PATH.
+Requires Node.js 24+ and, from the render milestone on, ffmpeg on PATH. The hub also starts the **film server** on
+http://127.0.0.1:7342 (`KAIROS_FILM_PORT`). App settings live in `~/.kairos/config.json` (`KAIROS_HOME` moves them).
 
 ## Layout
 
 ```
-src/server/   Fastify hub: index.ts (entry), security.ts (request guard), routes/
-src/web/      React UI: components/, pages/, icons/, theme/
-src/shared/   Code used by both sides (zod schemas, ports)
+src/server/   Fastify hub: index.ts (entry), security.ts (request guard), studio.ts (workspace + watcher),
+              films.ts (scan/create), film-server.ts (serves film pages),
+              folder-picker.ts/.ps1 (system "choose folder" window), routes/
+src/web/      React UI: components/, pages/, player/, icons/, theme/
+src/film/     bridge.js: plain JS the film server adds to every film page
+src/shared/   Code used by both sides (zod schemas, ports, film-protocol.ts)
+templates/    Starter film copied by "New film" ({{placeholders}} are filled in)
 scripts/      Small maintenance scripts
 public/       Static files copied as-is into the UI build
 ```
+
+## Films
+
+A film is a folder in `<workspace>/films/` with `kairos.json` (title, size, fps, duration, status, page) and a page
+that defines `window.renderOut(t)`, a pure function of `t` that may return a Promise. The film server serves it
+on its own origin (so film code can't reach the API), never caches, and injects `src/film/bridge.js`. The player
+talks to the bridge with `postMessage` (`src/shared/film-protocol.ts`): it sends `seek`, the film answers
+`frame`. File changes reach the UI as Server-Sent Events on `/api/events` and reload the preview.
 
 ## Conventions
 

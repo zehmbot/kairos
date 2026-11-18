@@ -6,3 +6,6 @@ export const DEFAULT_HUB_PORT = 7340;
 
 /** Port of the Vite dev server used by `npm run dev`. */
 export const DEV_WEB_PORT = 7341;
+
+/** Port of the film server, which serves film pages on their own origin. Override with KAIROS_FILM_PORT or --film-port. */
+export const DEFAULT_FILM_PORT = 7342;

@@ -7,6 +7,8 @@
  * - Sec-Fetch-Site: blocks cross-site requests from browsers that send it.
  */
 
+import type { FastifyReply, FastifyRequest } from "fastify";
+
 export interface GuardHeaders {
   host?: string;
   origin?: string;
@@ -52,4 +54,22 @@ export function checkRequest(
   }
 
   return { ok: true };
+}
+
+/** Fastify `onRequest` hook that runs `checkRequest` and answers 403 when it fails. */
+export function requestGuard(allowedHosts: ReadonlySet<string>) {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    const secFetchSite = request.headers["sec-fetch-site"];
+    const result = checkRequest(
+      {
+        host: request.headers.host,
+        origin: request.headers.origin,
+        secFetchSite: typeof secFetchSite === "string" ? secFetchSite : undefined,
+      },
+      allowedHosts,
+    );
+    if (!result.ok) {
+      return reply.code(403).send({ error: "forbidden", reason: result.reason });
+    }
+  };
 }
