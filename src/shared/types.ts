@@ -71,7 +71,21 @@ export const NewFilmSchema = z.object({
 export type NewFilm = z.input<typeof NewFilmSchema>;
 
 /** PATCH /api/films/:id: film settings the app can change in `kairos.json`. */
-export const FilmChangeSchema = z.object({ fps: FpsSchema });
+export const FilmChangeSchema = z
+  .object({
+    title: z
+      .string()
+      .trim()
+      .min(1, "The title can't be empty.")
+      .max(80, "Keep the title under 80 letters."),
+    fps: FpsSchema,
+    duration: z
+      .number({ error: "The length must be a number of seconds." })
+      .positive("The length must be more than 0 seconds."),
+    status: FilmStatusSchema,
+  })
+  .partial()
+  .refine((change) => Object.keys(change).length > 0, "Say what to change.");
 export type FilmChange = z.infer<typeof FilmChangeSchema>;
 
 /** One film folder, as the hub sees it. */
@@ -191,6 +205,13 @@ export const CameraSchema = z.object({
   browser: z.object({ name: z.string(), path: z.string() }).nullable(),
 });
 export type CameraInfo = z.infer<typeof CameraSchema>;
+
+/** GET /api/claude: is Claude Code installed here, and are the Kairos tools added to it? */
+export const ClaudeStatusSchema = z.object({
+  cli: z.object({ path: z.string(), version: z.string() }).nullable(),
+  connected: z.boolean(),
+});
+export type ClaudeStatus = z.infer<typeof ClaudeStatusSchema>;
 
 /** Messages on GET /api/events (Server-Sent Events). */
 export const HubEventSchema = z.discriminatedUnion("type", [

@@ -22,3 +22,14 @@ time a file here is saved.
 - Optional: `window.KAIROS_SCENES = [{ name, start, end }]` (in seconds) puts scene markers on the
   Kairos timeline.
 - If you change the length, update both `duration` in `kairos.json` and any constant in `film.js`.
+
+## Working with Kairos
+
+When the Kairos tools are connected (Kairos → Settings → Claude Code), use them:
+
+- `kairos_notes` shows the user's open frame notes: the time, what should change, the marks they drew and a
+  picture of the marked frame. Start there when asked to fix notes.
+- After a change, look at the frame again with `kairos_frame` (`t` in seconds). It also shows errors the film
+  throws.
+- When a note is done, mark it with `kairos_note_update` (`status: "fixed"`). Never edit `.kairos/` by hand.
+- `kairos_film_settings` changes the title, length, frame rate or status with checks.

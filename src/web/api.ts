@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   ApiErrorSchema,
   CameraSchema,
+  ClaudeStatusSchema,
   type FilmChange,
   FilmSummarySchema,
   HealthSchema,
@@ -54,6 +55,7 @@ export const queryKeys = {
   film: (id: string) => ["films", id],
   notes: (id: string) => ["films", id, "notes"],
   camera: ["camera"],
+  claude: ["claude"],
 } as const;
 
 const notesUrl = (filmId: string) => `/api/films/${encodeURIComponent(filmId)}/notes`;
@@ -185,6 +187,36 @@ export function useCamera() {
   return useQuery({
     queryKey: queryKeys.camera,
     queryFn: () => call(CameraSchema, "/api/camera"),
+  });
+}
+
+/** Claude Code on this computer, and whether the Kairos tools are added to it. */
+export function useClaude() {
+  return useQuery({
+    queryKey: queryKeys.claude,
+    queryFn: () => call(ClaudeStatusSchema, "/api/claude"),
+    // Asking `claude` takes a second or two: don't ask again on every visit.
+    staleTime: 30_000,
+  });
+}
+
+/** Connects (`true`) or disconnects (`false`) the Kairos tools in Claude Code. */
+export function useConnectClaude() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (connect: boolean) =>
+      call(ClaudeStatusSchema, `/api/claude/${connect ? "connect" : "disconnect"}`, {
+        method: "POST",
+      }),
+    onSuccess: (status) => queryClient.setQueryData(queryKeys.claude, status),
+  });
+}
+
+/** Opens a terminal with Claude running in the film's folder. */
+export function useOpenClaude() {
+  return useMutation({
+    mutationFn: (id: string) =>
+      callNoContent(`/api/films/${encodeURIComponent(id)}/open-claude`, { method: "POST" }),
   });
 }
 

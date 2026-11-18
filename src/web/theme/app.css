@@ -970,7 +970,10 @@ code {
   outline-offset: 2px;
 }
 
-.film-title-row > .px-btn {
+.film-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-left: auto;
 }
 

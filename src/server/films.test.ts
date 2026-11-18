@@ -147,3 +147,15 @@ describe("changeFilm", () => {
     expect(await readdir(join(filmsDir, "broken"))).toEqual(["index.html", "kairos.json"]);
   });
 });
+
+describe("changeFilm (other settings)", () => {
+  it("changes the title, length and status", async () => {
+    await makeFilm("intro", { title: "Intro", duration: 5 });
+    const config = await changeFilm(join(filmsDir, "intro"), {
+      title: "New intro",
+      duration: 12.5,
+      status: "review",
+    });
+    expect(config).toMatchObject({ title: "New intro", duration: 12.5, status: "review" });
+  });
+});

@@ -12,3 +12,16 @@ export function openFolder(path: string): void {
   child.on("error", (error) => console.warn(`Could not open ${path}: ${error.message}`));
   child.unref();
 }
+
+/** Opens a web address in the default browser. */
+export function openUrl(url: string): void {
+  const [command, args] =
+    process.platform === "win32"
+      ? ["rundll32.exe", ["url.dll,FileProtocolHandler", url]]
+      : process.platform === "darwin"
+        ? ["open", [url]]
+        : ["xdg-open", [url]];
+  const child = spawn(command, args, { detached: true, stdio: "ignore" });
+  child.on("error", (error) => console.warn(`Could not open ${url}: ${error.message}`));
+  child.unref();
+}

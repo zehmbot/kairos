@@ -6,10 +6,13 @@ import Fastify, { type FastifyInstance } from "fastify";
 import pkg from "../../package.json" with { type: "json" };
 import { DEFAULT_FILM_PORT, DEFAULT_HUB_PORT, DEV_WEB_PORT, HOST } from "../shared/ports.ts";
 import { Camera, findBrowser } from "./camera.ts";
+import { claudeTools } from "./claude-cli.ts";
 import { kairosHome } from "./config.ts";
 import { buildFilmServer } from "./film-server.ts";
+import { claudeRoutes } from "./routes/claude.ts";
 import { eventRoutes } from "./routes/events.ts";
 import { filmRoutes } from "./routes/films.ts";
+import { frameRoutes } from "./routes/frames.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { noteRoutes } from "./routes/notes.ts";
 import { workspaceRoutes } from "./routes/workspace.ts";
@@ -30,6 +33,7 @@ const filmPort = Number(args["film-port"] ?? process.env.KAIROS_FILM_PORT ?? DEF
 const url = `http://${HOST}:${port}`;
 const webDir = fileURLToPath(new URL("../../dist/web/", import.meta.url));
 const templateDir = fileURLToPath(new URL("../../templates/starter/", import.meta.url));
+const mcpServerPath = fileURLToPath(new URL("../mcp/server.ts", import.meta.url));
 
 // In dev, the Vite UI on DEV_WEB_PORT calls this API through its proxy.
 const uiHosts = allowedHostsFor(dev ? [port, DEV_WEB_PORT] : [port]);
@@ -45,7 +49,14 @@ healthRoutes(app, { version: pkg.version, url, dev, filmPort });
 workspaceRoutes(app, studio);
 filmRoutes(app, studio);
 eventRoutes(app, studio.events);
-noteRoutes(app, { studio, camera, filmServerUrl: `http://${HOST}:${filmPort}` });
+const filmServerUrl = `http://${HOST}:${filmPort}`;
+noteRoutes(app, { studio, camera, filmServerUrl });
+frameRoutes(app, { studio, camera, filmServerUrl });
+claudeRoutes(
+  app,
+  studio,
+  claudeTools({ serverPath: mcpServerPath, hubPort: port, defaultPort: DEFAULT_HUB_PORT }),
+);
 
 if (existsSync(webDir)) {
   await app.register(fastifyStatic, { root: webDir });

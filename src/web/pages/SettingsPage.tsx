@@ -1,5 +1,6 @@
-import { useCamera, useHealth, useWorkspace } from "../api.ts";
+import { useCamera, useClaude, useConnectClaude, useHealth, useWorkspace } from "../api.ts";
 import { Notice } from "../components/Notice.tsx";
+import { PixelButton } from "../components/PixelButton.tsx";
 import { PixelPanel } from "../components/PixelPanel.tsx";
 import { WorkspacePicker } from "../components/WorkspacePicker.tsx";
 
@@ -66,6 +67,56 @@ export function SettingsPage() {
           <p>{camera.isPending ? "Checking..." : "The hub is not reachable."}</p>
         )}
       </PixelPanel>
+      <ClaudePanel />
     </div>
+  );
+}
+
+/** Claude Code: is it installed, and are the Kairos tools added to it? */
+function ClaudePanel() {
+  const claude = useClaude();
+  const connect = useConnectClaude();
+  const status = claude.data;
+
+  return (
+    <PixelPanel
+      title="Claude Code"
+      actions={
+        status?.cli && (
+          <PixelButton
+            variant={status.connected ? "ghost" : "primary"}
+            icon="terminal"
+            disabled={connect.isPending}
+            onClick={() => connect.mutate(!status.connected)}
+          >
+            {connect.isPending ? "Working..." : status.connected ? "Disconnect" : "Connect"}
+          </PixelButton>
+        )
+      }
+    >
+      {status?.cli ? (
+        <div className="stack">
+          <p>
+            Connect Kairos to Claude Code so Claude can read your notes with their pictures, look at
+            any frame to check its work, and mark notes fixed. This adds Kairos to Claude Code for
+            all your projects.
+          </p>
+          <dl className="kv">
+            <dt>Claude Code</dt>
+            <dd>Version {status.cli.version}</dd>
+            <dt>Kairos tools</dt>
+            <dd>{status.connected ? "Connected" : "Not connected"}</dd>
+          </dl>
+          {connect.isError && <p className="field-error">{connect.error.message}</p>}
+        </div>
+      ) : status ? (
+        <Notice title="Claude Code isn't installed">
+          Kairos works with Claude Code, which writes and fixes your films. Install it (see
+          code.claude.com), then come back to this page.
+        </Notice>
+      ) : (
+        <p>{claude.isPending ? "Looking for Claude Code..." : "The hub is not reachable."}</p>
+      )}
+    </PixelPanel>
   );
 }

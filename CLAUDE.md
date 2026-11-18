@@ -15,6 +15,7 @@ Claude, and renders video files. The app UI is pixel art. The videos themselves 
 | `npm run lint` / `npm run format` | Biome check / fix                                                                               |
 | `npm run typecheck`               | `tsc --noEmit`                                                                                  |
 | `npm run favicon`                 | Regenerate `public/favicon.svg` from the hourglass icon                                         |
+| `npm run setup`                   | Add the Kairos tools to Claude Code (same as Settings → Claude Code → Connect)                  |
 
 Requires Node.js 24+ and, from the render milestone on, ffmpeg on PATH. The hub also starts the **film server** on
 http://127.0.0.1:7342 (`KAIROS_FILM_PORT`). App settings live in `~/.kairos/config.json` (`KAIROS_HOME` moves them).
@@ -24,7 +25,9 @@ http://127.0.0.1:7342 (`KAIROS_FILM_PORT`). App settings live in `~/.kairos/conf
 ```
 src/server/   Fastify hub: index.ts (entry), security.ts (request guard), studio.ts (workspace + watcher),
               films.ts (scan/create), film-server.ts (serves film pages), notes.ts (frame notes),
-              camera.ts (frame pictures), folder-picker.ts/.ps1 (system "choose folder" window), routes/
+              camera.ts (frame pictures), folder-picker.ts/.ps1 (system "choose folder" window),
+              claude-cli.ts (runs `claude`: version, mcp add/remove, open a terminal), routes/
+src/mcp/      Kairos tools for Claude Code: server.ts (stdio entry), tools.ts, hub-client.ts (calls the hub)
 src/web/      React UI: components/, pages/, player/, icons/, theme/
 src/film/     bridge.js: plain JS the film server adds to every film page
 src/shared/   Code used by both sides (zod schemas, ports, film-protocol.ts, marks.ts)
@@ -49,6 +52,15 @@ one write at a time, atomic, and it never overwrites a broken file). The **frame
 puppeteer-core with the installed Chrome or Edge, or `KAIROS_BROWSER`) opens the film page headless, calls
 `window.__kairos.render(t)` from the bridge, adds the marks SVG from `src/shared/marks.ts` and takes a PNG.
 The player overlay draws marks from the same `markGeometry`, so both look the same.
+
+## Claude Code
+
+The **Kairos tools** are an MCP server (`src/mcp/server.ts`, stdio) that Claude Code starts. Settings → Claude Code
+→ Connect runs `claude mcp add --scope user kairos -- <node> <repo>/src/mcp/server.ts`. The server only calls the
+hub over HTTP (`KAIROS_PORT`) and never touches files itself. Tools default to the film whose folder Claude runs
+in. `kairos_notes` and `kairos_frame` return PNG pictures, which Claude sees. Keep each answer under Claude Code's
+25,000-token limit: a 1280×720 picture costs about 1,200 tokens, so `kairos_notes` pages through notes. Stdout
+carries the protocol, so the MCP server logs to stderr only.
 
 ## Conventions
 

@@ -1,7 +1,14 @@
 import { useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import type { Note } from "../../shared/types.ts";
-import { useAddNote, useFilm, useHealth, useNotes, useOpenFilmFolder } from "../api.ts";
+import {
+  useAddNote,
+  useFilm,
+  useHealth,
+  useNotes,
+  useOpenClaude,
+  useOpenFilmFolder,
+} from "../api.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { FrameRateDialog } from "../components/FrameRateDialog.tsx";
 import { MarksLayer } from "../components/MarksLayer.tsx";
@@ -32,6 +39,7 @@ export function FilmPage() {
   const film = useFilm(id);
   const health = useHealth();
   const openFolder = useOpenFilmFolder();
+  const openClaude = useOpenClaude();
   const notes = useNotes(id, Boolean(film.data?.config));
   const addNote = useAddNote(id);
   const { draft, ...draftActions } = useNoteDraft();
@@ -156,8 +164,8 @@ export function FilmPage() {
           noteMarks={openNotes}
         />
         <p className="hint preview-hint">
-          To change this film, run <code>claude</code> in its folder. The preview updates every time
-          Claude saves a file.
+          To change this film, press Open Claude here (or run <code>claude</code> in its folder) and
+          say what you want. The preview updates every time Claude saves a file.
         </p>
       </div>
     );
@@ -191,17 +199,28 @@ export function FilmPage() {
               path
             )}
           </p>
-          <PixelButton
-            variant="ghost"
-            icon="folder"
-            title={path}
-            disabled={openFolder.isPending}
-            onClick={() => openFolder.mutate(film.data.id)}
-          >
-            Open folder
-          </PixelButton>
+          <div className="film-actions">
+            <PixelButton
+              icon="terminal"
+              title="Open a terminal in this film's folder with Claude Code running"
+              disabled={openClaude.isPending}
+              onClick={() => openClaude.mutate(film.data.id)}
+            >
+              Open Claude here
+            </PixelButton>
+            <PixelButton
+              variant="ghost"
+              icon="folder"
+              title={path}
+              disabled={openFolder.isPending}
+              onClick={() => openFolder.mutate(film.data.id)}
+            >
+              Open folder
+            </PixelButton>
+          </div>
         </div>
         {openFolder.isError && <p className="field-error">{openFolder.error.message}</p>}
+        {openClaude.isError && <p className="field-error">{openClaude.error.message}</p>}
       </div>
 
       <div className={canReview ? "review" : "stack"}>
