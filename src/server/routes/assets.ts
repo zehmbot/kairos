@@ -1,14 +1,15 @@
 import { createReadStream } from "node:fs";
 import { mkdir, stat } from "node:fs/promises";
+import { join } from "node:path";
 import type { Readable } from "node:stream";
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { contentTypeOf } from "../../shared/media.ts";
+import { contentTypeOf, KIND_FOLDERS, type MediaKind, mediaKindOf } from "../../shared/media.ts";
 import { AudioTrackSchema } from "../../shared/types.ts";
 import { assetFile, copyAssetToFilm, deleteAsset, importAsset, listAssets } from "../assets.ts";
 import { changeFilm, FilmConfigError, readFilm } from "../films.ts";
 import { openFolder } from "../open-folder.ts";
 import type { Studio } from "../studio.ts";
-import { UploadError } from "../uploads.ts";
+import { checkUploadName, saveUpload, UploadError } from "../uploads.ts";
 import { assetsDirOf } from "../workspace.ts";
 import { sendError } from "./errors.ts";
 
@@ -93,6 +94,27 @@ export function assetRoutes(
         }
         studio.events.publish({ type: "films-changed", ids: [film.id] });
         return { path };
+      });
+    },
+  );
+
+  // A file for one film (picture, video, font), saved straight into its assets/<kind>/ folder.
+  app.post<{ Params: { id: string }; Querystring: { name?: string } }>(
+    "/api/films/:id/files",
+    async (request, reply) => {
+      const films = studio.filmsDir;
+      if (!films) return noWorkspace(reply);
+      const film = await readFilm(films, request.params.id);
+      if (!film) return sendError(reply, 404, "not-found", "This film doesn't exist (any more).");
+      return guard(reply, async () => {
+        const name = checkUploadName(request.query.name, ["image", "video", "font"]);
+        const folder = `assets/${KIND_FOLDERS[mediaKindOf(name) as MediaKind]}`;
+        const saved = await saveUpload(
+          request.body as Readable,
+          join(film.path, ...folder.split("/")),
+          name,
+        );
+        return reply.code(201).send({ path: `${folder}/${saved}` });
       });
     },
   );

@@ -66,7 +66,7 @@ function changeReferences<T>(filmDir: string, change: (items: Reference[]) => T)
 
 const newId = () => `r_${Math.random().toString(36).slice(2, 10).padEnd(8, "0")}`;
 
-/** Adds a reference for a file already in `references/`. It starts "processing". */
+/** Adds a reference for a file already in `references/` (once per file). It starts "processing". */
 export function addReference(
   filmDir: string,
   file: string,
@@ -85,6 +85,9 @@ export function addReference(
     sheets: 0,
   };
   return changeReferences(filmDir, (items) => {
+    // Already listed (an upload and a refresh of the list both saw the new file): keep one.
+    const existing = items.find((reference) => reference.file === file);
+    if (existing) return existing;
     items.push(item);
     return item;
   });

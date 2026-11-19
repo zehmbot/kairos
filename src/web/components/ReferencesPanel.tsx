@@ -12,7 +12,7 @@ import {
 } from "../api.ts";
 import { formatLength } from "../player/time.ts";
 import { AssetPicker } from "./AssetPicker.tsx";
-import { DropZone, FileButton, UploadStatus, useUploads } from "./DropZone.tsx";
+import { FileButton, UploadStatus, useUploads } from "./DropZone.tsx";
 import { PixelButton } from "./PixelButton.tsx";
 import { PixelIcon } from "./PixelIcon.tsx";
 import { PixelPanel } from "./PixelPanel.tsx";
@@ -50,7 +50,8 @@ export function ReferencesPanel({ filmId }: { filmId: string }) {
 
   return (
     <PixelPanel title="References">
-      <DropZone onFiles={add} label="Drop to add the reference">
+      {/* The film page takes files dropped here as references (see FilmPage). */}
+      <div data-drop="reference">
         <div className="stack">
           {references.isError && <p className="field-error">{references.error.message}</p>}
           {items.length === 0 ? (
@@ -83,7 +84,7 @@ export function ReferencesPanel({ filmId }: { filmId: string }) {
             </p>
           )}
         </div>
-      </DropZone>
+      </div>
       <AssetPicker
         open={picking}
         kinds={["video", "image"]}

@@ -104,6 +104,12 @@ the middle of each (at most 36) and tiles them into sheets in `.kairos/reference
 Claude sees them with `kairos_references` (6 sheets per page), and the library with `kairos_assets` and
 `kairos_use_asset`.
 
+On the film page, the side column has tabs (Notes, Sound, References, Brief; the last one shown is remembered
+per film). Files dropped anywhere on the page, or added with **Add**, go where they fit: dropped on the Sound or
+References tab they go straight in, elsewhere Kairos asks what they are for (`src/web/filmAdd.ts`: the choices
+for each kind of file and where each is sent; `POST /api/films/:id/files` puts a picture, video or font in the
+film's `assets/`).
+
 ## Rendering
 
 `src/server/renderer.ts` turns a film into `renders/<id>-v<N>.mp4` (versions only go up; the list is

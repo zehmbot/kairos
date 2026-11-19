@@ -88,24 +88,36 @@ export function FileButton({
   );
 }
 
-/** Files dropped anywhere on its area go to `onFiles`. It lights up while a file is dragged over it. */
+/** The `data-drop` area under the pointer ("sound", "reference"...), if any. */
+const zoneOf = (target: EventTarget | null) =>
+  target instanceof Element
+    ? (target.closest<HTMLElement>("[data-drop]")?.dataset.drop ?? null)
+    : null;
+
+/**
+ * Files dropped anywhere on its area go to `onFiles`, with the `data-drop` area they landed in (or null).
+ * It lights up while a file is dragged over it; `labels` give the words for each area.
+ */
 export function DropZone({
   onFiles,
   label,
+  labels,
   children,
   className,
 }: {
-  onFiles: (files: File[]) => void;
+  onFiles: (files: File[], zone: string | null) => void;
   label: string;
+  labels?: Record<string, string>;
   children: ReactNode;
   className?: string;
 }) {
   const [active, setActive] = useState(false);
+  const [zone, setZone] = useState<string | null>(null);
   const depth = useRef(0);
   const hasFiles = (event: React.DragEvent) => event.dataTransfer.types.includes("Files");
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: dropping files is a shortcut; the Add buttons inside do the same with the keyboard.
+    // biome-ignore lint/a11y/noStaticElementInteractions: dropping files is a shortcut; the Add buttons do the same with the keyboard.
     <div
       className={className ? `drop-zone ${className}` : "drop-zone"}
       data-active={active ? "true" : undefined}
@@ -116,7 +128,10 @@ export function DropZone({
         setActive(true);
       }}
       onDragOver={(event) => {
-        if (hasFiles(event)) event.preventDefault();
+        if (!hasFiles(event)) return;
+        event.preventDefault();
+        const here = zoneOf(event.target);
+        if (here !== zone) setZone(here);
       }}
       onDragLeave={() => {
         depth.current = Math.max(0, depth.current - 1);
@@ -127,11 +142,11 @@ export function DropZone({
         event.preventDefault();
         depth.current = 0;
         setActive(false);
-        onFiles([...event.dataTransfer.files]);
+        onFiles([...event.dataTransfer.files], zoneOf(event.target));
       }}
     >
       {children}
-      {active && <div className="drop-zone-label">{label}</div>}
+      {active && <div className="drop-zone-label">{(zone && labels?.[zone]) || label}</div>}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import type { AudioTrack } from "../../shared/types.ts";
 import { queryKeys, useAddSoundFromAsset, useSaveAudio } from "../api.ts";
 import { formatLength } from "../player/time.ts";
 import { AssetPicker } from "./AssetPicker.tsx";
-import { DropZone, FileButton, UploadStatus, useUploads } from "./DropZone.tsx";
+import { FileButton, UploadStatus, useUploads } from "./DropZone.tsx";
 import { PixelButton } from "./PixelButton.tsx";
 import { PixelPanel } from "./PixelPanel.tsx";
 
@@ -83,7 +83,8 @@ export function SoundPanel({ filmId, tracks, duration, fileUrl, now }: SoundPane
 
   return (
     <PixelPanel title="Sound">
-      <DropZone onFiles={add} label="Drop to add the sound">
+      {/* The film page takes files dropped here as sounds (see FilmPage). */}
+      <div data-drop="sound">
         <div className="stack">
           {draft.length === 0 ? (
             <p className="hint">
@@ -195,7 +196,7 @@ export function SoundPanel({ filmId, tracks, duration, fileUrl, now }: SoundPane
           />
           <p className="hint">New sounds start at the player's current time.</p>
         </div>
-      </DropZone>
+      </div>
       <AssetPicker
         open={picking}
         kinds={["sound"]}

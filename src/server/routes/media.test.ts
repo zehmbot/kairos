@@ -129,6 +129,21 @@ describe("assets", () => {
     expect((await use("sounds/theme.mp3", { film: "nope" })).statusCode).toBe(404);
   });
 
+  it("saves a picture, video or font straight into a film", async () => {
+    const saved = await upload("/api/films/intro/files?name=Logo%20Big.PNG", "png bytes");
+    expect(saved.statusCode).toBe(201);
+    expect(saved.json()).toEqual({ path: "assets/images/logo-big.png" });
+    expect(await readFile(join(filmDir(), "assets", "images", "logo-big.png"), "utf8")).toBe(
+      "png bytes",
+    );
+    expect((await upload("/api/films/intro/files?name=title.woff2")).json()).toEqual({
+      path: "assets/fonts/title.woff2",
+    });
+    // Sounds go through the Sound panel instead.
+    expect((await upload("/api/films/intro/files?name=a.mp3")).statusCode).toBe(400);
+    expect((await upload("/api/films/nope/files?name=a.png")).statusCode).toBe(404);
+  });
+
   it("deletes assets and opens the library folder", async () => {
     await upload("/api/assets?name=theme.mp3");
     const deleted = await app.inject({ method: "DELETE", url: "/api/assets/sounds/theme.mp3" });

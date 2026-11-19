@@ -1720,3 +1720,91 @@ video.asset-media {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* ---------- Film page: side tabs, Add, drop anywhere ---------- */
+
+.side-tabs-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.side-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.side-tab {
+  --tab-line: var(--line);
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: var(--px);
+  padding: 10px 6px;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 0;
+  cursor: pointer;
+  box-shadow:
+    0 calc(var(--px) * -1) 0 0 var(--tab-line),
+    0 var(--px) 0 0 var(--tab-line),
+    calc(var(--px) * -1) 0 0 0 var(--tab-line),
+    var(--px) 0 0 0 var(--tab-line);
+}
+
+.side-tab:hover {
+  --tab-line: var(--text-muted);
+  color: var(--text);
+}
+
+.side-tab[aria-selected="true"] {
+  --tab-line: var(--accent);
+  color: var(--c-night);
+  background: var(--accent);
+}
+
+.side-tab:focus-visible {
+  outline: var(--px) solid var(--highlight);
+  outline-offset: 2px;
+}
+
+.side-tab-count {
+  padding: 2px 3px;
+  color: var(--c-night);
+  background: var(--highlight);
+}
+
+.side-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.add-message {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  color: var(--ok);
+}
+
+/* Dropping on the film page: the whole window lights up, the words say where the file goes. */
+.film-drop > .drop-zone-label {
+  position: fixed;
+  z-index: 50;
+  align-items: start;
+  padding-top: 120px;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+.purpose-file {
+  overflow-wrap: anywhere;
+}

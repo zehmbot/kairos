@@ -40,6 +40,15 @@ describe("shot numbers", () => {
 });
 
 describe("the reference list", () => {
+  it("lists a file once, even when it is added twice at the same time", async () => {
+    const [a, b] = await Promise.all([
+      addReference(film, "references/same.png", "image"),
+      addReference(film, "references/same.png", "image"),
+    ]);
+    expect(a.id).toBe(b.id);
+    expect(await readReferences(film)).toHaveLength(1);
+  });
+
   it("adds, changes and removes references with their files", async () => {
     const ref = await addReference(film, "references/a.png", "image");
     expect(ref).toMatchObject({ status: "processing", note: "", sheets: 0 });
