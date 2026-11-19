@@ -210,7 +210,15 @@ export function briefMarkdown(brief: BriefFile, title: string): string {
 }
 
 /** Never copied into a template: Kairos' own data, videos, hidden folders, packages, the brief. */
-const NOT_TEMPLATE = new Set([".kairos", "renders", "node_modules", "brief.md", "kairos.json"]);
+// References are left out too: they are often other people's videos.
+const NOT_TEMPLATE = new Set([
+  ".kairos",
+  "renders",
+  "references",
+  "node_modules",
+  "brief.md",
+  "kairos.json",
+]);
 
 /** The shape whose size this is, if any. */
 function shapeOf(config: FilmConfig): FilmShape | null {

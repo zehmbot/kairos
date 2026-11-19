@@ -2,6 +2,8 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tansta
 import { z } from "zod";
 import {
   ApiErrorSchema,
+  AssetSchema,
+  type AudioTrack,
   type BriefAnswers,
   BriefFileSchema,
   CameraSchema,
@@ -18,6 +20,7 @@ import {
   type NoteUpdate,
   PickSkillResultSchema,
   PickWorkspaceResultSchema,
+  ReferenceSchema,
   RenderJobSchema,
   RendersOverviewSchema,
   type SaveTemplate,
@@ -76,6 +79,8 @@ export const queryKeys = {
   // Under "films": every films change refreshes the trash too.
   trash: ["films", "~trash"],
   brief: (id: string) => ["films", id, "brief"],
+  references: (id: string) => ["films", id, "references"],
+  assets: ["assets"],
 } as const;
 
 const notesUrl = (filmId: string) => `/api/films/${encodeURIComponent(filmId)}/notes`;
@@ -502,5 +507,145 @@ export function useOpenFilmFolder() {
       });
       if (!response.ok) throw new Error("Kairos could not open the folder.");
     },
+  });
+}
+
+// ---------- Files: uploads, assets, sounds, references ----------
+
+/**
+ * Sends a file to the hub as it is (the body is the file), reporting progress from 0 to 1.
+ * Resolves with the hub's JSON answer; rejects with its plain-words message.
+ */
+export function uploadFile(
+  url: string,
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", url);
+    request.setRequestHeader("content-type", "application/octet-stream");
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(event.loaded / event.total);
+    };
+    request.onload = () => {
+      let body: unknown = null;
+      try {
+        body = JSON.parse(request.responseText);
+      } catch {}
+      if (request.status >= 400) {
+        const error = ApiErrorSchema.safeParse(body);
+        reject(
+          new Error(
+            (error.success ? (error.data.message ?? error.data.reason) : undefined) ??
+              `The hub answered ${request.status}.`,
+          ),
+        );
+      } else resolve(body);
+    };
+    request.onerror = () =>
+      reject(new Error("Kairos could not send the file. Is the hub running?"));
+    request.send(file);
+  });
+}
+
+export const assetFileUrl = (id: string) =>
+  `/api/assets/${id.split("/").map(encodeURIComponent).join("/")}/file`;
+
+export function useAssets(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.assets,
+    queryFn: () => call(z.array(AssetSchema), "/api/assets"),
+    enabled,
+  });
+}
+
+export function useDeleteAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => callNoContent(`/api/assets/${id}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.assets }),
+  });
+}
+
+/** Copies an asset into a film (a sound becomes a sound track, starting at `start`). */
+export function useUseAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, film, start }: { id: string; film: string; start?: number }) =>
+      call(
+        z.object({ path: z.string() }),
+        `/api/assets/${id}/use`,
+        sendJson("POST", { film, start }),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.films }),
+  });
+}
+
+export function useOpenAssetsFolder() {
+  return useMutation({
+    mutationFn: () => callNoContent("/api/assets/open-folder", { method: "POST" }),
+  });
+}
+
+const filmUrl = (filmId: string) => `/api/films/${encodeURIComponent(filmId)}`;
+
+/** Adds a library sound to a film as a track. */
+export function useAddSoundFromAsset(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { asset: string; start: number }) =>
+      call(z.unknown(), `${filmUrl(filmId)}/sounds/from-asset`, sendJson("POST", input)),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.film(filmId) }),
+  });
+}
+
+/** Saves a film's whole list of sound tracks. */
+export function useSaveAudio(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (audio: AudioTrack[]) =>
+      call(z.unknown(), `${filmUrl(filmId)}/audio`, sendJson("PUT", { audio })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.film(filmId) }),
+  });
+}
+
+export function useReferences(filmId: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.references(filmId),
+    queryFn: () => call(z.array(ReferenceSchema), `${filmUrl(filmId)}/references`),
+    enabled,
+  });
+}
+
+export const referenceSheetUrl = (filmId: string, ref: string, n: number, version: string) =>
+  `${filmUrl(filmId)}/references/${ref}/sheets/${n}?v=${encodeURIComponent(version)}`;
+
+export function useAddReferenceFromAsset(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (asset: string) =>
+      call(
+        ReferenceSchema,
+        `${filmUrl(filmId)}/references/from-asset`,
+        sendJson("POST", { asset }),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.references(filmId) }),
+  });
+}
+
+export function useReferenceNote(filmId: string) {
+  return useMutation({
+    mutationFn: ({ ref, note }: { ref: string; note: string }) =>
+      call(ReferenceSchema, `${filmUrl(filmId)}/references/${ref}`, sendJson("PATCH", { note })),
+  });
+}
+
+export function useDeleteReference(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ref: string) =>
+      callNoContent(`${filmUrl(filmId)}/references/${ref}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.references(filmId) }),
   });
 }

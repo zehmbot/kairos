@@ -4,6 +4,13 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 /** Films live in this folder inside the workspace. */
 export const FILMS_FOLDER = "films";
 
+/** The asset library (images, videos, sounds, fonts shared by all films). */
+export const ASSETS_FOLDER = "assets";
+
+export function assetsDirOf(workspace: string): string {
+  return join(workspace, ASSETS_FOLDER);
+}
+
 export function filmsDirOf(workspace: string): string {
   return join(workspace, FILMS_FOLDER);
 }

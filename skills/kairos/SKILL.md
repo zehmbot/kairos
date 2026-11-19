@@ -90,6 +90,17 @@ Kairos plays the tracks in step with the preview and mixes them into the rendere
 `duration`. The page itself never plays sound: Kairos does. Time the picture to the sound (a beat, a word) with
 `start` values and constants in `film.js`, not with timers.
 
+## References and assets
+
+- **References** are videos and pictures the user likes, added on the film page (they live in `references/`).
+  `kairos_references` shows each one with the user's note (what to take from it), its length, shot count and
+  shot lengths, and frame sheets: one picture from the middle of each shot, left to right, top to bottom. Look
+  at them before building or restyling a film, take the style (pace, framing, light, type), never the content.
+- **Assets** are the user's own files shared by all films (Assets page). `kairos_assets` lists them;
+  `kairos_use_asset` copies one into the film (`assets/images/...`, `assets/fonts/...`) and gives its path. A
+  sound becomes a sound track in `kairos.json`.
+- The user can also add sounds on the film page (Sound panel): they appear in `kairos.json` `audio`.
+
 ## Making the video
 
 When the user asks for the video file, `kairos_render` puts the film in the render queue (an MP4 in

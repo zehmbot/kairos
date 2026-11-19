@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   ApiErrorSchema,
+  type Asset,
+  AssetSchema,
   type FilmChange,
   type FilmSummary,
   FilmSummarySchema,
@@ -9,6 +11,8 @@ import {
   type Note,
   NoteSchema,
   type NoteStatus,
+  type Reference,
+  ReferenceSchema,
   type RenderJob,
   RenderJobSchema,
   type RenderQuality,
@@ -45,6 +49,13 @@ export interface Hub {
   changeFilm(id: string, change: FilmChange): Promise<FilmSummary>;
   startRender(id: string, quality: RenderQuality): Promise<RenderJob>;
   renders(): Promise<RendersOverview>;
+  /** The asset library. */
+  assets(): Promise<Asset[]>;
+  /** Copies an asset into a film (a sound becomes a track). Returns its path inside the film. */
+  useAsset(asset: string, film: string, start?: number): Promise<string>;
+  references(id: string): Promise<Reference[]>;
+  /** Sheet `n` (from 1) of a reference: a PNG. */
+  referenceSheet(id: string, ref: string, n: number): Promise<Buffer>;
 }
 
 /** Calls the Kairos hub over HTTP (it only listens on 127.0.0.1). */
@@ -133,6 +144,30 @@ export class HubClient implements Hub {
       RenderJobSchema,
       `/api/films/${encodeURIComponent(id)}/renders`,
       this.#send("POST", { quality }),
+    );
+  }
+
+  assets() {
+    return this.#json(z.array(AssetSchema), "/api/assets");
+  }
+
+  async useAsset(asset: string, film: string, start?: number) {
+    const path = asset.split("/").map(encodeURIComponent).join("/");
+    const answer = await this.#json(
+      z.object({ path: z.string() }),
+      `/api/assets/${path}/use`,
+      this.#send("POST", { film, start }),
+    );
+    return answer.path;
+  }
+
+  references(id: string) {
+    return this.#json(z.array(ReferenceSchema), `/api/films/${encodeURIComponent(id)}/references`);
+  }
+
+  referenceSheet(id: string, ref: string, n: number) {
+    return this.#bytes(
+      `/api/films/${encodeURIComponent(id)}/references/${encodeURIComponent(ref)}/sheets/${n}`,
     );
   }
 

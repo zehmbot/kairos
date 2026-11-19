@@ -8,6 +8,9 @@ time a file here is saved.
 If this folder has `brief.md`, read it first: it is what the user asked for (their idea, script or answers
 to the template's questions). Build the film from it, and keep to it when you change things later.
 
+If the film has references (videos or pictures the user likes, in `references/`), look at them with
+`kairos_references` too: their notes say what to take from each.
+
 ## Files
 
 - `kairos.json`: `title`, `width` and `height` in pixels, `fps` (frames per second, 1 to 120), `duration` in
@@ -41,6 +44,10 @@ When the Kairos tools are connected (Kairos → Settings → Claude Code), use t
 - `kairos_film_settings` changes the title, length, frame rate or status with checks.
 - When the user asks for the video, `kairos_render` makes an MP4 in `renders/`; `kairos_renders` shows progress
   and the finished versions.
+- `kairos_references` shows the videos and pictures the user added as references, with what to take from each,
+  their shot lengths and frame sheets. Look at them before building or restyling the film.
+- `kairos_assets` lists the user's asset library (images, videos, sounds, fonts); `kairos_use_asset` copies one into
+  this film and gives its path (a sound becomes a sound track).
 
 ## Skills
 

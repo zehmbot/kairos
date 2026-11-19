@@ -12,20 +12,24 @@ import { kairosHome } from "./config.ts";
 import { probeExport } from "./ffmpeg.ts";
 import { buildFilmServer } from "./film-server.ts";
 import { Renderer } from "./renderer.ts";
+import { assetRoutes } from "./routes/assets.ts";
 import { claudeRoutes } from "./routes/claude.ts";
 import { eventRoutes } from "./routes/events.ts";
 import { filmRoutes } from "./routes/films.ts";
 import { filmPicture, frameRoutes } from "./routes/frames.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { noteRoutes } from "./routes/notes.ts";
+import { referenceRoutes } from "./routes/references.ts";
 import { renderRoutes } from "./routes/renders.ts";
 import { skillRoutes } from "./routes/skills.ts";
+import { soundRoutes } from "./routes/sounds.ts";
 import { templateRoutes } from "./routes/templates.ts";
 import { trashRoutes } from "./routes/trash.ts";
 import { workspaceRoutes } from "./routes/workspace.ts";
 import { allowedHostsFor, requestGuard } from "./security.ts";
 import { claudeSkillsDir, Skills } from "./skills.ts";
 import { Studio } from "./studio.ts";
+import { acceptUploads } from "./uploads.ts";
 
 const { values: args } = parseArgs({
   options: {
@@ -65,6 +69,7 @@ try {
 
 const app = Fastify({ logger: false, forceCloseConnections: true });
 app.addHook("onRequest", requestGuard(uiHosts));
+acceptUploads(app);
 
 healthRoutes(app, { version: pkg.version, url, dev, filmPort });
 workspaceRoutes(app, studio);
@@ -98,6 +103,9 @@ const renderer = new Renderer({
   exportInfo: () => exportInfo,
 });
 renderRoutes(app, { studio, renderer, exportInfo: () => exportInfo });
+assetRoutes(app, studio);
+soundRoutes(app, studio);
+referenceRoutes(app, studio, { ffmpeg: async () => (await exportInfo).ffmpeg?.path ?? null });
 filmRoutes(app, studio, {
   picture: filmPicture({ studio, camera, filmServerUrl }),
   // A film can't be deleted while a render of it runs or waits.

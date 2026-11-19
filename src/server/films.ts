@@ -2,6 +2,7 @@ import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs
 import { dirname, extname, join, relative } from "node:path";
 import { z } from "zod";
 import {
+  type AudioTrack,
   type BriefFile,
   DEFAULT_FPS,
   FILM_SHAPES,
@@ -257,7 +258,10 @@ export class FilmConfigError extends Error {}
  * Changes settings in a film's `kairos.json` (`filmDir` must be a film folder).
  * Every other field, even ones Kairos doesn't know, is kept as it was, in the same order.
  */
-export async function changeFilm(filmDir: string, change: FilmChange): Promise<FilmConfig> {
+export async function changeFilm(
+  filmDir: string,
+  change: FilmChange | { audio: AudioTrack[] },
+): Promise<FilmConfig> {
   const file = join(filmDir, CONFIG_FILE);
   const text = await readFile(file, "utf8");
   let json: unknown;

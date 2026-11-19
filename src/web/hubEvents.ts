@@ -53,6 +53,10 @@ export function useHubEventStream(): void {
         );
       } else if (event.type === "renders-changed") {
         queryClient.invalidateQueries({ queryKey: queryKeys.renders });
+      } else if (event.type === "references-changed") {
+        queryClient.invalidateQueries({ queryKey: queryKeys.references(event.id) });
+      } else if (event.type === "assets-changed") {
+        queryClient.invalidateQueries({ queryKey: queryKeys.assets });
       } else {
         // Covers the list and each changed film (["films", id]).
         queryClient.invalidateQueries({ queryKey: queryKeys.films });

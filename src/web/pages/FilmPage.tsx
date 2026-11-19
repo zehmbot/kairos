@@ -24,8 +24,10 @@ import { PixelButton } from "../components/PixelButton.tsx";
 import { PixelIcon } from "../components/PixelIcon.tsx";
 import { PixelPanel } from "../components/PixelPanel.tsx";
 import { Player, type PlayerHandle } from "../components/Player.tsx";
+import { ReferencesPanel } from "../components/ReferencesPanel.tsx";
 import { RenderDialog } from "../components/RenderDialog.tsx";
 import { SaveTemplateDialog } from "../components/SaveTemplateDialog.tsx";
+import { SoundPanel } from "../components/SoundPanel.tsx";
 import { useHubEvent } from "../hubEvents.ts";
 import { filmFileUrl } from "../player/audioSync.ts";
 import { noteCovers } from "../player/marks.ts";
@@ -322,6 +324,16 @@ export function FilmPage() {
               onShowMarks={setShowMarks}
             />
             {film.data.hasBrief && <BriefPanel filmId={film.data.id} />}
+            {config && filmOrigin && (
+              <SoundPanel
+                filmId={film.data.id}
+                tracks={config.audio}
+                duration={config.duration}
+                fileUrl={(file) => filmFileUrl(filmOrigin, film.data.id, file)}
+                now={now}
+              />
+            )}
+            <ReferencesPanel filmId={film.data.id} />
           </div>
         )}
       </div>

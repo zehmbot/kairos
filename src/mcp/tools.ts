@@ -6,8 +6,10 @@ import { isAbsolute, join, relative, sep } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { formatSize } from "../shared/media.ts";
 import { DEV_WEB_PORT, HOST } from "../shared/ports.ts";
 import {
+  type Asset,
   FilmStatusSchema,
   type FilmSummary,
   FpsSchema,
@@ -54,10 +56,10 @@ const filmArg = z
 class ToolProblem extends Error {}
 
 const text = (value: string) => ({ type: "text" as const, text: value });
-const image = (png: Buffer) => ({
+const image = (bytes: Buffer, mimeType = "image/png") => ({
   type: "image" as const,
-  data: png.toString("base64"),
-  mimeType: "image/png",
+  data: bytes.toString("base64"),
+  mimeType,
 });
 const problem = (message: string): CallToolResult => ({ content: [text(message)], isError: true });
 
@@ -167,6 +169,12 @@ export function createKairosServer(context: ToolContext): McpServer {
         if (summary.config) {
           const open = (await hub.notes(id)).filter((note) => note.status === "open").length;
           lines.push(`Open notes: ${open}${open ? " (read them with kairos_notes)" : ""}`);
+          const references = (await hub.references(id)).length;
+          if (references) {
+            lines.push(
+              `References: ${references} (look at them with kairos_references before building)`,
+            );
+          }
         }
         lines.push(`Preview: ${await uiUrl()}/films/${encodeURIComponent(id)}`);
       }
@@ -420,6 +428,164 @@ export function createKairosServer(context: ToolContext): McpServer {
         );
       }
       return { content: [text(lines.length ? lines.join("\n") : "No renders yet.")] };
+    }),
+  );
+
+  server.registerTool(
+    "kairos_assets",
+    {
+      title: "List the user's assets",
+      description:
+        "The user's asset library: images, videos, sounds and fonts shared by all films. Use one in a film with kairos_use_asset.",
+      inputSchema: {
+        kind: z
+          .enum(["image", "video", "sound", "font"])
+          .optional()
+          .describe("Only this kind of file."),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    safely(async ({ kind }: { kind?: Asset["kind"] }) => {
+      const assets = (await hub.assets()).filter((asset) => !kind || asset.kind === kind);
+      if (assets.length === 0) {
+        return {
+          content: [
+            text(
+              kind
+                ? `No ${kind} files in the asset library.`
+                : "The asset library is empty. The user adds files on the Assets page in Kairos.",
+            ),
+          ],
+        };
+      }
+      const lines = assets.map((asset) => `${asset.id} (${asset.kind}, ${formatSize(asset.size)})`);
+      return {
+        content: [
+          text(
+            `${lines.join("\n")}\n\nUse one in the film with kairos_use_asset (its id, like "${assets[0]?.id}").`,
+          ),
+        ],
+      };
+    }),
+  );
+
+  server.registerTool(
+    "kairos_use_asset",
+    {
+      title: "Use an asset in a film",
+      description:
+        "Copies a file from the user's asset library into the film folder and gives its path. Images, videos and fonts go to assets/<kind>/; a sound becomes a sound track in kairos.json (starting at `start` seconds).",
+      inputSchema: {
+        asset: z.string().describe('The asset id from kairos_assets, like "images/logo.png".'),
+        start: z
+          .number()
+          .min(0)
+          .optional()
+          .describe("For sounds: when the track starts, in seconds."),
+        film: filmArg,
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    safely(async ({ asset, start, film }: { asset: string; start?: number; film?: string }) => {
+      const id = await filmId(film);
+      const path = await hub.useAsset(asset, id, start);
+      const sound = path.startsWith("audio/");
+      return {
+        content: [
+          text(
+            sound
+              ? `Added ${path} as a sound track starting at ${seconds(start ?? 0)}. Kairos plays it with the preview and mixes it into the video.`
+              : `Copied to ${path} in the film folder. Load it from the film page with that path.`,
+          ),
+        ],
+      };
+    }),
+  );
+
+  server.registerTool(
+    "kairos_references",
+    {
+      title: "Look at the film's references",
+      description:
+        "The videos and pictures the user added as references for this film, with what to take from each (their note). For videos: length, size, number of shots and shot lengths, plus frame sheets (one picture from the middle of each shot, left to right, top to bottom). Look at them before building or restyling the film.",
+      inputSchema: {
+        film: filmArg,
+        page: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("Sheets come in pages of 6 pictures; start with 1."),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    safely(async ({ film, page = 1 }: { film?: string; page?: number }) => {
+      const id = await filmId(film);
+      const references = await hub.references(id);
+      if (references.length === 0) {
+        return {
+          content: [
+            text(
+              "This film has no references. The user adds them in the References panel on the film page.",
+            ),
+          ],
+        };
+      }
+      const lines: string[] = [];
+      const sheets: { ref: string; n: number; label: string }[] = [];
+      for (const [i, reference] of references.entries()) {
+        const name = reference.file.split("/").pop() ?? reference.file;
+        lines.push(`Reference ${i + 1}: ${name} (${reference.kind})`);
+        lines.push(
+          `  What to take from it: ${reference.note.trim() || "(no note: ask the user, or take the overall style)"}`,
+        );
+        if (reference.status === "processing")
+          lines.push("  Kairos is still looking inside it. Ask again in a moment.");
+        if (reference.status === "failed") lines.push(`  Problem: ${reference.problem}`);
+        const info = reference.info;
+        if (info) {
+          lines.push(
+            `  ${info.width}×${info.height}${info.fps ? `, ${info.fps} fps` : ""}, ${seconds(info.duration)}, ${info.shots.length} shots: typical ${seconds(info.medianShot)}, shortest ${seconds(info.shortestShot)}, longest ${seconds(info.longestShot)}.`,
+          );
+          lines.push(
+            `  Shot starts: ${info.shots.map((t, s) => `${s + 1}@${t.toFixed(1)}s`).join(", ")}`,
+          );
+        }
+        const perSheet = info ? (info.height > info.width ? 18 : 12) : 1;
+        for (let n = 1; n <= reference.sheets; n++) {
+          const shots = info?.pictured.slice((n - 1) * perSheet, n * perSheet) ?? [];
+          sheets.push({
+            ref: reference.id,
+            n,
+            label: info
+              ? `Reference ${i + 1}, sheet ${n}: shots ${shots.join(", ")} (left to right, top to bottom).`
+              : `Reference ${i + 1}: the picture.`,
+          });
+        }
+      }
+      const PER_PAGE = 6;
+      const pages = Math.max(1, Math.ceil(sheets.length / PER_PAGE));
+      const shown = sheets.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+      const content: CallToolResult["content"] = [text(lines.join("\n"))];
+      for (const sheet of shown) {
+        content.push(text(sheet.label));
+        content.push(image(await hub.referenceSheet(id, sheet.ref, sheet.n), "image/jpeg"));
+      }
+      if (sheets.length) {
+        content.push(
+          text(
+            pages > page
+              ? `Page ${page} of ${pages}. Ask for page ${page + 1} to see more sheets.`
+              : `Page ${page} of ${pages}.`,
+          ),
+        );
+      }
+      return { content };
     }),
   );
 

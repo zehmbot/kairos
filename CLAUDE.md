@@ -30,7 +30,9 @@ src/server/   Fastify hub: index.ts (entry), security.ts (request guard), studio
               claude-cli.ts (runs `claude`: version, mcp add/remove, open a terminal),
               skills.ts (copies skills into Claude Code), renderer.ts (render queue),
               renders.ts (finished videos), ffmpeg.ts (encoders and command lines),
-              templates.ts (templates, briefs, save as template), thumbnails.ts (film card pictures), routes/
+              templates.ts (templates, briefs, save as template), thumbnails.ts (film card pictures),
+              uploads.ts (files from the browser), assets.ts (asset library), references.ts (reference
+              videos: shots and frame sheets), routes/
 src/mcp/      Kairos tools for Claude Code: server.ts (stdio entry), tools.ts, hub-client.ts (calls the hub)
 src/web/      React UI: components/, pages/, player/, icons/, theme/
 src/film/     bridge.js: plain JS the film server adds to every film page
@@ -87,6 +89,20 @@ lamps, windows and fire glow. Everything is a pure function of `t` (seeded rando
 skill is its style guide. Its characters and world are our own: never a game's or brand's name, logos or
 avatars. Biome checks the template's code too, so placeholders in `.js` are written inside strings
 (`Number("{{width}}")`).
+
+## Files: uploads, assets and references
+
+The browser sends a file as the request body (`application/octet-stream`, the name in `?name=`;
+`acceptUploads` in `src/server/uploads.ts`). The hub streams it to a hidden temp file, then renames it to a
+clean, free name (`rain-2.mp3`), one at a time per folder; it refuses unknown types (`src/shared/media.ts`) and
+files over 2 GB. The **asset library** is `<workspace>/assets/{images,videos,sounds,fonts}/`; using an asset in a
+film copies it into `assets/<kind>/` (sounds into `audio/` and a track in `kairos.json`). The film page's
+**Sound panel** writes `audio` with `changeFilm`, and every track file must be inside the film.
+**References** live in `<film>/references/` (the watcher ignores it; Save as template leaves it out). Their list
+is `.kairos/references.json`; `src/server/references.ts` finds the shots with ffmpeg scene detection, pictures
+the middle of each (at most 36) and tiles them into sheets in `.kairos/references/<id>/`, in the background.
+Claude sees them with `kairos_references` (6 sheets per page), and the library with `kairos_assets` and
+`kairos_use_asset`.
 
 ## Rendering
 

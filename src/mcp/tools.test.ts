@@ -4,10 +4,12 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, describe, expect, it } from "vitest";
 import type {
+  Asset,
   FilmChange,
   FilmSummary,
   Note,
   NoteStatus,
+  Reference,
   RenderJob,
   RenderQuality,
   RendersOverview,
@@ -111,6 +113,41 @@ class FakeHub implements Hub {
     const current = await this.film(id);
     return { ...current, config: current.config && { ...current.config, ...change } };
   }
+  assets_: Asset[] = [
+    {
+      id: "images/logo.png",
+      kind: "image",
+      name: "logo.png",
+      size: 2048,
+      addedAt: "2026-11-19T10:00:00.000Z",
+    },
+    {
+      id: "sounds/rain.mp3",
+      kind: "sound",
+      name: "rain.mp3",
+      size: 1_500_000,
+      addedAt: "2026-11-19T10:00:00.000Z",
+    },
+  ];
+  used: { asset: string; film: string; start?: number }[] = [];
+  references_: Reference[] = [];
+  async assets() {
+    this.#check();
+    return this.assets_;
+  }
+  async useAsset(asset: string, filmId: string, start?: number) {
+    await this.film(filmId);
+    this.used.push({ asset, film: filmId, start });
+    return asset.startsWith("sounds/") ? `audio/${asset.slice(7)}` : `assets/${asset}`;
+  }
+  async references(id: string) {
+    await this.film(id);
+    return this.references_;
+  }
+  async referenceSheet() {
+    this.#check();
+    return PNG;
+  }
   jobs: RenderJob[] = [];
   async startRender(id: string, quality: RenderQuality) {
     await this.film(id);
@@ -190,15 +227,18 @@ describe("Kairos tools", () => {
     await connect(new FakeHub());
     const { tools } = await client.listTools();
     expect(tools.map((tool) => tool.name).sort()).toEqual([
+      "kairos_assets",
       "kairos_film_settings",
       "kairos_films",
       "kairos_frame",
       "kairos_note_update",
       "kairos_notes",
       "kairos_open_preview",
+      "kairos_references",
       "kairos_render",
       "kairos_renders",
       "kairos_status",
+      "kairos_use_asset",
     ]);
     expect(client.getInstructions()).toContain("kairos_notes");
   });
@@ -296,6 +336,94 @@ describe("Kairos tools", () => {
     const { opened } = await connect(new FakeHub());
     await call("kairos_open_preview");
     expect(opened).toEqual(["http://127.0.0.1:7340/films/intro"]);
+  });
+
+  it("lists assets and copies them into the film", async () => {
+    const hub = new FakeHub();
+    await connect(hub);
+    const list = texts(await call("kairos_assets"));
+    expect(list).toContain("images/logo.png (image, 2 KB)");
+    expect(list).toContain("sounds/rain.mp3 (sound, 1.4 MB)");
+    expect(texts(await call("kairos_assets", { kind: "font" }))).toBe(
+      "No font files in the asset library.",
+    );
+    expect(texts(await call("kairos_use_asset", { asset: "images/logo.png" }))).toContain(
+      "Copied to assets/images/logo.png",
+    );
+    expect(texts(await call("kairos_use_asset", { asset: "sounds/rain.mp3", start: 2 }))).toContain(
+      "Added audio/rain.mp3 as a sound track starting at 2 s",
+    );
+    expect(hub.used).toEqual([
+      { asset: "images/logo.png", film: "intro", start: undefined },
+      { asset: "sounds/rain.mp3", film: "intro", start: 2 },
+    ]);
+  });
+
+  it("shows references with their numbers and frame sheets, in pages", async () => {
+    const hub = new FakeHub();
+    await connect(hub);
+    expect(texts(await call("kairos_references"))).toContain("This film has no references.");
+    const pictured = Array.from({ length: 36 }, (_, i) => i + 1);
+    hub.references_ = [
+      {
+        id: "r_aaaaaaaa",
+        file: "references/story.mp4",
+        kind: "video",
+        note: "the quick cuts",
+        addedAt: "2026-11-19T10:00:00.000Z",
+        status: "ready",
+        problem: null,
+        info: {
+          duration: 90,
+          width: 720,
+          height: 1280,
+          fps: 30,
+          shots: Array.from({ length: 40 }, (_, i) => i * 2.25),
+          medianShot: 2.25,
+          shortestShot: 1,
+          longestShot: 4,
+          pictured,
+        },
+        sheets: 2,
+      },
+      {
+        id: "r_bbbbbbbb",
+        file: "references/mood.png",
+        kind: "image",
+        note: "",
+        addedAt: "2026-11-19T10:00:00.000Z",
+        status: "ready",
+        problem: null,
+        info: null,
+        sheets: 1,
+      },
+      ...Array.from(
+        { length: 4 },
+        (_, i): Reference => ({
+          id: `r_c000000${i}`,
+          file: `references/pic${i}.png`,
+          kind: "image",
+          note: "",
+          addedAt: "2026-11-19T10:00:00.000Z",
+          status: "ready",
+          problem: null,
+          info: null,
+          sheets: 1,
+        }),
+      ),
+    ];
+    const first = await call("kairos_references");
+    const report = texts(first);
+    expect(report).toContain("Reference 1: story.mp4 (video)");
+    expect(report).toContain("What to take from it: the quick cuts");
+    expect(report).toContain("720×1280, 30 fps, 90 s, 40 shots: typical 2.25 s");
+    expect(report).toContain("Reference 1, sheet 2: shots 19, 20");
+    expect(report).toContain("Page 1 of 2.");
+    expect(images(first)).toHaveLength(6);
+    const second = await call("kairos_references", { page: 2 });
+    expect(images(second)).toHaveLength(1);
+    expect(texts(second)).toContain("Page 2 of 2.");
+    expect(texts(await call("kairos_status"))).toContain("References: 6");
   });
 
   it("says plainly when Kairos isn't running", async () => {

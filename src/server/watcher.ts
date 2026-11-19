@@ -2,7 +2,8 @@ import { type FSWatcher, watch } from "node:fs";
 import { isSafeFilmId } from "./workspace.ts";
 
 /** Folders inside a film whose changes never reload the preview. */
-const IGNORED_FOLDERS = new Set(["renders", "node_modules"]);
+// Changes here never reload the preview: videos, dependencies, and reference clips (not part of the film).
+const IGNORED_FOLDERS = new Set(["renders", "node_modules", "references"]);
 
 /**
  * Works out which film a changed path belongs to. `relPath` is relative to the films folder,

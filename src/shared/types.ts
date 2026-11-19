@@ -254,6 +254,66 @@ export const FilmChangeSchema = z
   .refine((change) => Object.keys(change).length > 0, "Say what to change.");
 export type FilmChange = z.infer<typeof FilmChangeSchema>;
 
+/** PUT /api/films/:id/audio: the whole list of sound tracks of a film. */
+export const AudioChangeSchema = z.object({ audio: z.array(AudioTrackSchema) });
+
+const MediaKindSchema = z.enum(["image", "video", "sound", "font"]);
+
+/** A file in the asset library (`<workspace>/assets/<kind folder>/<name>`). */
+export const AssetSchema = z.object({
+  /** "sounds/rain.mp3": the kind folder and the file name. */
+  id: z.string(),
+  kind: MediaKindSchema,
+  name: z.string(),
+  size: z.number(),
+  addedAt: z.string(),
+});
+export type Asset = z.infer<typeof AssetSchema>;
+
+/** POST /api/films/:id/sounds/from-asset and /references/from-asset. */
+export const FromAssetSchema = z.object({
+  asset: z.string().min(1),
+  start: z.number().min(0).optional(),
+});
+
+/** What Kairos found in a reference video. Times in seconds. */
+export const ReferenceInfoSchema = z.object({
+  duration: z.number(),
+  width: z.number(),
+  height: z.number(),
+  fps: z.number().nullable(),
+  /** When each shot starts (the first is 0). */
+  shots: z.array(z.number()),
+  /** Typical, shortest and longest shot. */
+  medianShot: z.number(),
+  shortestShot: z.number(),
+  longestShot: z.number(),
+  /** Which shots are on the sheets (numbers from 1), in reading order. */
+  pictured: z.array(z.number()),
+});
+export type ReferenceInfo = z.infer<typeof ReferenceInfoSchema>;
+
+/** A reference video or picture added to a film, for Claude to look at. */
+export const ReferenceSchema = z.object({
+  id: z.string(),
+  /** Inside the film folder: "references/clip.mp4". */
+  file: z.string(),
+  kind: z.enum(["video", "image"]),
+  /** What Claude should take from it (the user's words). */
+  note: z.string(),
+  addedAt: z.string(),
+  status: z.enum(["processing", "ready", "failed"]),
+  problem: z.string().nullable(),
+  info: ReferenceInfoSchema.nullable(),
+  /** How many sheet pictures there are. */
+  sheets: z.number(),
+});
+export type Reference = z.infer<typeof ReferenceSchema>;
+
+export const ReferenceNoteSchema = z.object({
+  note: z.string().max(1000, "Keep the note under 1000 letters."),
+});
+
 /** One film folder, as the hub sees it. */
 export const FilmSummarySchema = z.object({
   /** Folder name inside `<workspace>/films`. */
@@ -513,6 +573,8 @@ export const HubEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("films-changed"), ids: z.array(z.string()) }),
   z.object({ type: z.literal("workspace-changed") }),
   z.object({ type: z.literal("notes-changed"), id: z.string() }),
+  z.object({ type: z.literal("references-changed"), id: z.string() }),
+  z.object({ type: z.literal("assets-changed") }),
   /** A render moved on (sent at most a few times a second). */
   z.object({ type: z.literal("render-progress"), job: RenderJobSchema }),
   /** A film's list of finished videos changed. */

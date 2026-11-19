@@ -1499,3 +1499,224 @@ a.render-title:hover {
     aspect-ratio: 16 / 9;
   }
 }
+
+/* ---------- Files: drop zones, sounds, references, assets ---------- */
+
+.drop-zone {
+  position: relative;
+}
+
+/* Shown while a file is dragged over the area. */
+.drop-zone-label {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  box-shadow: inset 0 0 0 var(--px) var(--accent);
+  pointer-events: none;
+}
+
+.drop-page {
+  min-height: 60vh;
+}
+
+.upload-status {
+  color: var(--accent);
+}
+
+.sound-list,
+.ref-list,
+.asset-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sound-row,
+.ref-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg);
+}
+
+.sound-head,
+.ref-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sound-name,
+.ref-name {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  overflow-wrap: anywhere;
+}
+
+/* Where the sound plays within the film. */
+.sound-bar {
+  position: relative;
+  height: 8px;
+  background: var(--surface);
+}
+
+.sound-bar-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
+}
+
+.sound-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.sound-start {
+  width: 88px;
+}
+
+.sound-volume {
+  flex: 1;
+  min-width: 80px;
+  accent-color: var(--accent);
+}
+
+.sound-volume-value {
+  min-width: 44px;
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.ref-head {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.ref-thumb {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 96px;
+  height: 64px;
+  overflow: hidden;
+  color: var(--text-muted);
+  background: var(--bar);
+}
+
+.ref-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: auto;
+}
+
+.ref-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ref-sheets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 16px;
+}
+
+.ref-sheets a {
+  color: var(--accent);
+}
+
+.asset-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.asset-preview {
+  display: grid;
+  place-items: center;
+  height: 128px;
+  overflow: hidden;
+  color: var(--text-muted);
+  background: var(--bar);
+}
+
+.asset-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: auto;
+}
+
+video.asset-media {
+  object-fit: contain;
+  background: var(--c-night);
+}
+
+.asset-sound {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0 8px;
+}
+
+.asset-sound audio {
+  width: 100%;
+}
+
+.asset-font {
+  font-size: 48px;
+  color: var(--text);
+}
+
+.asset-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  background: var(--bg);
+}
+
+.asset-pick-preview {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 64px;
+  height: 48px;
+  overflow: hidden;
+  background: var(--bar);
+}
+
+.asset-pick-preview .asset-media {
+  object-fit: cover;
+}
+
+.asset-pick-preview .asset-font {
+  font-size: 24px;
+}
+
+.asset-pick-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
