@@ -1,4 +1,29 @@
-import type { RenderJob } from "../shared/types.ts";
+import type { RenderJob, RendersOverview } from "../shared/types.ts";
+
+/** How long the film page keeps saying a render ended (done, failed or cancelled). */
+export const RECENT_MS = 10 * 60_000;
+
+/**
+ * The render to mention on a film's page: the latest one while it runs, or for a few minutes after it ended.
+ * A finished render is only mentioned while its video still exists (it may have been deleted since).
+ */
+export function filmRender(
+  overview: RendersOverview | undefined,
+  filmId: string,
+  now: number,
+): RenderJob | null {
+  const latest = overview?.jobs.find((job) => job.filmId === filmId);
+  if (!latest) return null;
+  if (isActive(latest)) return latest;
+  if (!latest.endedAt || now - Date.parse(latest.endedAt) >= RECENT_MS) return null;
+  if (latest.state === "done") {
+    const kept = overview?.videos.some(
+      (video) => video.filmId === filmId && video.version === latest.version,
+    );
+    if (!kept) return null;
+  }
+  return latest;
+}
 
 /** `48234567` -> `"46.0 MB"` */
 export function formatBytes(bytes: number): string {

@@ -26,11 +26,8 @@ import { useHubEvent } from "../hubEvents.ts";
 import { noteCovers } from "../player/marks.ts";
 import { formatLength, frameCount, timeOf } from "../player/time.ts";
 import { useNoteDraft } from "../player/useNoteDraft.ts";
-import { isActive, jobStatus } from "../renderText.ts";
+import { filmRender, jobStatus } from "../renderText.ts";
 import { useNow } from "../useNow.ts";
-
-/** How long the film page keeps saying a render ended (done or failed). */
-const RECENT_MS = 10 * 60_000;
 
 function BackLink() {
   return (
@@ -57,13 +54,10 @@ export function FilmPage() {
   const [rateOpen, setRateOpen] = useState(false);
   const [renderOpen, setRenderOpen] = useState(false);
   const renders = useRenders();
-  // This film's latest render: shown while it runs, and for a few minutes after it ends.
-  const latest = renders.data?.jobs.find((job) => job.filmId === id);
-  const clock = useNow(Boolean(latest && isActive(latest)));
-  const renderJob =
-    latest && (isActive(latest) || clock - Date.parse(latest.endedAt ?? "") < RECENT_MS)
-      ? latest
-      : null;
+  // This film's latest render: shown while it runs, and for a few minutes after it ends. The clock ticks
+  // while there's something to show, so "time left" moves and an old message goes away by itself.
+  const clock = useNow(Boolean(filmRender(renders.data, id, Date.now())));
+  const renderJob = filmRender(renders.data, id, clock);
 
   // Live reload: any saved file in this film reloads the preview.
   useHubEvent((event) => {

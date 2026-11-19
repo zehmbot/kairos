@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { RenderJob } from "../shared/types.ts";
-import { formatBytes, formatDuration, jobStatus, progressOf, secondsLeft } from "./renderText.ts";
+import {
+  filmRender,
+  formatBytes,
+  formatDuration,
+  jobStatus,
+  progressOf,
+  RECENT_MS,
+  secondsLeft,
+} from "./renderText.ts";
 
 const job = (extra: Partial<RenderJob>): RenderJob => ({
   id: "r_1",
@@ -45,5 +53,42 @@ describe("render text", () => {
     expect(jobStatus(job({ state: "queued" }), now)).toBe("Waiting for the render before it");
     expect(jobStatus(job({ state: "done", version: 3 }), now)).toBe("Done: version 3");
     expect(jobStatus(job({ state: "failed", error: "boom" }), now)).toBe("boom");
+  });
+});
+
+describe("the render on a film's page", () => {
+  const ended = "2026-11-19T10:00:00.000Z";
+  const now = Date.parse(ended) + 60_000; // a minute later
+  const video = {
+    version: 1,
+    file: "renders/intro-v1.mp4",
+    createdAt: ended,
+    quality: "high" as const,
+    encoder: "libx264" as const,
+    width: 1920,
+    height: 1080,
+    fps: 30,
+    duration: 5,
+    frames: 150,
+    bytes: 1000,
+    seconds: 4,
+    filmId: "intro",
+    title: "Intro",
+  };
+  const done = job({ state: "done", version: 1, done: 300, endedAt: ended });
+
+  it("shows a running render, and a finished one for a while", () => {
+    expect(filmRender({ jobs: [job({ done: 10 })], videos: [] }, "intro", now)?.state).toBe(
+      "running",
+    );
+    expect(filmRender({ jobs: [done], videos: [video] }, "intro", now)?.version).toBe(1);
+    expect(filmRender({ jobs: [done], videos: [video] }, "intro", now + RECENT_MS)).toBeNull();
+    expect(filmRender({ jobs: [done], videos: [video] }, "outro", now)).toBeNull();
+  });
+
+  it("forgets a finished render once its video is deleted", () => {
+    expect(filmRender({ jobs: [done], videos: [] }, "intro", now)).toBeNull();
+    const failed = job({ state: "failed", error: "boom", endedAt: ended });
+    expect(filmRender({ jobs: [failed], videos: [] }, "intro", now)?.error).toBe("boom");
   });
 });
