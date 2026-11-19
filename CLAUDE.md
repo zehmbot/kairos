@@ -68,6 +68,13 @@ shared with the player (`src/shared/frames.ts`, frame `f` at `t = f / fps`). `sr
 which H.264 encoders really work (NVIDIA, AMD, Intel, then x264) with a 1-frame test encode. Progress goes over
 SSE (`render-progress`, `renders-changed`). On this machine a 1080p film renders at about 55 frames per second.
 
+**Sound:** `audio` in `kairos.json` is a list of tracks (`file`, `start` in seconds, `volume` 0 to 2; a single
+file name also works, see `AudioTrackSchema`). `readFilm` reports missing files as the film's problem. The
+preview plays one `<audio>` element per track (`src/web/player/useFilmAudio.ts`): the player's clock leads,
+tracks start at their `start` and are moved back in step when they drift over 80 ms. The render mixes the
+tracks while joining the chunks (`mixFilter` in `src/server/ffmpeg.ts`: `adelay`, `volume`, `amix` with
+`normalize=0`, `apad`, cut with `-t` at the film's length, AAC 192k).
+
 ## Claude Code
 
 The **Kairos tools** are an MCP server (`src/mcp/server.ts`, stdio) that Claude Code starts. Settings → Claude Code

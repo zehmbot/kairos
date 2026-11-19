@@ -142,6 +142,68 @@ describe.runIf(browser && ffmpeg)("Renderer (real browser and ffmpeg)", () => {
     expect(seen.some((event) => event.type === "renders-changed")).toBe(true);
   }, 120_000);
 
+  it("mixes the sound tracks into the video, as long as the film", async () => {
+    const templateDir = fileURLToPath(new URL("../../templates/starter/", import.meta.url));
+    await createFilm(filmsDir, templateDir, { title: "Sound Test", shape: "wide" });
+    const dir = join(filmsDir, "sound-test");
+    // Two tones: a short one from the start, a longer one from 0.5 s (cut at the film's end).
+    const tone = (file: string, hz: number, seconds: number) =>
+      run(ffmpeg ?? "", [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        `sine=frequency=${hz}:duration=${seconds}`,
+        join(dir, file),
+      ]);
+    await tone("low.wav", 220, 1);
+    await tone("high.wav", 880, 3);
+    await writeFile(
+      join(dir, "kairos.json"),
+      JSON.stringify({
+        title: "Sound Test",
+        width: 320,
+        height: 180,
+        fps: 30,
+        duration: 2,
+        audio: [
+          { file: "low.wav", volume: 0.5 },
+          { file: "high.wav", start: 0.5 },
+        ],
+      }),
+    );
+    const renderer = makeRenderer();
+    const job = await waitFor(
+      renderer,
+      (await renderer.start("sound-test", { quality: "small", gpu: false })).id,
+    );
+    expect(job.error).toBeNull();
+
+    const probe = await run(ffprobeNextTo(ffmpeg ?? ""), [
+      "-v",
+      "error",
+      "-show_entries",
+      "stream=codec_type,codec_name,sample_rate,duration",
+      "-of",
+      "json",
+      join(dir, "renders", "sound-test-v1.mp4"),
+    ]);
+    const streams = JSON.parse(probe.stdout).streams as {
+      codec_type: string;
+      codec_name: string;
+      sample_rate?: string;
+      duration: string;
+    }[];
+    const audio = streams.find((stream) => stream.codec_type === "audio");
+    expect(streams.map((stream) => stream.codec_type).sort()).toEqual(["audio", "video"]);
+    expect(audio).toMatchObject({ codec_name: "aac", sample_rate: "48000" });
+    expect(Number(audio?.duration)).toBeGreaterThan(1.9);
+    expect(Number(audio?.duration)).toBeLessThan(2.1);
+  }, 120_000);
+
   it("reports the frame where the film breaks", async () => {
     const dir = join(filmsDir, "render-test");
     await writeFile(

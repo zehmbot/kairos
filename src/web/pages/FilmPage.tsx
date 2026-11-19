@@ -23,6 +23,7 @@ import { PixelPanel } from "../components/PixelPanel.tsx";
 import { Player, type PlayerHandle } from "../components/Player.tsx";
 import { RenderDialog } from "../components/RenderDialog.tsx";
 import { useHubEvent } from "../hubEvents.ts";
+import { filmFileUrl } from "../player/audioSync.ts";
 import { noteCovers } from "../player/marks.ts";
 import { formatLength, frameCount, timeOf } from "../player/time.ts";
 import { useNoteDraft } from "../player/useNoteDraft.ts";
@@ -172,6 +173,11 @@ export function FilmPage() {
           reloadKey={reloadKey}
           overlay={overlay}
           noteMarks={openNotes}
+          audio={config.audio.map((track) => ({
+            url: filmFileUrl(filmOrigin, film.data.id, track.file),
+            start: track.start,
+            volume: track.volume,
+          }))}
         />
         <p className="hint preview-hint">
           To change this film, press Open Claude here (or run <code>claude</code> in its folder) and

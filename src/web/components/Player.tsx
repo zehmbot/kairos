@@ -3,12 +3,15 @@ import {
   type ReactNode,
   type Ref,
   type RefObject,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
   useState,
 } from "react";
+import type { PreviewTrack } from "../player/audioSync.ts";
 import { formatTimecode, frameAt, sceneAt, timeOf } from "../player/time.ts";
+import { useFilmAudio, useSoundSettings } from "../player/useFilmAudio.ts";
 import { useFilmPlayer } from "../player/useFilmPlayer.ts";
 import { Notice } from "./Notice.tsx";
 import { PixelButton } from "./PixelButton.tsx";
@@ -27,8 +30,12 @@ interface PlayerProps {
   overlay?: (frame: number) => ReactNode;
   /** Notes to show on the scrub bar: a marker for one frame, a bar for a range. */
   noteMarks?: readonly { id: string; t: number; until: number | null }[];
+  /** The film's sound tracks, played in step with the picture. */
+  audio?: readonly PreviewTrack[];
   ref?: Ref<PlayerHandle>;
 }
+
+const NO_AUDIO: readonly PreviewTrack[] = [];
 
 /** Lets the film page drive the player (jump to a note, pause to add one). */
 export interface PlayerHandle {
@@ -66,12 +73,18 @@ export function Player({
   reloadKey,
   overlay,
   noteMarks = [],
+  audio = NO_AUDIO,
   ref,
 }: PlayerProps) {
   const player = useFilmPlayer({ src, fps, duration });
   const { frame, total, toggle, step, seek, pause, currentFrame } = player;
   const stageRef = useRef<HTMLDivElement>(null);
   const stage = useElementSize(stageRef);
+  const sound = useSoundSettings();
+  const { muted, update: updateSound } = sound;
+  const hasSound = audio.length > 0;
+  const now = useCallback(() => timeOf(currentFrame(), fps), [currentFrame, fps]);
+  useFilmAudio(audio, player.playing, now, sound);
 
   // The page is built at the film's real size and scaled down to fit the stage.
   const scale = stage ? Math.min(stage.width / width, stage.height / height) : 0;
@@ -97,7 +110,7 @@ export function Player({
     const onKey = (event: KeyboardEvent) => {
       if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
       const target = event.target instanceof HTMLElement ? event.target : null;
-      const onScrubber = target instanceof HTMLInputElement && target.type === "range";
+      const onScrubber = target?.classList.contains("scrub-input") ?? false;
       if (!onScrubber && target?.closest("input, textarea, select, dialog, [contenteditable]"))
         return;
       if (event.key === " " && target?.closest("button, a")) return;
@@ -119,6 +132,11 @@ export function Player({
         case "End":
           seek(total - 1);
           break;
+        case "m":
+        case "M":
+          if (!hasSound) return;
+          updateSound({ muted: !muted });
+          break;
         default:
           return;
       }
@@ -126,7 +144,7 @@ export function Player({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [fps, total, toggle, step, seek]);
+  }, [fps, total, toggle, step, seek, hasSound, muted, updateSound]);
 
   return (
     <div className="player">
@@ -242,6 +260,30 @@ export function Player({
             onClick={() => seek(total - 1)}
           />
         </div>
+        {hasSound && (
+          <div className="sound-controls">
+            <PixelButton
+              variant="ghost"
+              icon={muted ? "mute" : "sound"}
+              aria-label={muted ? "Sound on" : "Sound off"}
+              title={muted ? "Sound on (M)" : "Sound off (M)"}
+              onMouseDown={keepFocus}
+              onClick={() => updateSound({ muted: !muted })}
+            />
+            <input
+              type="range"
+              className="volume-input"
+              min={0}
+              max={1}
+              step={0.05}
+              value={muted ? 0 : sound.volume}
+              aria-label="Volume"
+              onChange={(event) =>
+                updateSound({ volume: Number(event.target.value), muted: false })
+              }
+            />
+          </div>
+        )}
         <output className="timecode">
           {formatTimecode(t)}
           <span className="timecode-total"> / {formatTimecode(duration)}</span>

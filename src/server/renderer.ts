@@ -21,6 +21,7 @@ import { chunkArgs, concatLine, joinArgs, runFfmpeg } from "./ffmpeg.ts";
 import { type Film, readFilm } from "./films.ts";
 import { addRender, nextVersion, RENDERS_DIR, videoName } from "./renders.ts";
 import type { Studio } from "./studio.ts";
+import { resolveInside } from "./workspace.ts";
 
 /** A render can't start. The message is shown to the user as-is. */
 export class RenderError extends Error {}
@@ -269,7 +270,12 @@ export class Renderer {
         chunks.map((chunk) => concatLine(join(dir, chunkFile(chunk)))).join("\n"),
       );
       const joined = join(dir, "joined.mp4");
-      await runFfmpeg(ffmpeg, joinArgs(list, joined));
+      // The film's sound tracks are mixed in here (readFilm already checked they exist).
+      const tracks = config.audio.flatMap((track) => {
+        const file = resolveInside(film.path, track.file);
+        return file ? [{ path: file, start: track.start, volume: track.volume }] : [];
+      });
+      await runFfmpeg(ffmpeg, joinArgs(list, joined, { tracks, duration: config.duration }));
       const version = await nextVersion(film.path, film.id);
       const name = videoName(film.id, version);
       await rename(joined, join(film.path, RENDERS_DIR, name));

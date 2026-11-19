@@ -91,6 +91,15 @@ export async function readFilm(filmsDir: string, id: string): Promise<Film | nul
       const info = await stat(page).catch(() => null);
       if (!info?.isFile()) problem = `The film page "${result.config.page}" is missing.`;
     }
+    for (const track of result.config.audio) {
+      if (problem) break;
+      const file = resolveInside(path, track.file);
+      if (!file) {
+        problem = `The audio file "${track.file}" must be inside the film folder.`;
+      } else if (!(await stat(file).catch(() => null))?.isFile()) {
+        problem = `The audio file "${track.file}" is missing.`;
+      }
+    }
   }
 
   return { id, path, config: result.config, problem, updatedAt: await lastChange(path) };
@@ -186,7 +195,8 @@ export async function createFilm(
       }
     }
 
-    const config: FilmConfig = {
+    // What kairos.json holds (the input form: no empty "audio" list written into new films).
+    const config: z.input<typeof FilmConfigSchema> = {
       title: input.title,
       width: shape.width,
       height: shape.height,

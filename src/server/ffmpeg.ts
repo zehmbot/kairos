@@ -133,9 +133,47 @@ export function chunkArgs(chunk: ChunkEncoding): string[] {
   ];
 }
 
-/** Joins the chunks listed in `listFile` (ffmpeg concat format) into the final video, without encoding. */
-export function joinArgs(listFile: string, output: string): string[] {
-  return [
+/** A sound file to mix into the video, placed on the film's timeline. */
+export interface SoundTrack {
+  path: string;
+  /** Seconds from the start of the film. */
+  start: number;
+  /** 1 = as it is, 0 to 2. */
+  volume: number;
+}
+
+/**
+ * The audio filter that places each track (input 1, 2, ...) at its start and volume, mixes them without
+ * turning them down (`normalize=0`) and pads with silence, so the sound is never shorter than the film.
+ */
+export function mixFilter(tracks: readonly SoundTrack[]): string {
+  const parts = tracks.map((track, i) => {
+    const delay = Math.round(track.start * 1000);
+    const steps = [
+      "aresample=48000",
+      ...(delay > 0 ? [`adelay=delays=${delay}:all=1`] : []),
+      `volume=${track.volume}`,
+    ];
+    return `[${i + 1}:a]${steps.join(",")}[a${i}]`;
+  });
+  const labels = tracks.map((_, i) => `[a${i}]`).join("");
+  const mix =
+    tracks.length === 1
+      ? `${labels}apad[aout]`
+      : `${labels}amix=inputs=${tracks.length}:normalize=0:dropout_transition=0,apad[aout]`;
+  return [...parts, mix].join(";");
+}
+
+/**
+ * Joins the chunks listed in `listFile` (ffmpeg concat format) into the final video, without encoding
+ * the picture again. With sound, the tracks are mixed in (AAC) and cut at the film's `duration`.
+ */
+export function joinArgs(
+  listFile: string,
+  output: string,
+  sound?: { tracks: readonly SoundTrack[]; duration: number },
+): string[] {
+  const head = [
     "-hide_banner",
     "-loglevel",
     "error",
@@ -146,13 +184,27 @@ export function joinArgs(listFile: string, output: string): string[] {
     "0",
     "-i",
     listFile,
-    "-c",
+  ];
+  const tail = ["-movflags", "+faststart", "-f", "mp4", output];
+  if (!sound || sound.tracks.length === 0) return [...head, "-c", "copy", ...tail];
+  return [
+    ...head,
+    ...sound.tracks.flatMap((track) => ["-i", track.path]),
+    "-filter_complex",
+    mixFilter(sound.tracks),
+    "-map",
+    "0:v",
+    "-map",
+    "[aout]",
+    "-c:v",
     "copy",
-    "-movflags",
-    "+faststart",
-    "-f",
-    "mp4",
-    output,
+    "-c:a",
+    "aac",
+    "-b:a",
+    "192k",
+    "-t",
+    String(sound.duration),
+    ...tail,
   ];
 }
 

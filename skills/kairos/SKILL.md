@@ -11,7 +11,7 @@ live, collects the user's frame notes, and later renders it to a video file by d
 ## The film folder
 
 ```
-kairos.json   title, width, height (pixels), fps (1 to 120), duration (seconds), status
+kairos.json   title, width, height (pixels), fps (1 to 120), duration (seconds), status, audio
 index.html    the page, built at exactly width × height (Kairos scales the preview itself)
 film.js       defines window.renderOut(t)
 assets/       images, fonts, sounds
@@ -63,6 +63,25 @@ When the Kairos tools are connected:
    returns any error the film throws.
 5. `kairos_note_update` with `status: "fixed"`, only once you have seen the frame and it is right.
 6. Tell the user what you changed, note by note. If a note is unclear, ask rather than guess.
+
+## Sound
+
+Sound files live in the film folder (for example `audio/`) and are listed in `kairos.json`:
+
+```json
+"audio": [
+  { "file": "audio/music.mp3", "volume": 0.5 },
+  { "file": "audio/voice.wav", "start": 1.2 }
+]
+```
+
+- `start`: when the track begins on the film's timeline, in seconds (default 0).
+- `volume`: 0 to 2 (default 1). Put music under a voice at about 0.3-0.5.
+- A single `"audio": "file.mp3"` also works.
+
+Kairos plays the tracks in step with the preview and mixes them into the rendered MP4, cut at the film's
+`duration`. The page itself never plays sound: Kairos does. Time the picture to the sound (a beat, a word) with
+`start` values and constants in `film.js`, not with timers.
 
 ## Making the video
 

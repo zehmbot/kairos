@@ -7,6 +7,7 @@ import {
   ffprobeNextTo,
   findFfmpeg,
   joinArgs,
+  mixFilter,
   probeExport,
 } from "./ffmpeg.ts";
 
@@ -93,4 +94,31 @@ describe("probing", () => {
     },
     60_000,
   );
+});
+
+describe("mixing sound", () => {
+  const tracks = [
+    { path: "C:\filmaudiomusic.mp3", start: 0, volume: 0.5 },
+    { path: "C:\filmaudio\voice.wav", start: 1.2, volume: 1 },
+  ];
+
+  it("places each track and mixes them without turning them down", () => {
+    expect(mixFilter(tracks)).toBe(
+      "[1:a]aresample=48000,volume=0.5[a0];" +
+        "[2:a]aresample=48000,adelay=delays=1200:all=1,volume=1[a1];" +
+        "[a0][a1]amix=inputs=2:normalize=0:dropout_transition=0,apad[aout]",
+    );
+    expect(mixFilter(tracks.slice(1))).toBe(
+      "[1:a]aresample=48000,adelay=delays=1200:all=1,volume=1[a0];[a0]apad[aout]",
+    );
+  });
+
+  it("adds the sound while joining, cut at the film's length", () => {
+    const args = joinArgs("list.txt", "out.mp4", { tracks, duration: 5 });
+    expect(args.filter((arg) => arg === "-i")).toHaveLength(3);
+    expect(args).toEqual(expect.arrayContaining(["-map", "0:v", "[aout]", "-c:v", "copy", "aac"]));
+    expect(args[args.indexOf("-t") + 1]).toBe("5");
+    // Without sound, nothing is encoded again.
+    expect(joinArgs("list.txt", "out.mp4", { tracks: [], duration: 5 })).not.toContain("aac");
+  });
 });

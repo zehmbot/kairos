@@ -159,3 +159,52 @@ describe("changeFilm (other settings)", () => {
     expect(config).toMatchObject({ title: "New intro", duration: 12.5, status: "review" });
   });
 });
+
+describe("sound", () => {
+  it("reads one file or a list of tracks, always as a list", async () => {
+    await makeFilm("one", { title: "One", duration: 5, audio: "music.mp3" });
+    await writeFile(join(filmsDir, "one", "music.mp3"), "mp3");
+    expect((await readFilm(filmsDir, "one"))?.config?.audio).toEqual([
+      { file: "music.mp3", start: 0, volume: 1 },
+    ]);
+
+    await makeFilm("two", {
+      title: "Two",
+      duration: 5,
+      audio: [
+        { file: "a.wav", volume: 0.5 },
+        { file: "b.wav", start: 1.2 },
+      ],
+    });
+    await writeFile(join(filmsDir, "two", "a.wav"), "wav");
+    await writeFile(join(filmsDir, "two", "b.wav"), "wav");
+    const film = await readFilm(filmsDir, "two");
+    expect(film?.problem).toBeNull();
+    expect(film?.config?.audio).toEqual([
+      { file: "a.wav", start: 0, volume: 0.5 },
+      { file: "b.wav", start: 1.2, volume: 1 },
+    ]);
+
+    await makeFilm("none", { title: "None", duration: 5 });
+    expect((await readFilm(filmsDir, "none"))?.config?.audio).toEqual([]);
+  });
+
+  it("explains missing, outside and too loud sound", async () => {
+    await makeFilm("missing", { title: "M", duration: 5, audio: [{ file: "audio/voice.wav" }] });
+    expect((await readFilm(filmsDir, "missing"))?.problem).toBe(
+      'The audio file "audio/voice.wav" is missing.',
+    );
+    await makeFilm("outside", { title: "O", duration: 5, audio: "../secret.wav" });
+    expect((await readFilm(filmsDir, "outside"))?.problem).toContain(
+      "must be inside the film folder",
+    );
+    await makeFilm("loud", { title: "L", duration: 5, audio: [{ file: "a.wav", volume: 3 }] });
+    expect((await readFilm(filmsDir, "loud"))?.problem).toContain("volume goes from 0 to 2");
+  });
+
+  it("doesn't write an empty sound list into new films", async () => {
+    const id = await createFilm(filmsDir, templateDir, { title: "Quiet", shape: "wide" });
+    const saved = JSON.parse(await readFile(join(filmsDir, id, "kairos.json"), "utf8"));
+    expect(saved.audio).toBeUndefined();
+  });
+});

@@ -25,6 +25,28 @@ export const FpsSchema = z
   .min(MIN_FPS, `The frame rate must be at least ${MIN_FPS} frame per second.`)
   .max(MAX_FPS, `The frame rate can be at most ${MAX_FPS} frames per second.`);
 
+/** One sound file on the film's timeline (music, a voice, effects...). */
+export const AudioTrackSchema = z.object({
+  /** The sound file, inside the film folder, like `audio/music.mp3`. */
+  file: z.string().min(1, "Each audio track needs a file."),
+  /** When it starts on the film's timeline, in seconds. */
+  start: z.number().min(0, "An audio track can't start before the film.").default(0),
+  /** 1 is the file as it is, 0.5 half as loud, 2 twice as loud. */
+  volume: z
+    .number()
+    .min(0, "An audio track's volume goes from 0 to 2.")
+    .max(2, "An audio track's volume goes from 0 to 2.")
+    .default(1),
+});
+export type AudioTrack = z.infer<typeof AudioTrackSchema>;
+
+/** `"audio": "file.mp3"` (one track) or a list of tracks. Always read as a list. */
+const AudioSchema = z
+  .union([z.string().min(1), z.array(AudioTrackSchema)])
+  .transform((audio) =>
+    typeof audio === "string" ? [AudioTrackSchema.parse({ file: audio })] : audio,
+  );
+
 /**
  * `kairos.json` at the root of every film folder.
  * The film page itself exposes `window.renderOut(t)`, `window.READY` and `window.KAIROS_SCENES`.
@@ -39,8 +61,8 @@ export const FilmConfigSchema = z.object({
   status: FilmStatusSchema.default("draft"),
   /** Film page, relative to the film folder. */
   page: z.string().default("index.html"),
-  /** Optional soundtrack, relative to the film folder. */
-  audio: z.string().optional(),
+  /** Sound: one file, or tracks with a start and a volume (mixed together in the render). */
+  audio: AudioSchema.default([]),
 });
 export type FilmConfig = z.infer<typeof FilmConfigSchema>;
 

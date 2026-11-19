@@ -735,6 +735,19 @@ code {
   color: var(--text-muted);
 }
 
+/* Sound on/off and volume, next to the play buttons. */
+.sound-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.volume-input {
+  width: 64px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 /* ---------- Notes ---------- */
 
 .panel-actions {

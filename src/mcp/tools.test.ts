@@ -29,6 +29,7 @@ const film = (id: string, extra: Partial<FilmSummary> = {}): FilmSummary => ({
     duration: 5,
     status: "draft",
     page: "index.html",
+    audio: [],
   },
   problem: null,
   previewPath: `/${id}/index.html`,
