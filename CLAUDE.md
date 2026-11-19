@@ -27,7 +27,8 @@ src/server/   Fastify hub: index.ts (entry), security.ts (request guard), studio
               films.ts (scan/create), film-server.ts (serves film pages), notes.ts (frame notes),
               camera.ts (frame pictures), folder-picker.ts/.ps1 (system "choose folder" window),
               claude-cli.ts (runs `claude`: version, mcp add/remove, open a terminal),
-              skills.ts (copies skills into Claude Code), routes/
+              skills.ts (copies skills into Claude Code), renderer.ts (render queue),
+              renders.ts (finished videos), ffmpeg.ts (encoders and command lines), routes/
 src/mcp/      Kairos tools for Claude Code: server.ts (stdio entry), tools.ts, hub-client.ts (calls the hub)
 src/web/      React UI: components/, pages/, player/, icons/, theme/
 src/film/     bridge.js: plain JS the film server adds to every film page
@@ -54,6 +55,18 @@ one write at a time, atomic, and it never overwrites a broken file). The **frame
 puppeteer-core with the installed Chrome or Edge, or `KAIROS_BROWSER`) opens the film page headless, calls
 `window.__kairos.render(t)` from the bridge, adds the marks SVG from `src/shared/marks.ts` and takes a PNG.
 The player overlay draws marks from the same `markGeometry`, so both look the same.
+
+## Rendering
+
+`src/server/renderer.ts` turns a film into `renders/<id>-v<N>.mp4` (versions only go up; the list is
+`.kairos/renders.json`, `src/server/renders.ts`). Frames are split into chunks of about 4 s. Up to 4 workers
+(about one per 3 CPU cores) each start **their own hidden browser**: one browser takes screenshots one at a time,
+so separate browsers are about 3× faster, and in a hidden browser only a window's front tab draws. Each worker
+calls `window.__kairos.render(t)` per frame, takes a fast PNG and streams it into its own ffmpeg (`image2pipe`),
+which writes one chunk. ffmpeg then joins the chunks without encoding again (`concat`, `-c copy`). Frame math is
+shared with the player (`src/shared/frames.ts`, frame `f` at `t = f / fps`). `src/server/ffmpeg.ts` probes
+which H.264 encoders really work (NVIDIA, AMD, Intel, then x264) with a 1-frame test encode. Progress goes over
+SSE (`render-progress`, `renders-changed`). On this machine a 1080p film renders at about 55 frames per second.
 
 ## Claude Code
 

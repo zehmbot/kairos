@@ -33,6 +33,8 @@ When the Kairos tools are connected (Kairos → Settings → Claude Code), use t
   throws.
 - When a note is done, mark it with `kairos_note_update` (`status: "fixed"`). Never edit `.kairos/` by hand.
 - `kairos_film_settings` changes the title, length, frame rate or status with checks.
+- When the user asks for the video, `kairos_render` makes an MP4 in `renders/`; `kairos_renders` shows progress
+  and the finished versions.
 
 ## Skills
 

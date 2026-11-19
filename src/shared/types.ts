@@ -265,11 +265,90 @@ export const PickSkillResultSchema = z.object({
 });
 export type PickSkillResult = z.infer<typeof PickSkillResultSchema>;
 
+/** "high" looks like the film itself; "small" makes a smaller file. */
+export const RenderQualitySchema = z.enum(["high", "small"]);
+export type RenderQuality = z.infer<typeof RenderQualitySchema>;
+
+export const RenderEncoderSchema = z.enum(["h264_nvenc", "h264_amf", "h264_qsv", "libx264"]);
+export type RenderEncoder = z.infer<typeof RenderEncoderSchema>;
+
+/** GET /api/export: can this computer make videos, and with which encoders? */
+export const ExportInfoSchema = z.object({
+  ffmpeg: z.object({ path: z.string(), version: z.string() }).nullable(),
+  /** The encoders that really work here, fastest first. */
+  encoders: z.array(z.object({ id: RenderEncoderSchema, name: z.string(), gpu: z.boolean() })),
+});
+export type ExportInfo = z.infer<typeof ExportInfoSchema>;
+
+/** POST /api/films/:id/renders */
+export const StartRenderSchema = z.object({
+  quality: RenderQualitySchema.default("high"),
+  /** Use the graphics card when one works (much faster). */
+  gpu: z.boolean().default(true),
+});
+export type StartRender = z.input<typeof StartRenderSchema>;
+
+/** A render in the queue, running, or just ended. */
+export const RenderJobSchema = z.object({
+  id: z.string(),
+  filmId: z.string(),
+  title: z.string(),
+  state: z.enum(["queued", "running", "joining", "done", "failed", "cancelled"]),
+  quality: RenderQualitySchema,
+  encoder: RenderEncoderSchema,
+  /** Frames drawn so far, of `total`. */
+  done: z.number().int(),
+  total: z.number().int(),
+  queuedAt: z.string(),
+  startedAt: z.string().nullable(),
+  endedAt: z.string().nullable(),
+  /** Plain-words reason when the render failed. */
+  error: z.string().nullable(),
+  /** The version made, once done. */
+  version: z.number().int().nullable(),
+});
+export type RenderJob = z.infer<typeof RenderJobSchema>;
+
+/** A finished video, as kept in the film's `.kairos/renders.json`. */
+export const RenderSchema = z.object({
+  version: z.number().int().positive(),
+  /** Path inside the film folder, like `renders/my-intro-v3.mp4`. */
+  file: z.string(),
+  createdAt: z.string(),
+  quality: RenderQualitySchema,
+  encoder: RenderEncoderSchema,
+  width: z.number().int(),
+  height: z.number().int(),
+  fps: z.number(),
+  duration: z.number(),
+  frames: z.number().int(),
+  bytes: z.number().int(),
+  /** How long the render took, in seconds. */
+  seconds: z.number(),
+});
+export type Render = z.infer<typeof RenderSchema>;
+
+export const RendersFileSchema = z.object({
+  version: z.literal(1),
+  renders: z.array(RenderSchema),
+});
+
+/** GET /api/renders: what is rendering, and the finished videos of every film (newest first). */
+export const RendersOverviewSchema = z.object({
+  jobs: z.array(RenderJobSchema),
+  videos: z.array(RenderSchema.extend({ filmId: z.string(), title: z.string() })),
+});
+export type RendersOverview = z.infer<typeof RendersOverviewSchema>;
+
 /** Messages on GET /api/events (Server-Sent Events). */
 export const HubEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("films-changed"), ids: z.array(z.string()) }),
   z.object({ type: z.literal("workspace-changed") }),
   z.object({ type: z.literal("notes-changed"), id: z.string() }),
+  /** A render moved on (sent at most a few times a second). */
+  z.object({ type: z.literal("render-progress"), job: RenderJobSchema }),
+  /** A film's list of finished videos changed. */
+  z.object({ type: z.literal("renders-changed"), id: z.string() }),
 ]);
 export type HubEvent = z.infer<typeof HubEventSchema>;
 

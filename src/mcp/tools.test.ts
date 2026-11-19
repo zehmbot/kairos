@@ -3,7 +3,15 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, describe, expect, it } from "vitest";
-import type { FilmChange, FilmSummary, Note, NoteStatus } from "../shared/types.ts";
+import type {
+  FilmChange,
+  FilmSummary,
+  Note,
+  NoteStatus,
+  RenderJob,
+  RenderQuality,
+  RendersOverview,
+} from "../shared/types.ts";
 import { type Hub, HubError, HubOfflineError } from "./hub-client.ts";
 import { createKairosServer, MAX_NOTES } from "./tools.ts";
 
@@ -101,6 +109,51 @@ class FakeHub implements Hub {
     const current = await this.film(id);
     return { ...current, config: current.config && { ...current.config, ...change } };
   }
+  jobs: RenderJob[] = [];
+  async startRender(id: string, quality: RenderQuality) {
+    await this.film(id);
+    const job: RenderJob = {
+      id: `r_${this.jobs.length + 1}`,
+      filmId: id,
+      title: id,
+      state: "queued",
+      quality,
+      encoder: "h264_nvenc",
+      done: 0,
+      total: 150,
+      queuedAt: "2026-11-19T10:00:00.000Z",
+      startedAt: null,
+      endedAt: null,
+      error: null,
+      version: null,
+    };
+    this.jobs.push(job);
+    return job;
+  }
+  async renders(): Promise<RendersOverview> {
+    this.#check();
+    return {
+      jobs: this.jobs,
+      videos: [
+        {
+          version: 2,
+          file: "renders/intro-v2.mp4",
+          createdAt: "2026-11-19T09:00:00.000Z",
+          quality: "high",
+          encoder: "libx264",
+          width: 1920,
+          height: 1080,
+          fps: 30,
+          duration: 5,
+          frames: 150,
+          bytes: 1000,
+          seconds: 4,
+          filmId: "intro",
+          title: "INTRO",
+        },
+      ],
+    };
+  }
 }
 
 let client: Client;
@@ -141,6 +194,8 @@ describe("Kairos tools", () => {
       "kairos_note_update",
       "kairos_notes",
       "kairos_open_preview",
+      "kairos_render",
+      "kairos_renders",
       "kairos_status",
     ]);
     expect(client.getInstructions()).toContain("kairos_notes");
@@ -220,6 +275,19 @@ describe("Kairos tools", () => {
     );
     expect(hub.changes).toEqual([{ duration: 8 }]);
     expect((await call("kairos_film_settings", {})).isError).toBe(true);
+  });
+
+  it("starts renders and reports on them", async () => {
+    const hub = new FakeHub();
+    await connect(hub);
+    expect(texts(await call("kairos_render"))).toContain(
+      'Render r_1 of "intro" is in the queue: 150 frames',
+    );
+    expect(hub.jobs[0]?.quality).toBe("high");
+    const report = texts(await call("kairos_renders"));
+    expect(report).toContain('Render r_1 of "intro": queued');
+    expect(report).toContain('Video "intro" v2: renders/intro-v2.mp4, 1920×1080, 30 fps, 5 s');
+    expect(texts(await call("kairos_renders", { film: "outro" }))).toBe("No renders yet.");
   });
 
   it("opens the preview in the browser", async () => {

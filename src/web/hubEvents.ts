@@ -1,6 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
-import { type HubEvent, HubEventSchema } from "../shared/types.ts";
+import {
+  type HubEvent,
+  HubEventSchema,
+  type RenderJob,
+  type RendersOverview,
+} from "../shared/types.ts";
 import { queryKeys } from "./api.ts";
 
 type Listener = (event: HubEvent) => void;
@@ -41,6 +46,13 @@ export function useHubEventStream(): void {
         queryClient.invalidateQueries({ queryKey: queryKeys.films });
       } else if (event.type === "notes-changed") {
         queryClient.invalidateQueries({ queryKey: queryKeys.notes(event.id) });
+      } else if (event.type === "render-progress") {
+        // Progress comes often: update the job in place instead of asking the hub again.
+        queryClient.setQueryData<RendersOverview>(queryKeys.renders, (old) =>
+          old ? { ...old, jobs: withJob(old.jobs, event.job) } : old,
+        );
+      } else if (event.type === "renders-changed") {
+        queryClient.invalidateQueries({ queryKey: queryKeys.renders });
       } else {
         // Covers the list and each changed film (["films", id]).
         queryClient.invalidateQueries({ queryKey: queryKeys.films });
@@ -50,6 +62,13 @@ export function useHubEventStream(): void {
 
     return () => source.close();
   }, [queryClient]);
+}
+
+/** The job list with `job` updated, or added first (the list is newest first). */
+export function withJob(jobs: readonly RenderJob[], job: RenderJob): RenderJob[] {
+  return jobs.some((entry) => entry.id === job.id)
+    ? jobs.map((entry) => (entry.id === job.id ? job : entry))
+    : [job, ...jobs];
 }
 
 /** Calls `listener` for every hub event while the component is mounted. */

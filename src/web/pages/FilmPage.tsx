@@ -8,6 +8,7 @@ import {
   useNotes,
   useOpenClaude,
   useOpenFilmFolder,
+  useRenders,
 } from "../api.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { FrameRateDialog } from "../components/FrameRateDialog.tsx";
@@ -20,10 +21,16 @@ import { PixelButton } from "../components/PixelButton.tsx";
 import { PixelIcon } from "../components/PixelIcon.tsx";
 import { PixelPanel } from "../components/PixelPanel.tsx";
 import { Player, type PlayerHandle } from "../components/Player.tsx";
+import { RenderDialog } from "../components/RenderDialog.tsx";
 import { useHubEvent } from "../hubEvents.ts";
 import { noteCovers } from "../player/marks.ts";
 import { formatLength, frameCount, timeOf } from "../player/time.ts";
 import { useNoteDraft } from "../player/useNoteDraft.ts";
+import { isActive, jobStatus } from "../renderText.ts";
+import { useNow } from "../useNow.ts";
+
+/** How long the film page keeps saying a render ended (done or failed). */
+const RECENT_MS = 10 * 60_000;
 
 function BackLink() {
   return (
@@ -48,6 +55,15 @@ export function FilmPage() {
   const [showMarks, setShowMarks] = useState(true);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [rateOpen, setRateOpen] = useState(false);
+  const [renderOpen, setRenderOpen] = useState(false);
+  const renders = useRenders();
+  // This film's latest render: shown while it runs, and for a few minutes after it ends.
+  const latest = renders.data?.jobs.find((job) => job.filmId === id);
+  const clock = useNow(Boolean(latest && isActive(latest)));
+  const renderJob =
+    latest && (isActive(latest) || clock - Date.parse(latest.endedAt ?? "") < RECENT_MS)
+      ? latest
+      : null;
 
   // Live reload: any saved file in this film reloads the preview.
   useHubEvent((event) => {
@@ -201,6 +217,15 @@ export function FilmPage() {
           </p>
           <div className="film-actions">
             <PixelButton
+              variant="ghost"
+              icon="render"
+              title="Make an MP4 video of this film"
+              disabled={!canReview}
+              onClick={() => setRenderOpen(true)}
+            >
+              Render
+            </PixelButton>
+            <PixelButton
               icon="terminal"
               title="Open a terminal in this film's folder with Claude Code running"
               disabled={openClaude.isPending}
@@ -221,6 +246,15 @@ export function FilmPage() {
         </div>
         {openFolder.isError && <p className="field-error">{openFolder.error.message}</p>}
         {openClaude.isError && <p className="field-error">{openClaude.error.message}</p>}
+        {renderJob && (
+          <p className="render-line" data-state={renderJob.state}>
+            {jobStatus(renderJob, clock)}
+            {" · "}
+            <Link to="/renders">
+              {renderJob.state === "done" ? "Play it in Renders" : "See renders"}
+            </Link>
+          </p>
+        )}
       </div>
 
       <div className={canReview ? "review" : "stack"}>
@@ -276,12 +310,20 @@ export function FilmPage() {
       </div>
 
       {config && (
-        <FrameRateDialog
-          open={rateOpen}
-          onClose={() => setRateOpen(false)}
-          filmId={film.data.id}
-          fps={config.fps}
-        />
+        <>
+          <FrameRateDialog
+            open={rateOpen}
+            onClose={() => setRateOpen(false)}
+            filmId={film.data.id}
+            fps={config.fps}
+          />
+          <RenderDialog
+            open={renderOpen}
+            onClose={() => setRenderOpen(false)}
+            filmId={film.data.id}
+            title={config.title}
+          />
+        </>
       )}
     </div>
   );

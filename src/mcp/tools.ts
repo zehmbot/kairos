@@ -351,6 +351,74 @@ export function createKairosServer(context: ToolContext): McpServer {
     }),
   );
 
+  server.registerTool(
+    "kairos_render",
+    {
+      title: "Render a video",
+      description:
+        "Puts the film in the Kairos render queue to make an MP4 (in the film's renders/ folder). Rendering draws every frame and takes a while: check on it with kairos_renders. Render when the user asks for a video, not to check a frame (use kairos_frame for that).",
+      inputSchema: {
+        film: filmArg,
+        quality: z
+          .enum(["high", "small"])
+          .default("high")
+          .describe('"high" looks like the film; "small" makes a smaller file.'),
+      },
+      annotations: { readOnlyHint: false, openWorldHint: false },
+    },
+    safely(async ({ film, quality }: { film?: string; quality: "high" | "small" }) => {
+      const id = await filmId(film);
+      const job = await hub.startRender(id, quality);
+      return {
+        content: [
+          text(
+            `Render ${job.id} of "${id}" is ${job.state === "queued" ? "in the queue" : "running"}: ${job.total} frames. The user can follow it on the Renders page; check with kairos_renders.`,
+          ),
+        ],
+      };
+    }),
+  );
+
+  server.registerTool(
+    "kairos_renders",
+    {
+      title: "Renders",
+      description:
+        "Renders that are running or waiting (with progress), recent failures with their reason, and the finished videos of a film.",
+      inputSchema: { film: filmArg },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    safely(async ({ film }: { film?: string }) => {
+      let id: string | null = null;
+      try {
+        id = await filmId(film);
+      } catch (error) {
+        if (!(error instanceof ToolProblem)) throw error;
+      }
+      const overview = await hub.renders();
+      const jobs = overview.jobs.filter((job) => !id || job.filmId === id);
+      const videos = overview.videos.filter((video) => !id || video.filmId === id);
+      const lines: string[] = [];
+      for (const job of jobs) {
+        const where =
+          job.state === "running"
+            ? `rendering, ${job.done} of ${job.total} frames`
+            : job.state === "failed"
+              ? `failed: ${job.error}`
+              : job.state === "done"
+                ? `done (version ${job.version})`
+                : job.state;
+        lines.push(`Render ${job.id} of "${job.filmId}": ${where}`);
+      }
+      for (const video of videos.slice(0, 10)) {
+        lines.push(
+          `Video "${video.filmId}" v${video.version}: ${video.file}, ${video.width}×${video.height}, ${video.fps} fps, ${seconds(video.duration)}, made ${video.createdAt}`,
+        );
+      }
+      return { content: [text(lines.length ? lines.join("\n") : "No renders yet.")] };
+    }),
+  );
+
   return server;
 }
 

@@ -9,13 +9,16 @@ import { DEFAULT_FILM_PORT, DEFAULT_HUB_PORT, DEV_WEB_PORT, HOST } from "../shar
 import { Camera, findBrowser } from "./camera.ts";
 import { claudeTools } from "./claude-cli.ts";
 import { kairosHome } from "./config.ts";
+import { probeExport } from "./ffmpeg.ts";
 import { buildFilmServer } from "./film-server.ts";
+import { Renderer } from "./renderer.ts";
 import { claudeRoutes } from "./routes/claude.ts";
 import { eventRoutes } from "./routes/events.ts";
 import { filmRoutes } from "./routes/films.ts";
 import { frameRoutes } from "./routes/frames.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { noteRoutes } from "./routes/notes.ts";
+import { renderRoutes } from "./routes/renders.ts";
 import { skillRoutes } from "./routes/skills.ts";
 import { workspaceRoutes } from "./routes/workspace.ts";
 import { allowedHostsFor, requestGuard } from "./security.ts";
@@ -76,6 +79,23 @@ claudeRoutes(
 );
 skillRoutes(app, skills);
 
+// Video export: find ffmpeg and test its encoders once, in the background (it takes a few seconds).
+const exportInfo = probeExport();
+void exportInfo.then((info) =>
+  console.log(
+    info.ffmpeg
+      ? `Video export: ffmpeg ${info.ffmpeg.version}, ${info.encoders.map((encoder) => encoder.name).join(", ")}`
+      : "Video export: ffmpeg not found, rendering is off",
+  ),
+);
+const renderer = new Renderer({
+  studio,
+  browser: camera.browser,
+  filmServerUrl,
+  exportInfo: () => exportInfo,
+});
+renderRoutes(app, { studio, renderer, exportInfo: () => exportInfo });
+
 if (existsSync(webDir)) {
   await app.register(fastifyStatic, { root: webDir });
   // Single-page app: unknown non-API paths get index.html so client routes work on reload.
@@ -129,8 +149,8 @@ console.log(
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     studio.close();
-    Promise.allSettled([app.close(), filmServer.close(), camera.close()]).finally(() =>
-      process.exit(0),
+    Promise.allSettled([renderer.close(), app.close(), filmServer.close(), camera.close()]).finally(
+      () => process.exit(0),
     );
   });
 }

@@ -1,4 +1,11 @@
-import { useCamera, useClaude, useConnectClaude, useHealth, useWorkspace } from "../api.ts";
+import {
+  useCamera,
+  useClaude,
+  useConnectClaude,
+  useExportInfo,
+  useHealth,
+  useWorkspace,
+} from "../api.ts";
 import { Notice } from "../components/Notice.tsx";
 import { PixelButton } from "../components/PixelButton.tsx";
 import { PixelPanel } from "../components/PixelPanel.tsx";
@@ -67,6 +74,7 @@ export function SettingsPage() {
           <p>{camera.isPending ? "Checking..." : "The hub is not reachable."}</p>
         )}
       </PixelPanel>
+      <ExportPanel />
       <ClaudePanel />
     </div>
   );
@@ -116,6 +124,38 @@ function ClaudePanel() {
         </Notice>
       ) : (
         <p>{claude.isPending ? "Looking for Claude Code..." : "The hub is not reachable."}</p>
+      )}
+    </PixelPanel>
+  );
+}
+
+/** ffmpeg and the encoders that work here. */
+function ExportPanel() {
+  const info = useExportInfo();
+  const data = info.data;
+  return (
+    <PixelPanel title="Video export">
+      {data?.ffmpeg ? (
+        <div className="stack">
+          <p>
+            Kairos makes videos with ffmpeg. Renders use the first encoder below that you allow.
+          </p>
+          <dl className="kv">
+            <dt>ffmpeg</dt>
+            <dd>Version {data.ffmpeg.version}</dd>
+            <dt>Path</dt>
+            <dd>{data.ffmpeg.path}</dd>
+            <dt>Encoders</dt>
+            <dd>{data.encoders.map((encoder) => encoder.name).join(", ") || "None work"}</dd>
+          </dl>
+        </div>
+      ) : data ? (
+        <Notice title="ffmpeg is missing">
+          Kairos uses ffmpeg to turn films into videos. Install it (on Windows: winget install
+          Gyan.FFmpeg, on macOS: brew install ffmpeg), then restart Kairos.
+        </Notice>
+      ) : (
+        <p>{info.isPending ? "Checking the video tools..." : "The hub is not reachable."}</p>
       )}
     </PixelPanel>
   );

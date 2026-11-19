@@ -4,6 +4,7 @@ import {
   ApiErrorSchema,
   CameraSchema,
   ClaudeStatusSchema,
+  ExportInfoSchema,
   type FilmChange,
   FilmSummarySchema,
   HealthSchema,
@@ -15,7 +16,10 @@ import {
   type NoteUpdate,
   PickSkillResultSchema,
   PickWorkspaceResultSchema,
+  RenderJobSchema,
+  RendersOverviewSchema,
   SkillSchema,
+  type StartRender,
   WorkspaceSchema,
 } from "../shared/types.ts";
 
@@ -60,6 +64,8 @@ export const queryKeys = {
   camera: ["camera"],
   claude: ["claude"],
   skills: ["skills"],
+  export: ["export"],
+  renders: ["renders"],
 } as const;
 
 const notesUrl = (filmId: string) => `/api/films/${encodeURIComponent(filmId)}/notes`;
@@ -264,6 +270,65 @@ export function useOpenSkillFolder() {
   return useMutation({
     mutationFn: (name: string) =>
       callNoContent(`${skillUrl(name)}/open-folder`, { method: "POST" }),
+  });
+}
+
+/** ffmpeg and the encoders that work on this computer. */
+export function useExportInfo() {
+  return useQuery({
+    queryKey: queryKeys.export,
+    queryFn: () => call(ExportInfoSchema, "/api/export"),
+    staleTime: 60_000,
+  });
+}
+
+/** The render queue and every finished video. Progress arrives live (see hubEvents.ts). */
+export function useRenders() {
+  return useQuery({
+    queryKey: queryKeys.renders,
+    queryFn: () => call(RendersOverviewSchema, "/api/renders"),
+  });
+}
+
+export function useStartRender(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (options: StartRender) =>
+      call(
+        RenderJobSchema,
+        `/api/films/${encodeURIComponent(filmId)}/renders`,
+        sendJson("POST", options),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.renders }),
+  });
+}
+
+export function useCancelRender() {
+  return useMutation({
+    mutationFn: (jobId: string) =>
+      callNoContent(`/api/renders/${encodeURIComponent(jobId)}/cancel`, { method: "POST" }),
+  });
+}
+
+const videoPath = (filmId: string, version: number) =>
+  `/api/films/${encodeURIComponent(filmId)}/renders/${version}`;
+
+/** Address of a finished video, for the in-app player. */
+export const videoUrl = (filmId: string, version: number) => `${videoPath(filmId, version)}/video`;
+
+export function useDeleteRender() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ filmId, version }: { filmId: string; version: number }) =>
+      callNoContent(videoPath(filmId, version), { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.renders }),
+  });
+}
+
+export function useOpenRenderFolder() {
+  return useMutation({
+    mutationFn: ({ filmId, version }: { filmId: string; version: number }) =>
+      callNoContent(`${videoPath(filmId, version)}/open-folder`, { method: "POST" }),
   });
 }
 

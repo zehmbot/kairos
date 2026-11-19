@@ -9,6 +9,11 @@ import {
   type Note,
   NoteSchema,
   type NoteStatus,
+  type RenderJob,
+  RenderJobSchema,
+  type RenderQuality,
+  type RendersOverview,
+  RendersOverviewSchema,
   type Workspace,
   WorkspaceSchema,
 } from "../shared/types.ts";
@@ -38,6 +43,8 @@ export interface Hub {
   /** A fresh PNG of the frame at `t` seconds. */
   frame(id: string, t: number): Promise<Buffer>;
   changeFilm(id: string, change: FilmChange): Promise<FilmSummary>;
+  startRender(id: string, quality: RenderQuality): Promise<RenderJob>;
+  renders(): Promise<RendersOverview>;
 }
 
 /** Calls the Kairos hub over HTTP (it only listens on 127.0.0.1). */
@@ -119,5 +126,17 @@ export class HubClient implements Hub {
       `/api/films/${encodeURIComponent(id)}`,
       this.#send("PATCH", change),
     );
+  }
+
+  startRender(id: string, quality: RenderQuality) {
+    return this.#json(
+      RenderJobSchema,
+      `/api/films/${encodeURIComponent(id)}/renders`,
+      this.#send("POST", { quality }),
+    );
+  }
+
+  renders() {
+    return this.#json(RendersOverviewSchema, "/api/renders");
   }
 }

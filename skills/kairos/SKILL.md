@@ -64,6 +64,13 @@ When the Kairos tools are connected:
 5. `kairos_note_update` with `status: "fixed"`, only once you have seen the frame and it is right.
 6. Tell the user what you changed, note by note. If a note is unclear, ask rather than guess.
 
+## Making the video
+
+When the user asks for the video file, `kairos_render` puts the film in the render queue (an MP4 in
+`renders/`, a new version each time, never overwritten). Rendering draws every frame, so a film that throws on any
+frame fails: check a few frames with `kairos_frame` first. Follow it with `kairos_renders`, which also shows the
+reason when a render fails (the frame and the error).
+
 ## Longer films: one file per scene
 
 Past about 20 seconds, split the film into scenes so each part stays easy to change:

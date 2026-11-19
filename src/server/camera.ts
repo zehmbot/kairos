@@ -1,9 +1,9 @@
 /**
  * The frame camera: takes a picture of any frame of a film, using the Chrome or Edge already on the
- * computer, hidden (headless). Note pictures use it now; the renderer will build on it later.
+ * computer, hidden (headless). The renderer uses the same launch and the same way of drawing a frame.
  */
 import { existsSync } from "node:fs";
-import puppeteer, { type Browser } from "puppeteer-core";
+import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { marksSvg } from "../shared/marks.ts";
 import type { NoteShape } from "../shared/types.ts";
 
@@ -74,6 +74,66 @@ export function findBrowser(
   return browserCandidates(platform, env).find((candidate) => exists(candidate.path)) ?? null;
 }
 
+/** Starts the browser hidden. The camera and the renderer each start their own. */
+export function launchHeadless(browser: BrowserInfo): Promise<Browser> {
+  return puppeteer.launch({
+    executablePath: browser.path,
+    headless: true,
+    args: [
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--hide-scrollbars",
+      "--mute-audio",
+      // 3D films (WebGL): fall back to software drawing when the GPU can't be used. Only the
+      // user's own films are opened here, so the warning about untrusted pages doesn't apply.
+      "--enable-unsafe-swiftshader",
+    ],
+  });
+}
+
+/** A film page opened in the hidden browser, ready to draw frames. */
+export interface OpenFilm {
+  /** Draws the frame at `t` seconds. Throws "The film could not draw this frame: ..." on film errors. */
+  draw(t: number): Promise<void>;
+}
+
+/**
+ * Opens a film page at its exact size (`scale` shrinks the picture, not the page) and waits for the
+ * Kairos bridge. Drawing goes through `window.__kairos.render(t)`, like the preview.
+ */
+export async function openFilm(
+  page: Page,
+  url: string,
+  width: number,
+  height: number,
+  scale = 1,
+): Promise<OpenFilm> {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push((error as Error).message));
+  const failed = (error: unknown) => {
+    const reason = pageErrors[0] ?? (error as Error).message;
+    return new Error(`The film could not draw this frame: ${reason}`);
+  };
+  await page.setViewport({ width, height, deviceScaleFactor: scale });
+  await page.goto(url, { waitUntil: "load", timeout: 30_000 });
+  try {
+    await page.waitForFunction(() => typeof window.__kairos?.render === "function", {
+      timeout: 10_000,
+    });
+  } catch (error) {
+    throw failed(error);
+  }
+  return {
+    async draw(t) {
+      try {
+        await page.evaluate((time) => window.__kairos?.render(time), t);
+      } catch (error) {
+        throw failed(error);
+      }
+    },
+  };
+}
+
 export interface CaptureRequest {
   /** Address of the film page on the film server. */
   url: string;
@@ -117,19 +177,7 @@ export class Camera {
       return Promise.reject(new Error("Kairos could not find Chrome or Edge to take pictures."));
     }
     if (!this.#running) {
-      const launching = puppeteer.launch({
-        executablePath: this.browser.path,
-        headless: true,
-        args: [
-          "--no-first-run",
-          "--no-default-browser-check",
-          "--hide-scrollbars",
-          "--mute-audio",
-          // 3D films (WebGL): fall back to software drawing when the GPU can't be used. Only the
-          // user's own films are opened here, so the warning about untrusted pages doesn't apply.
-          "--enable-unsafe-swiftshader",
-        ],
-      });
+      const launching = launchHeadless(this.browser);
       this.#running = launching;
       launching.then(
         (browser) =>
@@ -148,28 +196,13 @@ export class Camera {
     clearTimeout(this.#idleTimer);
     const browser = await this.#launch();
     const page = await browser.newPage();
-    const pageErrors: string[] = [];
-    page.on("pageerror", (error) => pageErrors.push((error as Error).message));
     try {
       const scale = Math.min(
         1,
         (request.maxSide ?? 1280) / Math.max(request.width, request.height),
       );
-      await page.setViewport({
-        width: request.width,
-        height: request.height,
-        deviceScaleFactor: scale,
-      });
-      await page.goto(request.url, { waitUntil: "load", timeout: 30_000 });
-      try {
-        await page.waitForFunction(() => typeof window.__kairos?.render === "function", {
-          timeout: 10_000,
-        });
-        await page.evaluate((t) => window.__kairos?.render(t), request.t);
-      } catch (error) {
-        const reason = pageErrors[0] ?? (error as Error).message;
-        throw new Error(`The film could not draw this frame: ${reason}`);
-      }
+      const film = await openFilm(page, request.url, request.width, request.height, scale);
+      await film.draw(request.t);
       if (request.shapes && request.shapes.length > 0) {
         const svg = marksSvg(request.shapes, request.width, request.height);
         await page.evaluate((markup) => {
