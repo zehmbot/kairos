@@ -79,6 +79,15 @@ template starts from. It is never shown as a template card. The **Templates page
 templates' `template.json` (the template editor, `src/web/templateForm.ts`: question ids come from the question text
 and saved ids are kept, so earlier briefs still match); Kairos' templates can only be duplicated.
 
+**Blocky** (`templates/blocky/`) is a template with an engine: Claude writes the shot list in `story.js` (places,
+shot types, the cast, faces, poses, captions) and `blocky/*.js` turns it into frames: three.js toy figures with
+drawn faces, six places with day/evening/night light, framing computed for any film size, word-by-word captions
+and icons on a 2D layer, and bloom, focus blur, vignette and grain. Lights stay dim and the exposure high, so only
+lamps, windows and fire glow. Everything is a pure function of `t` (seeded randomness only). The `kairos-blocky`
+skill is its style guide. Its characters and world are our own: never a game's or brand's name, logos or
+avatars. Biome checks the template's code too, so placeholders in `.js` are written inside strings
+(`Number("{{width}}")`).
+
 ## Rendering
 
 `src/server/renderer.ts` turns a film into `renders/<id>-v<N>.mp4` (versions only go up; the list is

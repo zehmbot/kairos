@@ -44,7 +44,7 @@ renderer.setSize(W, H, false);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1;
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap; // soft by default in this three.js version
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();

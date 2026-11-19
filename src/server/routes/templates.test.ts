@@ -72,6 +72,7 @@ describe("templates", () => {
     const list = (await app.inject("/api/templates")).json() as TemplateSummary[];
     expect(list.map((template) => [template.id, template.source])).toEqual([
       ["starter", "kairos"],
+      ["blocky", "kairos"],
       ["story", "yours"],
     ]);
     const preview = await app.inject("/api/templates/story/preview");
@@ -84,7 +85,8 @@ describe("templates", () => {
     expect((await app.inject({ method: "DELETE", url: "/api/templates/story" })).statusCode).toBe(
       204,
     );
-    expect(((await app.inject("/api/templates")).json() as TemplateSummary[]).length).toBe(1);
+    const left = (await app.inject("/api/templates")).json() as TemplateSummary[];
+    expect(left.map((template) => template.id)).toEqual(["starter", "blocky"]);
   });
 });
 
@@ -174,6 +176,42 @@ describe("film card pictures", () => {
     await app.inject("/api/films/card/thumbnail");
     expect(captures).toBe(2);
     expect((await app.inject("/api/films/nope/thumbnail")).statusCode).toBe(404);
+  });
+});
+
+describe("the Blocky template", () => {
+  it("is valid and makes a vertical film with its engine, font and story questions", async () => {
+    const blocky = ((await app.inject("/api/templates")).json() as TemplateSummary[]).find(
+      (template) => template.id === "blocky",
+    );
+    expect(blocky).toMatchObject({ source: "kairos", hasPreview: true, problem: null });
+    expect(blocky?.defaults).toMatchObject({ shape: "tall", fps: 30 });
+    expect(blocky?.kinds.map((kind) => kind.id)).toEqual(["story"]);
+    const fields = blocky?.kinds[0]?.fields ?? [];
+    expect(fields.map((field) => field.id)).toEqual([
+      "story",
+      "characters",
+      "hero",
+      "place",
+      "mood",
+    ]);
+    expect(fields[1]?.options?.[0]).toBe("Keep the Blocky cast");
+
+    const made = await post("/api/films", {
+      title: "Snow day",
+      shape: "tall",
+      template: "blocky",
+      kind: "story",
+      brief: { story: "It snowed all night.", characters: "Keep the Blocky cast" },
+    });
+    expect(made.statusCode).toBe(201);
+    const dir = join(root, "ws", "films", "snow-day");
+    expect(await readFile(join(dir, "film.js"), "utf8")).toContain('Number("1080")');
+    expect(await readFile(join(dir, "blocky", "engine.js"), "utf8")).toContain("createEngine");
+    const font = await readFile(join(dir, "assets", "fonts", "Poppins-ExtraBoldItalic.ttf"));
+    expect(font.length).toBeGreaterThan(100_000);
+    expect(await readFile(join(dir, "CLAUDE.md"), "utf8")).toMatch(/^# Snow day/);
+    expect(await readFile(join(dir, "brief.md"), "utf8")).toContain("Keep the Blocky cast");
   });
 });
 

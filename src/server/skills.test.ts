@@ -198,6 +198,7 @@ describe("the skills Kairos ships", () => {
     expect(names.sort()).toEqual([
       "kairos",
       "kairos-3d",
+      "kairos-blocky",
       "kairos-camera",
       "kairos-captions",
       "kairos-directing",
