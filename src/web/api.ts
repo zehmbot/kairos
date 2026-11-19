@@ -11,8 +11,11 @@ import {
   ExportInfoSchema,
   type FilmChange,
   FilmSummarySchema,
+  type FilmVoices,
+  FilmVoicesSchema,
   HealthSchema,
   type NewFilm,
+  type NewLines,
   type NewNote,
   type NewSkill,
   type Note,
@@ -29,6 +32,10 @@ import {
   type TemplateInput,
   TemplateSummarySchema,
   TrashEntrySchema,
+  VoiceInfoSchema,
+  VoiceLineSchema,
+  VoiceStatusSchema,
+  WordSchema,
   WorkspaceSchema,
 } from "../shared/types.ts";
 
@@ -81,6 +88,10 @@ export const queryKeys = {
   brief: (id: string) => ["films", id, "brief"],
   references: (id: string) => ["films", id, "references"],
   assets: ["assets"],
+  voice: ["voice"],
+  filmVoices: (id: string) => ["films", id, "voices"],
+  lines: (id: string) => ["films", id, "lines"],
+  words: (id: string) => ["films", id, "words"],
 } as const;
 
 const notesUrl = (filmId: string) => `/api/films/${encodeURIComponent(filmId)}/notes`;
@@ -647,5 +658,127 @@ export function useDeleteReference(filmId: string) {
     mutationFn: (ref: string) =>
       callNoContent(`${filmUrl(filmId)}/references/${ref}`, { method: "DELETE" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.references(filmId) }),
+  });
+}
+
+// ---------- Voices (fish.audio) ----------
+
+export function useVoiceStatus() {
+  return useQuery({
+    queryKey: queryKeys.voice,
+    queryFn: () => call(VoiceStatusSchema, "/api/voice/status"),
+  });
+}
+
+/** Saves a fish.audio key (the hub checks it with fish.audio first), or removes it (null). */
+export function useVoiceKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string | null) =>
+      key === null
+        ? call(VoiceStatusSchema, "/api/voice/key", { method: "DELETE" })
+        : call(VoiceStatusSchema, "/api/voice/key", sendJson("PUT", { key })),
+    onSuccess: (status) => queryClient.setQueryData(queryKeys.voice, status),
+  });
+}
+
+export function useVoiceModel() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (model: string) =>
+      call(VoiceStatusSchema, "/api/voice/model", sendJson("PUT", { model })),
+    onSuccess: (status) => queryClient.setQueryData(queryKeys.voice, status),
+  });
+}
+
+export function useVoiceLibrary(query: string, mine: boolean, enabled: boolean) {
+  return useQuery({
+    queryKey: ["voice-library", query, mine],
+    queryFn: () =>
+      call(
+        z.array(VoiceInfoSchema),
+        `/api/voice/library?${new URLSearchParams({ query, mine: String(mine) })}`,
+      ),
+    enabled,
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+export function useFilmVoices(filmId: string) {
+  return useQuery({
+    queryKey: queryKeys.filmVoices(filmId),
+    queryFn: () => call(FilmVoicesSchema, `${filmUrl(filmId)}/voices`),
+  });
+}
+
+export function useSetFilmVoices(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (voices: FilmVoices) =>
+      call(FilmVoicesSchema, `${filmUrl(filmId)}/voices`, sendJson("PUT", voices)),
+    onSuccess: (voices) => {
+      queryClient.setQueryData(queryKeys.filmVoices(filmId), voices);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.voice });
+    },
+  });
+}
+
+export function useLines(filmId: string) {
+  return useQuery({
+    queryKey: queryKeys.lines(filmId),
+    queryFn: () => call(z.array(VoiceLineSchema), `${filmUrl(filmId)}/lines`),
+  });
+}
+
+export function useMakeLines(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: NewLines) =>
+      call(z.unknown(), `${filmUrl(filmId)}/lines`, sendJson("POST", input)),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.lines(filmId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.film(filmId), exact: true });
+    },
+  });
+}
+
+export function useDeleteLine(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (line: string) =>
+      callNoContent(`${filmUrl(filmId)}/lines/${line}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.lines(filmId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.film(filmId), exact: true });
+    },
+  });
+}
+
+const WordsAnswerSchema = z.object({
+  text: z.string(),
+  duration: z.number(),
+  words: z.array(WordSchema),
+  source: z.enum(["speech", "transcript"]),
+});
+
+export type WordsAnswer = z.infer<typeof WordsAnswerSchema>;
+
+/** Word timings of the film's sounds that have them, by file. */
+export function useFilmWords(filmId: string) {
+  return useQuery({
+    queryKey: queryKeys.words(filmId),
+    queryFn: () => call(z.record(z.string(), WordsAnswerSchema), `${filmUrl(filmId)}/words`),
+    staleTime: 30_000,
+  });
+}
+
+/** Asks fish.audio for the word timings of a recording (speech-to-text). */
+export function useTranscribe(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: string) =>
+      call(WordsAnswerSchema, `${filmUrl(filmId)}/words`, sendJson("POST", { file })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.words(filmId) }),
   });
 }

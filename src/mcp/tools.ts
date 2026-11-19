@@ -175,6 +175,13 @@ export function createKairosServer(context: ToolContext): McpServer {
               `References: ${references} (look at them with kairos_references before building)`,
             );
           }
+          const speakers = Object.keys(summary.config.voices ?? {});
+          const spoken = speakers.length ? (await hub.lines(id)).length : 0;
+          if (speakers.length) {
+            lines.push(
+              `Voices: ${speakers.join(", ")}; ${spoken} spoken line${spoken === 1 ? "" : "s"} in voice/ (word timings in voice/*.words.json, or kairos_words)`,
+            );
+          }
         }
         lines.push(`Preview: ${await uiUrl()}/films/${encodeURIComponent(id)}`);
       }
@@ -587,6 +594,215 @@ export function createKairosServer(context: ToolContext): McpServer {
       }
       return { content };
     }),
+  );
+
+  const wordList = (words: readonly { text: string; start: number }[], shift = 0) =>
+    words.map((word) => `${word.text}@${(word.start + shift).toFixed(2)}`).join(" ");
+
+  server.registerTool(
+    "kairos_voices",
+    {
+      title: "Film voices",
+      description:
+        "Who speaks in the film (speaker name → fish.audio voice), and the fish.audio voice library: search with `query`, or `mine` for the user's own voices. Set a speaker's voice with `choose`. Prefer voices the user picked; ask before choosing for them.",
+      inputSchema: {
+        film: filmArg,
+        query: z.string().optional().describe("Search the voice library by name."),
+        mine: z.boolean().optional().describe("List the user's own (cloned) voices."),
+        choose: z
+          .object({
+            speaker: z
+              .string()
+              .describe('A speaker name: small letters, like "narrator" or "ruby".'),
+            id: z.string().describe("The voice id from the library."),
+            name: z.string().describe("The voice's name."),
+          })
+          .optional()
+          .describe("Give a speaker this voice."),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    safely(
+      async ({
+        film,
+        query,
+        mine,
+        choose,
+      }: {
+        film?: string;
+        query?: string;
+        mine?: boolean;
+        choose?: { speaker: string; id: string; name: string };
+      }) => {
+        const id = await filmId(film);
+        let voices = await hub.filmVoices(id);
+        if (choose) {
+          voices = await hub.setFilmVoices(id, {
+            ...voices,
+            [choose.speaker]: { id: choose.id, name: choose.name },
+          });
+        }
+        const lines = [
+          Object.keys(voices).length
+            ? `Speakers: ${Object.entries(voices)
+                .map(([speaker, voice]) => `${speaker} = ${voice.name} (${voice.id})`)
+                .join("; ")}`
+            : "No speakers yet: choose a voice for the narrator first.",
+        ];
+        if (query !== undefined || mine) {
+          const found = await hub.voiceLibrary(query ?? "", Boolean(mine));
+          lines.push(
+            found.length
+              ? found
+                  .map(
+                    (voice) =>
+                      `${voice.id}: ${voice.name}${voice.author ? ` by ${voice.author}` : ""}${voice.languages.length ? ` [${voice.languages.join(", ")}]` : ""}${voice.description ? ` - ${voice.description.slice(0, 120)}` : ""}`,
+                  )
+                  .join("\n")
+              : "No voices found.",
+          );
+        }
+        return { content: [text(lines.join("\n"))] };
+      },
+    ),
+  );
+
+  server.registerTool(
+    "kairos_say",
+    {
+      title: "Make spoken lines",
+      description:
+        "Makes speech with fish.audio for a speaker (one file per line, with word timings) and places the lines on the film's timeline one after the other. Costs the user's fish.audio credits: only when the user asked for a voice. The same line again is reused, not paid twice. Answers with each line's file, start, length and words (word@seconds on the film).",
+      inputSchema: {
+        film: filmArg,
+        speaker: z
+          .string()
+          .optional()
+          .describe('Who speaks (default "narrator"); give it a voice with kairos_voices.'),
+        lines: z.array(z.string()).min(1).describe("The words of each line, in order."),
+        speed: z.number().min(0.5).max(2).optional().describe("1 = normal speed."),
+        start: z
+          .number()
+          .min(0)
+          .optional()
+          .describe(
+            "Where the first line starts on the film (seconds). Default: after the voice lines already there.",
+          ),
+        gap: z
+          .number()
+          .min(0)
+          .max(10)
+          .optional()
+          .describe("Silence between lines, in seconds (default 0.3)."),
+        place: z
+          .boolean()
+          .optional()
+          .describe("false: make the files only, don't put them on the timeline."),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    safely(
+      async (args: {
+        film?: string;
+        speaker?: string;
+        lines: string[];
+        speed?: number;
+        start?: number;
+        gap?: number;
+        place?: boolean;
+      }) => {
+        const id = await filmId(args.film);
+        const gap = args.gap ?? 0.3;
+        let start = args.start;
+        if (args.place !== false && start === undefined) {
+          // After the voice lines already on the timeline.
+          const known = await hub.lines(id);
+          const audio = (await hub.film(id)).config?.audio ?? [];
+          const ends = audio
+            .filter((track) => track.file.startsWith("voice/"))
+            .map(
+              (track) =>
+                track.start +
+                (track.length ?? known.find((line) => line.file === track.file)?.duration ?? 0),
+            );
+          start = ends.length ? Math.round((Math.max(...ends) + gap) * 100) / 100 : 0;
+        }
+        const made = await hub.makeLines(id, {
+          speaker: args.speaker ?? "narrator",
+          lines: args.lines,
+          speed: args.speed ?? 1,
+          gap,
+          ...(args.place === false ? {} : { start }),
+        });
+        const report = made.lines.map((line, i) => {
+          const at = made.placed[i];
+          return `${i + 1}. ${line.file}, ${seconds(line.duration)}${at ? `, starts at ${seconds(at.start)}` : ""}\n   ${wordList(line.words, at?.start ?? 0)}`;
+        });
+        const end = made.placed.at(-1);
+        return {
+          content: [
+            text(
+              `${report.join("\n")}${end ? `\nThe last line ends at ${seconds(end.start + end.duration)}. Make the film at least that long (kairos_film_settings).` : ""}`,
+            ),
+          ],
+        };
+      },
+    ),
+  );
+
+  server.registerTool(
+    "kairos_words",
+    {
+      title: "Word timings of a sound",
+      description:
+        "Each word of a sound in the film and when it is said (seconds into the file). Lines made with kairos_say have them already; for a recording, Kairos asks fish.audio speech-to-text (uses credits) when `transcribe` is true. Use them to time captions and mouths to the voice.",
+      inputSchema: {
+        film: filmArg,
+        file: z
+          .string()
+          .describe('The sound file in the film folder, like "voice/narrator-1.mp3".'),
+        transcribe: z
+          .boolean()
+          .optional()
+          .describe("Ask fish.audio when there are no timings yet."),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    safely(
+      async ({ film, file, transcribe }: { film?: string; file: string; transcribe?: boolean }) => {
+        const id = await filmId(film);
+        const found = await hub.words(id, file, Boolean(transcribe)).catch((error: unknown) => {
+          if (error instanceof HubError && error.status === 404 && !transcribe) {
+            throw new ToolProblem(
+              `${file} has no word timings yet. Call kairos_words again with transcribe: true to find them with fish.audio speech-to-text (uses the user's credits).`,
+            );
+          }
+          throw error;
+        });
+        return {
+          content: [
+            text(
+              `"${found.text}" (${seconds(found.duration)}, ${found.source === "speech" ? "made with the voice" : "from speech-to-text"})\n${wordList(found.words)}`,
+            ),
+          ],
+        };
+      },
+    ),
   );
 
   return server;

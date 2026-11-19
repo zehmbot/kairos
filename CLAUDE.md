@@ -32,7 +32,8 @@ src/server/   Fastify hub: index.ts (entry), security.ts (request guard), studio
               renders.ts (finished videos), ffmpeg.ts (encoders and command lines),
               templates.ts (templates, briefs, save as template), thumbnails.ts (film card pictures),
               uploads.ts (files from the browser), assets.ts (asset library), references.ts (reference
-              videos: shots and frame sheets), routes/
+              videos: shots and frame sheets), secrets.ts (keys in ~/.kairos/.env), fish.ts (fish.audio),
+              voices.ts (a film's spoken lines), fake-fish.ts (fish.audio stand-in for tests), routes/
 src/mcp/      Kairos tools for Claude Code: server.ts (stdio entry), tools.ts, hub-client.ts (calls the hub)
 src/web/      React UI: components/, pages/, player/, icons/, theme/
 src/film/     bridge.js: plain JS the film server adds to every film page
@@ -138,14 +139,36 @@ scene and clip edges); a drag saves the last pointer position, not the last draw
 whole list with `PUT /api/films/:id/audio`; Undo/Redo keep the lists before. Sounds dropped on the timeline land
 at that time and lane (`?lane=`); other new sounds get a free lane (`nextLane`, `src/shared/lanes.ts`).
 
+## Voices
+
+Spoken lines come from fish.audio. `src/server/fish.ts` is the only code that talks to it: voices (`GET /model`),
+speech with word timings (`POST /v1/tts/stream/with-timestamp`, an SSE stream: the latest alignment of each
+`chunk_seq`, moved by `chunk_audio_offset_sec`) and speech-to-text (`POST /v1/asr`). Its errors are plain words.
+`FISH_AUDIO_URL` points it elsewhere (tests use `fake-fish.ts`).
+
+**The key** (`FISH_AUDIO_API_KEY`) lives in `~/.kairos/.env` (`src/server/secrets.ts`: atomic, keeps other
+lines), else in the environment or the repo's git-ignored `.env`. The hub checks a key with fish.audio before
+saving it. It never goes to the browser, into an answer, a log or a film folder (status shows `…a1b2`).
+Settings → Voice also picks the model; recently used voices are in `config.json`.
+
+**A film's voices:** `voices` in `kairos.json` maps a speaker (`narrator`, `ruby`) to a fish.audio voice.
+Lines are `voice/<speaker>-<n>.mp3`, each with `voice/<speaker>-<n>.words.json` (text, duration, words with
+`start`/`end` in seconds from the start of the file, `source`). They are listed in `voice/lines.json`
+(`src/server/voices.ts`, one change at a time). The same text, voice, speed and model reuse the line, so it is
+never paid twice. File numbers are never used twice (`next`), so a new take never shares a name with an old
+one: the browser caches waveforms by address. Placed lines go on the voice lane (a lane holding only `voice/`
+files). Deleting a line removes its files and clips. **Get words** (speech-to-text) writes `<file>.words.json` next
+to any sound. Save as template leaves `voice/` out.
+
 ## Claude Code
 
 The **Kairos tools** are an MCP server (`src/mcp/server.ts`, stdio) that Claude Code starts. Settings → Claude Code
 → Connect runs `claude mcp add --scope user kairos -- <node> <repo>/src/mcp/server.ts`. The server only calls the
 hub over HTTP (`KAIROS_PORT`) and never touches files itself. Tools default to the film whose folder Claude runs
 in. `kairos_notes` and `kairos_frame` return PNG pictures, which Claude sees. Keep each answer under Claude Code's
-25,000-token limit: a 1280×720 picture costs about 1,200 tokens, so `kairos_notes` pages through notes. Stdout
-carries the protocol, so the MCP server logs to stderr only.
+25,000-token limit: a 1280×720 picture costs about 1,200 tokens, so `kairos_notes` pages through notes. The voice
+tools (`kairos_voices`, `kairos_say`, `kairos_words`) say they spend the user's fish.audio credits, so Claude uses
+them only when asked. Stdout carries the protocol, so the MCP server logs to stderr only.
 
 **Skills** come from `skills/` (Kairos) and `~/.kairos/skills/` (the user's own). Turning one on copies it into
 `~/.claude/skills/<name>/` with a `.kairos-skill` marker (source + content hash). Kairos only changes folders that

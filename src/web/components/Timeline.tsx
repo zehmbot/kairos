@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import { mediaKindOf } from "../../shared/media.ts";
-import type { AudioTrack } from "../../shared/types.ts";
+import type { AudioTrack, Word } from "../../shared/types.ts";
 import { drawWaveform, usePeaks } from "../player/waveform.ts";
 import {
   clipLength,
@@ -28,6 +28,10 @@ const RULER_H = 24;
 const FILM_H = 36;
 const LANE_H = 44;
 const WAVE_H = 28;
+/** Word labels show on clips from this zoom (pixels per second). */
+const WORDS_PPS = 40;
+/** A word shows its text when it has this much room (pixels). */
+const WORD_ROOM = 26;
 /** A clip whose file isn't read yet shows this long. */
 const PLACEHOLDER = 1;
 
@@ -51,6 +55,13 @@ export interface TimelineProps {
   onChange: (tracks: AudioTrack[]) => void;
   /** Sound files dropped on the timeline, at a time and a lane. */
   onAddSounds: (files: File[], start: number, lane: number) => void;
+  /** Word timings of the sounds that have them, by file. */
+  words?: Readonly<Record<string, { words: readonly Word[] }>>;
+  /** Asks for the word timings of a sound (speech-to-text). */
+  onGetWords?: (file: string) => void;
+  /** The file whose words are being found, and the last problem. */
+  wordsBusy?: string | null;
+  wordsError?: string | null;
 }
 
 type Drag =
@@ -80,6 +91,10 @@ export function Timeline({
   onSeek,
   onChange,
   onAddSounds,
+  words,
+  onGetWords,
+  wordsBusy,
+  wordsError,
 }: TimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -294,6 +309,11 @@ export function Timeline({
     seen[track.file] = (seen[track.file] ?? 0) + 1;
     return { track, index, key: `${track.file}#${seen[track.file]}` };
   });
+  /** A lane holding only spoken lines (files in voice/). */
+  const isVoiceLane = (lane: number) => {
+    const inLane = draft.filter((track) => track.lane === lane);
+    return inLane.length > 0 && inLane.every((track) => track.file.startsWith("voice/"));
+  };
   const laneMuted = (lane: number) => {
     const inLane = draft.filter((track) => track.lane === lane);
     return inLane.length > 0 && inLane.every((track) => track.muted);
@@ -362,10 +382,10 @@ export function Timeline({
           {laneIds.map((lane) => (
             <div
               key={lane}
-              className={`timeline-head lane-c${lane % 4}`}
+              className={`timeline-head lane-c${lane % 4}${isVoiceLane(lane) ? " lane-voice" : ""}`}
               style={{ height: LANE_H }}
             >
-              <span>Sound {lane + 1}</span>
+              <span>{isVoiceLane(lane) ? "Voice" : `Sound ${lane + 1}`}</span>
               <button
                 type="button"
                 className="timeline-mute"
@@ -458,7 +478,7 @@ export function Timeline({
               {laneIds.map((lane) => (
                 <div
                   key={lane}
-                  className={`timeline-lane timeline-sound lane-c${lane % 4}`}
+                  className={`timeline-lane timeline-sound lane-c${lane % 4}${isVoiceLane(lane) ? " lane-voice" : ""}`}
                   data-muted={laneMuted(lane) ? "true" : undefined}
                   style={{ height: LANE_H }}
                   onPointerDown={startScrub}
@@ -473,6 +493,7 @@ export function Timeline({
                         pps={pps}
                         length={lengthOf(track)}
                         selected={selected === index}
+                        words={words?.[track.file]?.words}
                         onDuration={(d) =>
                           setDurations((all) =>
                             all[track.file] === d ? all : { ...all, [track.file]: d },
@@ -546,6 +567,20 @@ export function Timeline({
           >
             Start at the playhead
           </PixelButton>
+          {onGetWords &&
+            (words?.[selectedTrack.file] ? (
+              <span className="hint">{words[selectedTrack.file]?.words.length} words</span>
+            ) : (
+              <PixelButton
+                variant="ghost"
+                data-size="small"
+                disabled={Boolean(wordsBusy)}
+                title="Ask fish.audio when each word is said (speech-to-text, uses credits)"
+                onClick={() => onGetWords(selectedTrack.file)}
+              >
+                {wordsBusy === selectedTrack.file ? "Listening…" : "Get words"}
+              </PixelButton>
+            ))}
           <PixelButton
             variant="ghost"
             data-size="small"
@@ -557,6 +592,7 @@ export function Timeline({
           </PixelButton>
         </div>
       )}
+      {wordsError && <p className="field-error timeline-error">{wordsError}</p>}
     </section>
   );
 }
@@ -568,6 +604,7 @@ function Clip({
   pps,
   length,
   selected,
+  words,
   onDuration,
   onPointerDown,
 }: {
@@ -576,6 +613,7 @@ function Clip({
   pps: number;
   length: number;
   selected: boolean;
+  words?: readonly Word[];
   onDuration: (duration: number) => void;
   onPointerDown: (event: ReactPointerEvent, mode: "move" | "start" | "end") => void;
 }) {
@@ -605,6 +643,26 @@ function Clip({
     >
       <canvas ref={canvasRef} className="timeline-wave" width={canvasWidth} height={WAVE_H} />
       <span className="timeline-clip-name">{fileName(track.file)}</span>
+      {words && pps >= WORDS_PPS && (
+        <div className="timeline-words">
+          {words.map((word, i) => {
+            const x = (word.start - track.from) * pps;
+            if (x < 0 || word.start >= track.from + length) return null;
+            const room = ((words[i + 1]?.start ?? track.from + length) - word.start) * pps - 2;
+            // Too narrow for its text: just the mark where the word starts.
+            return (
+              <span
+                key={`${word.start}:${word.text}`}
+                className="timeline-word"
+                style={{ left: x, maxWidth: Math.max(4, room) }}
+                title={word.text}
+              >
+                {room >= WORD_ROOM ? word.text : ""}
+              </span>
+            );
+          })}
+        </div>
+      )}
       <span
         className="timeline-edge timeline-edge-start"
         onPointerDown={(event) => onPointerDown(event, "start")}

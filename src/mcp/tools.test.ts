@@ -7,12 +7,15 @@ import type {
   Asset,
   FilmChange,
   FilmSummary,
+  FilmVoices,
+  NewLines,
   Note,
   NoteStatus,
   Reference,
   RenderJob,
   RenderQuality,
   RendersOverview,
+  VoiceLine,
 } from "../shared/types.ts";
 import { type Hub, HubError, HubOfflineError } from "./hub-client.ts";
 import { createKairosServer, MAX_NOTES } from "./tools.ts";
@@ -148,6 +151,82 @@ class FakeHub implements Hub {
     this.#check();
     return PNG;
   }
+  voices_: FilmVoices = {};
+  lines_: VoiceLine[] = [];
+  made: NewLines[] = [];
+  async filmVoices(id: string) {
+    await this.film(id);
+    return this.voices_;
+  }
+  async setFilmVoices(id: string, voices: FilmVoices) {
+    await this.film(id);
+    this.voices_ = voices;
+    return voices;
+  }
+  async voiceLibrary(query: string) {
+    this.#check();
+    return [
+      {
+        id: "voice-calm",
+        name: "Calm Narrator",
+        author: "Tests",
+        description: "Warm",
+        languages: ["en"],
+        cover: null,
+        sample: null,
+      },
+    ].filter((voice) => voice.name.toLowerCase().includes(query.toLowerCase()));
+  }
+  async lines(id: string) {
+    await this.film(id);
+    return this.lines_;
+  }
+  async makeLines(id: string, input: NewLines) {
+    await this.film(id);
+    this.made.push(input);
+    let t = input.start ?? 0;
+    const lines = input.lines.map(
+      (words, i): VoiceLine => ({
+        id: `l${i}`,
+        speaker: input.speaker ?? "narrator",
+        voiceId: "voice-calm",
+        voiceName: "Calm Narrator",
+        text: words,
+        speed: 1,
+        model: "s2.1-pro",
+        file: `voice/narrator-${i + 1}.mp3`,
+        duration: 1.5,
+        words: words
+          .split(" ")
+          .map((word, j) => ({ text: word, start: j * 0.5, end: j * 0.5 + 0.4 })),
+        createdAt: "2026-11-19T10:00:00.000Z",
+      }),
+    );
+    const placed =
+      input.start === undefined
+        ? []
+        : lines.map((line) => {
+            const at = { file: line.file, start: t, duration: line.duration };
+            t += line.duration + (input.gap ?? 0.3);
+            return at;
+          });
+    return { lines, placed };
+  }
+  transcribed: string[] = [];
+  async words(id: string, file: string, transcribe: boolean) {
+    await this.film(id);
+    if (!transcribe) throw new HubError("This sound has no word timings yet.", 404);
+    this.transcribed.push(file);
+    return {
+      text: "hello there",
+      duration: 1,
+      words: [
+        { text: "hello", start: 0.1, end: 0.4 },
+        { text: "there", start: 0.5, end: 0.9 },
+      ],
+      source: "transcript" as const,
+    };
+  }
   jobs: RenderJob[] = [];
   async startRender(id: string, quality: RenderQuality) {
     await this.film(id);
@@ -237,8 +316,11 @@ describe("Kairos tools", () => {
       "kairos_references",
       "kairos_render",
       "kairos_renders",
+      "kairos_say",
       "kairos_status",
       "kairos_use_asset",
+      "kairos_voices",
+      "kairos_words",
     ]);
     expect(client.getInstructions()).toContain("kairos_notes");
   });
@@ -424,6 +506,51 @@ describe("Kairos tools", () => {
     expect(images(second)).toHaveLength(1);
     expect(texts(second)).toContain("Page 2 of 2.");
     expect(texts(await call("kairos_status"))).toContain("References: 6");
+  });
+
+  it("chooses voices, makes lines placed after the others, and gives word timings", async () => {
+    const hub = new FakeHub();
+    await connect(hub);
+    expect(texts(await call("kairos_voices"))).toContain("No speakers yet");
+    const found = texts(await call("kairos_voices", { query: "calm" }));
+    expect(found).toContain("voice-calm: Calm Narrator by Tests [en] - Warm");
+    expect(
+      texts(
+        await call("kairos_voices", {
+          choose: { speaker: "narrator", id: "voice-calm", name: "Calm Narrator" },
+        }),
+      ),
+    ).toContain("Speakers: narrator = Calm Narrator (voice-calm)");
+
+    const said = texts(await call("kairos_say", { lines: ["Once upon a time", "the end"] }));
+    expect(hub.made[0]).toMatchObject({ speaker: "narrator", start: 0, gap: 0.3 });
+    expect(said).toContain("1. voice/narrator-1.mp3, 1.5 s, starts at 0 s");
+    expect(said).toContain("Once@0.00 upon@0.50 a@1.00 time@1.50");
+    expect(said).toContain("2. voice/narrator-2.mp3, 1.5 s, starts at 1.8 s");
+    expect(said).toContain("The last line ends at 3.3 s");
+
+    // Next lines go after the voice clips already on the timeline.
+    hub.lines_ = [
+      {
+        ...(await hub.makeLines("intro", { lines: ["x"] })).lines[0],
+        file: "voice/narrator-1.mp3",
+        duration: 2,
+      } as VoiceLine,
+    ];
+    const intro = hub.films_[0];
+    if (intro?.config)
+      intro.config.audio = [
+        { file: "voice/narrator-1.mp3", start: 1, volume: 1, from: 0, muted: false },
+      ];
+    await call("kairos_say", { lines: ["more"] });
+    expect(hub.made.at(-1)).toMatchObject({ start: 3.3 });
+    await call("kairos_say", { lines: ["files only"], place: false });
+    expect(hub.made.at(-1)?.start).toBeUndefined();
+
+    expect((await call("kairos_words", { file: "audio/take.mp3" })).isError).toBe(true);
+    const heard = texts(await call("kairos_words", { file: "audio/take.mp3", transcribe: true }));
+    expect(heard).toContain("from speech-to-text");
+    expect(heard).toContain("hello@0.10 there@0.50");
   });
 
   it("says plainly when Kairos isn't running", async () => {

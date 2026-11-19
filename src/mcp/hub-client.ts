@@ -6,8 +6,11 @@ import {
   type FilmChange,
   type FilmSummary,
   FilmSummarySchema,
+  type FilmVoices,
+  FilmVoicesSchema,
   type Health,
   HealthSchema,
+  type NewLines,
   type Note,
   NoteSchema,
   type NoteStatus,
@@ -18,9 +21,29 @@ import {
   type RenderQuality,
   type RendersOverview,
   RendersOverviewSchema,
+  type VoiceInfo,
+  VoiceInfoSchema,
+  type VoiceLine,
+  VoiceLineSchema,
+  type Word,
+  WordSchema,
   type Workspace,
   WorkspaceSchema,
 } from "../shared/types.ts";
+
+/** Word timings saved next to a sound file. */
+const WordsAnswerSchema = z.object({
+  text: z.string(),
+  duration: z.number(),
+  words: z.array(WordSchema),
+  source: z.enum(["speech", "transcript"]),
+});
+export type WordsAnswer = {
+  text: string;
+  duration: number;
+  words: Word[];
+  source: "speech" | "transcript";
+};
 
 /** The hub isn't running (nothing answers on its port). */
 export class HubOfflineError extends Error {}
@@ -56,6 +79,16 @@ export interface Hub {
   references(id: string): Promise<Reference[]>;
   /** Sheet `n` (from 1) of a reference: a PNG. */
   referenceSheet(id: string, ref: string, n: number): Promise<Buffer>;
+  filmVoices(id: string): Promise<FilmVoices>;
+  setFilmVoices(id: string, voices: FilmVoices): Promise<FilmVoices>;
+  voiceLibrary(query: string, mine: boolean): Promise<VoiceInfo[]>;
+  lines(id: string): Promise<VoiceLine[]>;
+  makeLines(
+    id: string,
+    input: NewLines,
+  ): Promise<{ lines: VoiceLine[]; placed: { file: string; start: number; duration: number }[] }>;
+  /** Word timings of a sound; with `transcribe`, asks fish.audio when there are none yet. */
+  words(id: string, file: string, transcribe: boolean): Promise<WordsAnswer>;
 }
 
 /** Calls the Kairos hub over HTTP (it only listens on 127.0.0.1). */
@@ -169,6 +202,48 @@ export class HubClient implements Hub {
     return this.#bytes(
       `/api/films/${encodeURIComponent(id)}/references/${encodeURIComponent(ref)}/sheets/${n}`,
     );
+  }
+
+  filmVoices(id: string) {
+    return this.#json(FilmVoicesSchema, `/api/films/${encodeURIComponent(id)}/voices`);
+  }
+
+  setFilmVoices(id: string, voices: FilmVoices) {
+    return this.#json(
+      FilmVoicesSchema,
+      `/api/films/${encodeURIComponent(id)}/voices`,
+      this.#send("PUT", voices),
+    );
+  }
+
+  voiceLibrary(query: string, mine: boolean) {
+    const params = new URLSearchParams({ query, mine: String(mine) });
+    return this.#json(z.array(VoiceInfoSchema), `/api/voice/library?${params}`);
+  }
+
+  lines(id: string) {
+    return this.#json(z.array(VoiceLineSchema), `/api/films/${encodeURIComponent(id)}/lines`);
+  }
+
+  makeLines(id: string, input: NewLines) {
+    return this.#json(
+      z.object({
+        lines: z.array(VoiceLineSchema),
+        placed: z.array(z.object({ file: z.string(), start: z.number(), duration: z.number() })),
+      }),
+      `/api/films/${encodeURIComponent(id)}/lines`,
+      this.#send("POST", input),
+    );
+  }
+
+  async words(id: string, file: string, transcribe: boolean) {
+    const film = `/api/films/${encodeURIComponent(id)}/words`;
+    try {
+      return await this.#json(WordsAnswerSchema, `${film}?file=${encodeURIComponent(file)}`);
+    } catch (error) {
+      if (!(error instanceof HubError) || error.status !== 404 || !transcribe) throw error;
+      return this.#json(WordsAnswerSchema, film, this.#send("POST", { file }));
+    }
   }
 
   renders() {

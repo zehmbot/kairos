@@ -1,5 +1,5 @@
 import { mkdir } from "node:fs/promises";
-import type { AppConfig } from "../shared/types.ts";
+import type { AppConfig, FilmVoice } from "../shared/types.ts";
 import { loadConfig, saveConfig } from "./config.ts";
 import { EventBus } from "./events.ts";
 import type { Film } from "./films.ts";
@@ -60,6 +60,29 @@ export class Studio {
     await saveConfig(this.home, this.#config);
     await this.#startWatcher();
     this.events.publish({ type: "workspace-changed" });
+  }
+
+  /** fish.audio settings: the speech model and the voices used lately. */
+  get voiceSettings(): { model: string | null; recent: FilmVoice[] } {
+    return { model: this.#config.voice?.model ?? null, recent: this.#config.voice?.recent ?? [] };
+  }
+
+  async setVoiceModel(model: string): Promise<void> {
+    this.#config = { ...this.#config, voice: { ...this.voiceSettings, model } };
+    await saveConfig(this.home, this.#config);
+  }
+
+  /** Puts a voice first in the "used lately" list (at most 12). */
+  async rememberVoice(voice: FilmVoice): Promise<void> {
+    const recent = [voice, ...this.voiceSettings.recent.filter((v) => v.id !== voice.id)].slice(
+      0,
+      12,
+    );
+    this.#config = {
+      ...this.#config,
+      voice: { model: this.voiceSettings.model ?? undefined, recent },
+    };
+    await saveConfig(this.home, this.#config);
   }
 
   /** Path of a film's page on the film server, or `null` when the film can't be previewed. */

@@ -4,13 +4,16 @@ import type { Note } from "../../shared/types.ts";
 import {
   useAddNote,
   useFilm,
+  useFilmWords,
   useHealth,
+  useLines,
   useNotes,
   useOpenClaude,
   useOpenFilmFolder,
   useReferences,
   useRenders,
   useSaveAudio,
+  useTranscribe,
 } from "../api.ts";
 import {
   AddDialog,
@@ -40,6 +43,7 @@ import { SaveTemplateDialog } from "../components/SaveTemplateDialog.tsx";
 import { SideTabs } from "../components/SideTabs.tsx";
 import { SoundPanel } from "../components/SoundPanel.tsx";
 import { Timeline } from "../components/Timeline.tsx";
+import { VoicePanel } from "../components/VoicePanel.tsx";
 import { groupFiles, type Purpose, purposesFor } from "../filmAdd.ts";
 import { useHubEvent } from "../hubEvents.ts";
 import { filmFileUrl } from "../player/audioSync.ts";
@@ -49,7 +53,7 @@ import { useNoteDraft } from "../player/useNoteDraft.ts";
 import { filmRender, jobStatus } from "../renderText.ts";
 import { useNow } from "../useNow.ts";
 
-const SIDE_TABS: readonly SideTab[] = ["notes", "sound", "references", "brief"];
+const SIDE_TABS: readonly SideTab[] = ["notes", "sound", "voice", "references", "brief"];
 
 /** The side tab shown for a film, remembered per film in this browser. */
 function useFilmTab(id: string): [SideTab, (tab: SideTab) => void] {
@@ -94,6 +98,9 @@ export function FilmPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const navigate = useNavigate();
   const references = useReferences(id, Boolean(film.data));
+  const lines = useLines(id);
+  const filmWords = useFilmWords(id);
+  const transcribe = useTranscribe(id);
   const saveAudio = useSaveAudio(id);
   const [tab, setTab] = useFilmTab(id);
   const [addOpen, setAddOpen] = useState(false);
@@ -237,6 +244,10 @@ export function FilmPage() {
               onSeek={seekTime}
               onChange={(next) => saveAudio.mutate(next)}
               onAddSounds={(files, start, lane) => void adds.addSoundsAt(files, start, lane)}
+              words={filmWords.data}
+              onGetWords={(file) => transcribe.mutate(file)}
+              wordsBusy={transcribe.isPending ? transcribe.variables : null}
+              wordsError={transcribe.error?.message ?? null}
             />
           )}
           audio={config.audio.map((track) => ({
@@ -280,6 +291,7 @@ export function FilmPage() {
   const tabs = [
     { id: "notes" as const, label: "Notes", count: openNotes.length },
     { id: "sound" as const, label: "Sound", count: config?.audio.length ?? 0 },
+    { id: "voice" as const, label: "Voice", count: lines.data?.length ?? 0 },
     { id: "references" as const, label: "References", count: references.data?.length ?? 0 },
     ...(film.data.hasBrief ? [{ id: "brief" as const, label: "Brief" }] : []),
   ];
@@ -457,6 +469,16 @@ export function FilmPage() {
                     duration={config.duration}
                     fileUrl={(file) => filmFileUrl(filmOrigin, film.data.id, file)}
                     now={now}
+                  />
+                )}
+                {shownTab === "voice" && config && filmOrigin && (
+                  <VoicePanel
+                    filmId={film.data.id}
+                    tracks={config.audio}
+                    duration={config.duration}
+                    now={now}
+                    onSeek={showTime}
+                    fileUrl={(file) => filmFileUrl(filmOrigin, film.data.id, file)}
                   />
                 )}
                 {shownTab === "references" && <ReferencesPanel filmId={film.data.id} />}

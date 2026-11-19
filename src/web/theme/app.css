@@ -1387,7 +1387,7 @@ a.render-title:hover {
 @media (min-width: 1200px) {
   .review {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) clamp(340px, 32%, 480px);
+    grid-template-columns: minmax(0, 1fr) clamp(368px, 32%, 480px);
     align-items: start;
   }
 
@@ -1741,9 +1741,9 @@ video.asset-media {
   flex: 1 1 auto;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   margin: var(--px);
-  padding: 10px 6px;
+  padding: 10px 4px;
   font-family: var(--font-pixel);
   font-size: 8px;
   line-height: 1;
@@ -2106,4 +2106,175 @@ video.asset-media {
 .timeline-volume input {
   width: 120px;
   accent-color: var(--accent);
+}
+
+/* Spoken lines: their own colour, and each word under the clip when zoomed in. */
+.lane-voice {
+  --lane: var(--track-voice);
+}
+
+.timeline-words {
+  position: absolute;
+  right: 0;
+  bottom: 2px;
+  left: 0;
+  height: 14px;
+  pointer-events: none;
+}
+
+.timeline-word {
+  position: absolute;
+  bottom: 0;
+  overflow: hidden;
+  padding-left: 3px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 14px;
+  white-space: nowrap;
+  color: var(--text);
+  text-shadow: 0 2px 0 var(--bg);
+  box-shadow: inset 2px 0 0 var(--lane);
+}
+
+.timeline-error {
+  margin: 0;
+  padding: 0 calc(var(--px) * 2) calc(var(--px) * 2);
+}
+
+/* ---------- Voice ---------- */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.voice-ok {
+  padding: 4px 8px;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--bg);
+  background: var(--ok);
+}
+
+.voice-key-row,
+.voice-add-speaker,
+.voice-speed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice-key-row .px-input,
+.voice-add-speaker .px-input {
+  flex: 1;
+  min-width: 160px;
+}
+
+.voice-speed input[type="range"] {
+  flex: 1;
+  min-width: 80px;
+  accent-color: var(--track-voice);
+}
+
+.voice-cast,
+.voice-lines,
+.voice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.voice-cast-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice-cast-row .hint {
+  flex: 1;
+  min-width: 0;
+}
+
+.voice-speaker {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--track-voice);
+}
+
+.voice-line,
+.voice-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--bg);
+}
+
+.voice-line-text {
+  overflow-wrap: anywhere;
+}
+
+.voice-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.voice-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+}
+
+.voice-name {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+}
+
+.voice-description {
+  overflow: hidden;
+  font-size: 14px;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-recent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.voice-search {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.voice-list {
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.voice-line-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.voice-past-end {
+  color: var(--highlight);
 }

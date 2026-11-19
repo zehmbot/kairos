@@ -67,6 +67,83 @@ const AudioSchema = z
     typeof audio === "string" ? [AudioTrackSchema.parse({ file: audio })] : audio,
   );
 
+// ---------- Voices (fish.audio) ----------
+
+/** A spoken word and when it is said, in seconds from the start of its sound file. */
+export const WordSchema = z.object({ text: z.string(), start: z.number(), end: z.number() });
+export type Word = z.infer<typeof WordSchema>;
+
+/** A voice in the fish.audio library (or one of the user's own). */
+export const VoiceInfoSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  author: z.string().nullable(),
+  description: z.string(),
+  languages: z.array(z.string()),
+  /** Picture and sample addresses on fish.audio (https), when it has them. */
+  cover: z.string().nullable(),
+  sample: z.string().nullable(),
+});
+export type VoiceInfo = z.infer<typeof VoiceInfoSchema>;
+
+/** Who speaks in a film: a speaker name ("narrator", "ruby") and its fish.audio voice. */
+export const SPEAKER_PATTERN = /^[a-z][a-z0-9-]{0,31}$/;
+export const FilmVoiceSchema = z.object({ id: z.string().min(1), name: z.string() });
+export type FilmVoice = z.infer<typeof FilmVoiceSchema>;
+export const FilmVoicesSchema = z.record(
+  z.string().regex(SPEAKER_PATTERN, "Speaker names use small letters, numbers and dashes."),
+  FilmVoiceSchema,
+);
+export type FilmVoices = z.infer<typeof FilmVoicesSchema>;
+
+/** A line of speech made for a film (`voice/lines.json`). */
+export const VoiceLineSchema = z.object({
+  id: z.string(),
+  speaker: z.string(),
+  voiceId: z.string(),
+  voiceName: z.string(),
+  text: z.string(),
+  speed: z.number(),
+  model: z.string(),
+  /** The sound file in the film folder, and its word timings next to it (`.words.json`). */
+  file: z.string(),
+  duration: z.number(),
+  words: z.array(WordSchema),
+  createdAt: z.string(),
+});
+export type VoiceLine = z.infer<typeof VoiceLineSchema>;
+
+/** POST /api/films/:id/lines: make lines (and place them on the timeline). */
+export const NewLinesSchema = z.object({
+  speaker: z.string().regex(SPEAKER_PATTERN).default("narrator"),
+  lines: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1, "A line needs some words.")
+        .max(2000, "Keep a line under 2000 letters."),
+    )
+    .min(1)
+    .max(60),
+  speed: z.number().min(0.5).max(2).default(1),
+  /** Where the first line starts on the film (seconds); the others follow it. Left out: not placed. */
+  start: z.number().min(0).optional(),
+  /** Silence between lines placed back-to-back, in seconds. */
+  gap: z.number().min(0).max(10).default(0.3),
+});
+export type NewLines = z.input<typeof NewLinesSchema>;
+
+/** Is fish.audio ready: is there a key (and where from), which model. The key itself never leaves the hub. */
+export const VoiceStatusSchema = z.object({
+  key: z.enum(["settings", "environment"]).nullable(),
+  hint: z.string().nullable(),
+  model: z.string(),
+  models: z.array(z.string()),
+  recent: z.array(FilmVoiceSchema),
+});
+export type VoiceStatus = z.infer<typeof VoiceStatusSchema>;
+
 /**
  * `kairos.json` at the root of every film folder.
  * The film page itself exposes `window.renderOut(t)`, `window.READY` and `window.KAIROS_SCENES`.
@@ -83,6 +160,8 @@ export const FilmConfigSchema = z.object({
   page: z.string().default("index.html"),
   /** Sound: one file, or tracks with a start and a volume (mixed together in the render). */
   audio: AudioSchema.default([]),
+  /** Who speaks in the film and with which fish.audio voice. */
+  voices: FilmVoicesSchema.optional(),
 });
 export type FilmConfig = z.infer<typeof FilmConfigSchema>;
 
@@ -357,6 +436,10 @@ export type FilmSummary = z.infer<typeof FilmSummarySchema>;
 export const AppConfigSchema = z.object({
   /** Folder that holds `films/`. Not set until the user picks one. */
   workspace: z.string().optional(),
+  /** fish.audio: the speech model, and voices used lately (newest first). The key is in `.env`, not here. */
+  voice: z
+    .object({ model: z.string().optional(), recent: z.array(FilmVoiceSchema).default([]) })
+    .optional(),
 });
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 

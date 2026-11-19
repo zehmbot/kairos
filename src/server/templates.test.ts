@@ -162,6 +162,8 @@ describe("saving a film as a template", () => {
     await writeFile(join(dir, "renders", "rainy-v1.mp4"), "video");
     await mkdir(join(dir, ".git"));
     await writeFile(join(dir, ".kairos", "notes.json"), "{}");
+    await mkdir(join(dir, "voice"));
+    await writeFile(join(dir, "voice", "narrator-1.mp3"), "spoken");
     const film = must(await readFilm(filmsDir, id));
 
     const templateId = await saveAsTemplate(

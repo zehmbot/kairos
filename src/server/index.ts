@@ -25,11 +25,19 @@ import { skillRoutes } from "./routes/skills.ts";
 import { soundRoutes } from "./routes/sounds.ts";
 import { templateRoutes } from "./routes/templates.ts";
 import { trashRoutes } from "./routes/trash.ts";
+import { voiceRoutes } from "./routes/voice.ts";
 import { workspaceRoutes } from "./routes/workspace.ts";
 import { allowedHostsFor, requestGuard } from "./security.ts";
 import { claudeSkillsDir, Skills } from "./skills.ts";
 import { Studio } from "./studio.ts";
 import { acceptUploads } from "./uploads.ts";
+
+// Secrets (the fish.audio key) can sit in the Kairos folder's own .env, which git ignores.
+try {
+  process.loadEnvFile(fileURLToPath(new URL("../../.env", import.meta.url)));
+} catch {
+  // No .env: fine.
+}
 
 const { values: args } = parseArgs({
   options: {
@@ -105,6 +113,7 @@ const renderer = new Renderer({
 renderRoutes(app, { studio, renderer, exportInfo: () => exportInfo });
 assetRoutes(app, studio);
 soundRoutes(app, studio);
+voiceRoutes(app, studio);
 referenceRoutes(app, studio, { ffmpeg: async () => (await exportInfo).ffmpeg?.path ?? null });
 filmRoutes(app, studio, {
   picture: filmPicture({ studio, camera, filmServerUrl }),

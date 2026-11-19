@@ -9,6 +9,7 @@ import {
 import { Notice } from "../components/Notice.tsx";
 import { PixelButton } from "../components/PixelButton.tsx";
 import { PixelPanel } from "../components/PixelPanel.tsx";
+import { VoiceSettings } from "../components/VoiceSettings.tsx";
 import { WorkspacePicker } from "../components/WorkspacePicker.tsx";
 
 export function SettingsPage() {
@@ -75,6 +76,7 @@ export function SettingsPage() {
         )}
       </PixelPanel>
       <ExportPanel />
+      <VoiceSettings />
       <ClaudePanel />
     </div>
   );

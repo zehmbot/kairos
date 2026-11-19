@@ -98,6 +98,27 @@ Kairos plays the tracks in step with the preview and mixes them into the rendere
 `duration`. The page itself never plays sound: Kairos does. Time the picture to the sound (a beat, a word) with
 `start` values and constants in `film.js`, not with timers.
 
+## Voices
+
+Kairos makes spoken lines with fish.audio. **They cost the user's credits:** make lines only when the user asks
+for a voice or narration, and write the words first.
+
+1. `kairos_voices`: who speaks in this film (`narrator`, `ruby`...) and with which voice. If a speaker you need
+   has no voice, search (`query`, or `mine` for the user's own voices) and ask the user which one to use, then
+   set it with `choose`.
+2. `kairos_say`: give a speaker one or more lines. Each becomes `voice/<speaker>-<n>.mp3` with its word timings
+   in `voice/<speaker>-<n>.words.json`, placed on the timeline after the voice lines already there (or at
+   `start`). The answer lists each line's start, length and every word as `word@seconds` on the film.
+   - One line per sentence or beat, so shots and captions can follow them.
+   - The same words, voice and speed again reuse the earlier file (not paid twice).
+   - The film doesn't grow on its own: set `duration` to cover the last line (`kairos_film_settings`).
+3. Time the picture to the words: use the starts from the answer, or read `voice/*.words.json` from the page
+   (word times there are from the start of that file, so add the clip's `start` from `kairos.json`).
+
+`kairos_words` gives the word timings of any sound in the film. For the user's own recording it can ask
+fish.audio's speech-to-text (`transcribe: true`, uses credits). The user can also make lines in the Voice tab on
+the film page, and press **Get words** on a clip in the timeline.
+
 ## References and assets
 
 - **References** are videos and pictures the user likes, added on the film page (they live in `references/`).

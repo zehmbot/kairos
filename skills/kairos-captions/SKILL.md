@@ -55,9 +55,39 @@ function drawCaption(t) {
 With three.js, draw captions on a 2D canvas laid over the WebGL canvas (both at film size, absolutely positioned),
 or as a canvas texture on a plane in front of the camera.
 
-**Where the word times come from:** a transcript with word timings of the narration audio. If you only have the
-script, estimate (about 2.5 words per second, plus pauses at punctuation), say clearly that the times are
-estimates, and keep them in one list so they are easy to replace.
+**Where the word times come from:** Kairos keeps the real ones next to each voice file. A line made with
+`kairos_say` (or the Voice tab) has `voice/<speaker>-<n>.words.json`; a recording gets `<file>.words.json` when
+the user presses **Get words** (or `kairos_words` with `transcribe: true`):
+
+```json
+{ "version": 1, "text": "Every night...", "duration": 3.1, "source": "speech",
+  "words": [{ "text": "Every", "start": 0, "end": 0.28 }, { "text": "night", "start": 0.3, "end": 0.66 }] }
+```
+
+These times are from the start of the file. Add the clip's `start` from `kairos.json` `audio` (and subtract its
+`from` if it is trimmed) to get film time. Load them in `READY` with `fetch` (the page and its files share an
+origin), or copy them into the film's code when they won't change. Words keep their punctuation ("night,"):
+strip it for display if the style wants. Only if there is no voice yet, estimate (about 2.5 words per second,
+plus pauses at punctuation), say clearly that the times are estimates, and keep them in one list so they are easy
+to replace.
+
+```js
+// In READY: words of every voice clip, in film time.
+const film = await (await fetch("kairos.json")).json();
+const WORDS = [];
+for (const clip of film.audio ?? []) {
+  const res = await fetch(clip.file.replace(/\.[^./]+$/, ".words.json"));
+  if (!res.ok) continue;
+  const { words } = await res.json();
+  const from = clip.from ?? 0;
+  const end = from + (clip.length ?? Infinity);
+  for (const w of words) {
+    const at = (clip.start ?? 0) - from;
+    if (w.start >= from && w.start < end) WORDS.push({ ...w, start: at + w.start, end: at + w.end });
+  }
+}
+WORDS.sort((a, b) => a.start - b.start);
+```
 
 ## Kinetic type patterns
 

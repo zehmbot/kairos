@@ -10,6 +10,7 @@ import {
   type FilmChange,
   type FilmConfig,
   FilmConfigSchema,
+  type FilmVoices,
   type NewFilm,
 } from "../shared/types.ts";
 import { writeFileAtomic } from "./atomic-write.ts";
@@ -261,7 +262,7 @@ export class FilmConfigError extends Error {}
  */
 export async function changeFilm(
   filmDir: string,
-  change: FilmChange | { audio: AudioTrack[] },
+  change: FilmChange | { audio: AudioTrack[] } | { voices: FilmVoices },
 ): Promise<FilmConfig> {
   const file = join(filmDir, CONFIG_FILE);
   const text = await readFile(file, "utf8");

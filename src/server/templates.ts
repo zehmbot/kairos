@@ -210,11 +210,12 @@ export function briefMarkdown(brief: BriefFile, title: string): string {
 }
 
 /** Never copied into a template: Kairos' own data, videos, hidden folders, packages, the brief. */
-// References are left out too: they are often other people's videos.
+// References are left out too (they are often other people's videos), and the film's spoken lines (voice/).
 const NOT_TEMPLATE = new Set([
   ".kairos",
   "renders",
   "references",
+  "voice",
   "node_modules",
   "brief.md",
   "kairos.json",
