@@ -15,11 +15,12 @@ import { Renderer } from "./renderer.ts";
 import { claudeRoutes } from "./routes/claude.ts";
 import { eventRoutes } from "./routes/events.ts";
 import { filmRoutes } from "./routes/films.ts";
-import { frameRoutes } from "./routes/frames.ts";
+import { filmPicture, frameRoutes } from "./routes/frames.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { noteRoutes } from "./routes/notes.ts";
 import { renderRoutes } from "./routes/renders.ts";
 import { skillRoutes } from "./routes/skills.ts";
+import { templateRoutes } from "./routes/templates.ts";
 import { workspaceRoutes } from "./routes/workspace.ts";
 import { allowedHostsFor, requestGuard } from "./security.ts";
 import { claudeSkillsDir, Skills } from "./skills.ts";
@@ -38,7 +39,7 @@ const port = Number(args.port ?? process.env.KAIROS_PORT ?? DEFAULT_HUB_PORT);
 const filmPort = Number(args["film-port"] ?? process.env.KAIROS_FILM_PORT ?? DEFAULT_FILM_PORT);
 const url = `http://${HOST}:${port}`;
 const webDir = fileURLToPath(new URL("../../dist/web/", import.meta.url));
-const templateDir = fileURLToPath(new URL("../../templates/starter/", import.meta.url));
+const templatesDir = fileURLToPath(new URL("../../templates/", import.meta.url));
 const mcpServerPath = fileURLToPath(new URL("../mcp/server.ts", import.meta.url));
 const builtinSkillsDir = fileURLToPath(new URL("../../skills/", import.meta.url));
 
@@ -46,7 +47,7 @@ const builtinSkillsDir = fileURLToPath(new URL("../../skills/", import.meta.url)
 const uiHosts = allowedHostsFor(dev ? [port, DEV_WEB_PORT] : [port]);
 const uiOrigins = [...uiHosts].map((host) => `http://${host}`);
 
-const studio = await Studio.open({ home: kairosHome(), templateDir });
+const studio = await Studio.open({ home: kairosHome(), templatesDir });
 const camera = new Camera(findBrowser());
 const skills = new Skills({
   builtinDir: builtinSkillsDir,
@@ -66,9 +67,10 @@ app.addHook("onRequest", requestGuard(uiHosts));
 
 healthRoutes(app, { version: pkg.version, url, dev, filmPort });
 workspaceRoutes(app, studio);
-filmRoutes(app, studio);
-eventRoutes(app, studio.events);
 const filmServerUrl = `http://${HOST}:${filmPort}`;
+filmRoutes(app, studio, { picture: filmPicture({ studio, camera, filmServerUrl }) });
+templateRoutes(app, studio);
+eventRoutes(app, studio.events);
 noteRoutes(app, { studio, camera, filmServerUrl });
 frameRoutes(app, { studio, camera, filmServerUrl });
 claudeRoutes(

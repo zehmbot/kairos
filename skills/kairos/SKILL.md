@@ -8,10 +8,17 @@ description: How Kairos films work and how to change them safely. Use whenever y
 Kairos is the user's local video studio. A **film** is a web page that draws any frame on request. Kairos shows it
 live, collects the user's frame notes, and later renders it to a video file by drawing every frame.
 
+## Start from the brief
+
+If the film folder has `brief.md`, read it before anything else: it is what the user asked for when they
+made the film (their idea, script, or answers to the template's questions). Build the film from it, and keep
+to it when you change things later. The user can edit it in Kairos; read it again when they say they did.
+
 ## The film folder
 
 ```
 kairos.json   title, width, height (pixels), fps (1 to 120), duration (seconds), status, audio
+brief.md      what the user asked for (when the film was made from a template's form)
 index.html    the page, built at exactly width × height (Kairos scales the preview itself)
 film.js       defines window.renderOut(t)
 assets/       images, fonts, sounds

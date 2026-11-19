@@ -5,9 +5,9 @@ import { rename, rm, writeFile } from "node:fs/promises";
  * Writes `text` to `file` all at once: readers see the old file or the new one, never half of it.
  * The text goes to a temp file next to it, which then replaces the file.
  */
-export async function writeFileAtomic(file: string, text: string): Promise<void> {
+export async function writeFileAtomic(file: string, text: string | Uint8Array): Promise<void> {
   const temp = `${file}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
-  await writeFile(temp, text, "utf8");
+  await writeFile(temp, text);
   // Windows can briefly lock a file (antivirus, sync tools): try the swap a few times.
   for (let attempt = 1; ; attempt++) {
     try {

@@ -1,9 +1,17 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { DEFAULT_FPS, FILM_SHAPES, type FilmShape } from "../../shared/types.ts";
-import { useCreateFilm } from "../api.ts";
+import {
+  DEFAULT_FPS,
+  FILM_SHAPES,
+  type FilmShape,
+  type TemplateSummary,
+} from "../../shared/types.ts";
+import { templatePreviewUrl, useCreateFilm, useDeleteTemplate, useTemplates } from "../api.ts";
+import { answersOf, firstMissing, initialAnswers } from "../brief.ts";
+import { BriefFields } from "./BriefFields.tsx";
 import { FrameRatePicker, useFrameRate } from "./FrameRatePicker.tsx";
 import { PixelButton } from "./PixelButton.tsx";
+import { PixelIcon } from "./PixelIcon.tsx";
 import { TextField } from "./TextField.tsx";
 
 const SHAPES = Object.entries(FILM_SHAPES) as [FilmShape, (typeof FILM_SHAPES)[FilmShape]][];
@@ -15,35 +23,99 @@ interface NewFilmDialogProps {
   onClose: () => void;
 }
 
+/** New film in two steps: choose a template (and its kind), then the details and the template's questions. */
 export function NewFilmDialog({ open, onClose }: NewFilmDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingId = useId();
+  const templateName = useId();
+  const kindName = useId();
+  const templates = useTemplates();
+  const create = useCreateFilm();
+  const removeTemplate = useDeleteTemplate();
+  const navigate = useNavigate();
+  const rate = useFrameRate(DEFAULT_FPS);
+
+  const [step, setStep] = useState<"template" | "details">("template");
+  const [templateId, setTemplateId] = useState("starter");
+  const [kindId, setKindId] = useState("");
   const [title, setTitle] = useState("");
   const [shape, setShape] = useState<FilmShape>("wide");
-  const rate = useFrameRate(DEFAULT_FPS);
-  const create = useCreateFilm();
-  const navigate = useNavigate();
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const list = templates.data ?? [];
+  const template = list.find((entry) => entry.id === templateId) ?? list[0];
+  const kind = template?.kinds.find((entry) => entry.id === kindId) ?? template?.kinds[0];
   const { reset } = create;
   const resetRate = rate.reset;
+
+  /** Picks a template (and its first kind) with its defaults. */
+  const choose = (next: TemplateSummary, nextKind = next.kinds[0]) => {
+    setTemplateId(next.id);
+    setKindId(nextKind?.id ?? "");
+    setShape(next.defaults.shape);
+    resetRate(next.defaults.fps);
+    setAnswers(initialAnswers(nextKind?.fields ?? []));
+    setConfirmDelete(false);
+  };
 
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
     if (open && !dialog.open) {
+      setStep("template");
       setTitle("");
-      setShape("wide");
-      resetRate(DEFAULT_FPS);
+      setFormError(null);
       reset();
       dialog.showModal();
     } else if (!open && dialog.open) {
       dialog.close();
     }
-  }, [open, reset, resetRate]);
+  }, [open, reset]);
+
+  // When the templates arrive (or the chosen one is gone), start from the first one.
+  const firstId = list[0]?.id;
+  const known = list.some((entry) => entry.id === templateId);
+  useEffect(() => {
+    if (open && !known && firstId) {
+      const first = list.find((entry) => entry.id === firstId);
+      if (first) choose(first);
+    }
+  });
+
+  const create_ = () => {
+    if (!template || !kind || rate.fps === null) return;
+    const missing = firstMissing(kind.fields, answers);
+    if (missing) {
+      setFormError(missing);
+      return;
+    }
+    setFormError(null);
+    create.mutate(
+      {
+        title,
+        shape,
+        fps: rate.fps,
+        template: template.id,
+        kind: kind.id,
+        brief: answersOf(answers),
+      },
+      {
+        onSuccess: (film) => {
+          onClose();
+          navigate(`/films/${encodeURIComponent(film.id)}`);
+        },
+      },
+    );
+  };
+
+  const fixedSize = template?.defaults.size;
 
   return (
     <dialog
       ref={dialogRef}
-      className="px-dialog px-box"
+      className="px-dialog px-dialog-wide px-box"
       aria-labelledby={headingId}
       onClose={onClose}
     >
@@ -51,74 +123,197 @@ export function NewFilmDialog({ open, onClose }: NewFilmDialogProps) {
         className="form"
         onSubmit={(event) => {
           event.preventDefault();
-          if (rate.fps === null) return;
-          create.mutate(
-            { title, shape, fps: rate.fps },
-            {
-              onSuccess: (film) => {
-                onClose();
-                navigate(`/films/${encodeURIComponent(film.id)}`);
-              },
-            },
-          );
+          if (step === "template") setStep("details");
+          else create_();
         }}
       >
         <h2 id={headingId} className="dialog-title">
-          New film
+          New film {step === "details" && template ? `· ${template.name}` : ""}
         </h2>
-        <TextField
-          label="Name"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder="My first film"
-          maxLength={80}
-          autoComplete="off"
-          error={create.error?.message}
-        />
-        <fieldset className="choice-picker">
-          <legend className="field-label">Shape</legend>
-          <div className="choice-cards">
-            {SHAPES.map(([key, info]) => {
-              const fit = SHAPE_BOX / Math.max(info.width, info.height);
-              return (
-                <label key={key} className="choice-card">
-                  <input
-                    type="radio"
-                    name="shape"
-                    value={key}
-                    checked={shape === key}
-                    onChange={() => setShape(key)}
-                    className="visually-hidden"
-                  />
-                  <span className="shape-box">
-                    <span
-                      className="shape-preview"
-                      style={{
-                        width: Math.round(info.width * fit),
-                        height: Math.round(info.height * fit),
-                      }}
+
+        {step === "template" ? (
+          <>
+            <fieldset className="choice-picker">
+              <legend className="field-label">Start from a template</legend>
+              {templates.isPending && <p>Loading templates...</p>}
+              {templates.isError && <p className="field-error">{templates.error.message}</p>}
+              <div className="template-cards">
+                {list.map((entry) => (
+                  <label
+                    key={entry.id}
+                    className="choice-card template-card"
+                    data-disabled={entry.problem ? "true" : undefined}
+                  >
+                    <input
+                      type="radio"
+                      name={templateName}
+                      checked={template?.id === entry.id}
+                      disabled={Boolean(entry.problem)}
+                      onChange={() => choose(entry)}
+                      className="visually-hidden"
                     />
-                  </span>
-                  <span className="choice-label">{info.label}</span>
-                  <span className="choice-sub">{info.ratio}</span>
-                </label>
-              );
-            })}
-          </div>
-        </fieldset>
-        <FrameRatePicker state={rate} />
-        <div className="form-actions">
-          <PixelButton variant="ghost" onClick={onClose}>
-            Cancel
-          </PixelButton>
-          <PixelButton
-            type="submit"
-            icon="plus"
-            disabled={create.isPending || !title.trim() || rate.fps === null}
-          >
-            Create film
-          </PixelButton>
-        </div>
+                    <span className="template-preview">
+                      {entry.hasPreview ? (
+                        <img src={templatePreviewUrl(entry.id)} alt="" />
+                      ) : (
+                        <PixelIcon name="film" size={32} />
+                      )}
+                    </span>
+                    <span className="choice-label">
+                      {entry.name}
+                      {entry.source === "yours" && (
+                        <span className="px-tag template-yours">Yours</span>
+                      )}
+                    </span>
+                    <span className="template-description">
+                      {entry.problem ?? entry.description}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            {template && template.kinds.length > 1 && (
+              <fieldset className="choice-picker">
+                <legend className="field-label">What kind of film?</legend>
+                <div className="choice-cards">
+                  {template.kinds.map((entry) => (
+                    <label key={entry.id} className="choice-card">
+                      <input
+                        type="radio"
+                        name={kindName}
+                        checked={kind?.id === entry.id}
+                        onChange={() => choose(template, entry)}
+                        className="visually-hidden"
+                      />
+                      <span className="choice-label">{entry.name}</span>
+                      <span className="choice-sub">{entry.description}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
+
+            {template?.source === "yours" && (
+              <div className="note-actions">
+                {confirmDelete ? (
+                  <>
+                    <span className="note-confirm">Delete the "{template.name}" template?</span>
+                    <PixelButton
+                      data-size="small"
+                      icon="trash"
+                      disabled={removeTemplate.isPending}
+                      onClick={() =>
+                        removeTemplate.mutate(template.id, {
+                          onSuccess: () => setConfirmDelete(false),
+                        })
+                      }
+                    >
+                      Delete
+                    </PixelButton>
+                    <PixelButton
+                      variant="ghost"
+                      data-size="small"
+                      onClick={() => setConfirmDelete(false)}
+                    >
+                      Keep
+                    </PixelButton>
+                  </>
+                ) : (
+                  <PixelButton
+                    variant="ghost"
+                    data-size="small"
+                    icon="trash"
+                    onClick={() => setConfirmDelete(true)}
+                  >
+                    Delete this template
+                  </PixelButton>
+                )}
+              </div>
+            )}
+            {removeTemplate.error && <p className="field-error">{removeTemplate.error.message}</p>}
+
+            <div className="form-actions">
+              <PixelButton variant="ghost" onClick={onClose}>
+                Cancel
+              </PixelButton>
+              <PixelButton type="submit" disabled={!template || Boolean(template.problem)}>
+                Next
+              </PixelButton>
+            </div>
+          </>
+        ) : (
+          <>
+            <TextField
+              label="Name"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="My first film"
+              maxLength={80}
+              autoComplete="off"
+            />
+            {fixedSize ? (
+              <p className="hint">
+                Size: {fixedSize.width} × {fixedSize.height} (set by the template).
+              </p>
+            ) : (
+              <fieldset className="choice-picker">
+                <legend className="field-label">Shape</legend>
+                <div className="choice-cards">
+                  {SHAPES.map(([key, info]) => {
+                    const fit = SHAPE_BOX / Math.max(info.width, info.height);
+                    return (
+                      <label key={key} className="choice-card">
+                        <input
+                          type="radio"
+                          name="shape"
+                          value={key}
+                          checked={shape === key}
+                          onChange={() => setShape(key)}
+                          className="visually-hidden"
+                        />
+                        <span className="shape-box">
+                          <span
+                            className="shape-preview"
+                            style={{
+                              width: Math.round(info.width * fit),
+                              height: Math.round(info.height * fit),
+                            }}
+                          />
+                        </span>
+                        <span className="choice-label">{info.label}</span>
+                        <span className="choice-sub">{info.ratio}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            )}
+            <FrameRatePicker state={rate} />
+            {kind && kind.fields.length > 0 && (
+              <BriefFields
+                fields={kind.fields}
+                values={answers}
+                onChange={(id, value) => setAnswers((current) => ({ ...current, [id]: value }))}
+              />
+            )}
+            {(formError ?? create.error) && (
+              <p className="field-error">{formError ?? create.error?.message}</p>
+            )}
+            <div className="form-actions">
+              <PixelButton variant="ghost" icon="arrowLeft" onClick={() => setStep("template")}>
+                Back
+              </PixelButton>
+              <PixelButton
+                type="submit"
+                icon="plus"
+                disabled={create.isPending || !title.trim() || rate.fps === null}
+              >
+                {create.isPending ? "Creating..." : "Create film"}
+              </PixelButton>
+            </div>
+          </>
+        )}
       </form>
     </dialog>
   );

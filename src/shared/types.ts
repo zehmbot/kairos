@@ -79,6 +79,105 @@ export const FILM_SHAPES: Record<
   square: { label: "Square", ratio: "1:1", width: 1080, height: 1080 },
 };
 
+/** Folder names of templates (like skills: small letters, numbers, dashes). */
+export const TEMPLATE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+/** Answers to a template's form, by field id. */
+export const BriefAnswersSchema = z.record(z.string(), z.union([z.string(), z.number()]));
+export type BriefAnswers = z.infer<typeof BriefAnswersSchema>;
+
+/** One question in a template's form. */
+export const TemplateFieldSchema = z
+  .object({
+    id: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/, "Field ids use small letters, numbers and _."),
+    label: z.string().min(1).max(120),
+    /** `longtext` is for scripts and longer answers. */
+    type: z.enum(["text", "longtext", "choice", "number"]),
+    required: z.boolean().default(false),
+    placeholder: z.string().max(500).optional(),
+    hint: z.string().max(300).optional(),
+    /** The choices of a `choice` field. */
+    options: z.array(z.string().min(1)).optional(),
+    min: z.number().optional(),
+    max: z.number().optional(),
+    default: z.union([z.string(), z.number()]).optional(),
+  })
+  .refine((field) => field.type !== "choice" || (field.options?.length ?? 0) > 0, {
+    message: "A choice field needs options.",
+  });
+export type TemplateField = z.infer<typeof TemplateFieldSchema>;
+
+/** A kind of film a template makes (Story, Educational...), with its own form. */
+export const TemplateKindSchema = z.object({
+  id: z.string().regex(TEMPLATE_ID_PATTERN, "Kind ids use small letters, numbers and dashes."),
+  name: z.string().min(1).max(60),
+  description: z.string().max(300).default(""),
+  fields: z.array(TemplateFieldSchema).default([]),
+});
+export type TemplateKind = z.infer<typeof TemplateKindSchema>;
+
+/** A template's settings for new films. `size` replaces the shape choice. */
+export const TemplateDefaultsSchema = z.object({
+  shape: FilmShapeSchema.default("wide"),
+  fps: FpsSchema.default(DEFAULT_FPS),
+  duration: z.number().positive().default(5),
+  size: z
+    .object({ width: z.number().int().positive(), height: z.number().int().positive() })
+    .optional(),
+});
+
+/** `template.json` in a template folder. */
+export const TemplateFileSchema = z.object({
+  name: z.string().min(1).max(60),
+  description: z.string().max(300).default(""),
+  defaults: TemplateDefaultsSchema.prefault({}),
+  kinds: z.array(TemplateKindSchema).default([]),
+});
+export type TemplateFile = z.infer<typeof TemplateFileSchema>;
+
+/** GET /api/templates: one template, ready for the New film dialog. */
+export const TemplateSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  source: z.enum(["kairos", "yours"]),
+  defaults: TemplateDefaultsSchema,
+  /** At least one: a template without kinds gets one with no questions. */
+  kinds: z.array(TemplateKindSchema),
+  hasPreview: z.boolean(),
+  /** Why the template can't be used (a broken template.json), or null. */
+  problem: z.string().nullable(),
+});
+export type TemplateSummary = z.infer<typeof TemplateSummarySchema>;
+
+/** `.kairos/brief.json`: what the user asked for, kept so the form can be edited later. */
+export const BriefFileSchema = z.object({
+  version: z.literal(1),
+  template: z.string(),
+  templateName: z.string(),
+  kind: z.string(),
+  kindName: z.string(),
+  /** The questions as they were when the film was made (the template may change or go away). */
+  fields: z.array(TemplateFieldSchema),
+  answers: BriefAnswersSchema,
+  updatedAt: z.string(),
+});
+export type BriefFile = z.infer<typeof BriefFileSchema>;
+
+/** PUT /api/films/:id/brief */
+export const BriefUpdateSchema = z.object({ answers: BriefAnswersSchema });
+
+/** POST /api/films/:id/save-as-template */
+export const SaveTemplateSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Give the template a name.")
+    .max(60, "Keep the name under 60 letters."),
+  description: z.string().trim().max(300, "Keep the description under 300 letters.").default(""),
+});
+export type SaveTemplate = z.input<typeof SaveTemplateSchema>;
+
 /** POST /api/films */
 export const NewFilmSchema = z.object({
   title: z
@@ -88,8 +187,14 @@ export const NewFilmSchema = z.object({
     .max(80, "Keep the name under 80 letters."),
   shape: FilmShapeSchema,
   fps: FpsSchema.default(DEFAULT_FPS),
+  /** The template to start from (its folder name). */
+  template: z.string().default("starter"),
+  /** The template's kind; the first one when left out. */
+  kind: z.string().optional(),
+  /** Answers to the kind's form. */
+  brief: BriefAnswersSchema.default({}),
 });
-/** What the client sends (`fps` may be left out). */
+/** What the client sends (`fps`, `template` and `brief` may be left out). */
 export type NewFilm = z.input<typeof NewFilmSchema>;
 
 /** PATCH /api/films/:id: film settings the app can change in `kairos.json`. */
@@ -124,6 +229,8 @@ export const FilmSummarySchema = z.object({
   previewPath: z.string().nullable(),
   /** Last change to the folder's top-level files, in ms since 1970. */
   updatedAt: z.number(),
+  /** The film was made with a brief (`brief.md` + `.kairos/brief.json`). */
+  hasBrief: z.boolean(),
 });
 export type FilmSummary = z.infer<typeof FilmSummarySchema>;
 

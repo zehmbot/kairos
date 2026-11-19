@@ -4,26 +4,26 @@ import { loadConfig, saveConfig } from "./config.ts";
 import { EventBus } from "./events.ts";
 import type { Film } from "./films.ts";
 import { type FilmWatcher, watchFilms } from "./watcher.ts";
-import { filmsDirOf } from "./workspace.ts";
+import { filmsDirOf, templatesDirOf } from "./workspace.ts";
 
 export interface StudioOptions {
   /** Kairos' settings folder (`~/.kairos`). */
   home: string;
-  /** Folder of the starter film template. */
-  templateDir: string;
+  /** Folder of the templates Kairos ships (one folder per template). */
+  templatesDir: string;
 }
 
 /** The hub's live state: the chosen workspace, its file watcher and the event bus. */
 export class Studio {
   readonly events = new EventBus();
   readonly home: string;
-  readonly templateDir: string;
+  readonly templatesDir: string;
   #config: AppConfig;
   #watcher: FilmWatcher | null = null;
 
   private constructor(options: StudioOptions, config: AppConfig) {
     this.home = options.home;
-    this.templateDir = options.templateDir;
+    this.templatesDir = options.templatesDir;
     this.#config = config;
   }
 
@@ -40,6 +40,11 @@ export class Studio {
 
   get filmsDir(): string | null {
     return this.workspace ? filmsDirOf(this.workspace) : null;
+  }
+
+  /** The user's own templates (`<workspace>/templates`), or `null` until a workspace is chosen. */
+  get userTemplatesDir(): string | null {
+    return this.workspace ? templatesDirOf(this.workspace) : null;
   }
 
   /** Switches to `path` (absolute), creating `<path>/films` if needed. Throws if the folder can't be made. */

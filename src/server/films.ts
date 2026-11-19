@@ -2,6 +2,7 @@ import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs
 import { dirname, extname, join, relative } from "node:path";
 import { z } from "zod";
 import {
+  type BriefFile,
   DEFAULT_FPS,
   FILM_SHAPES,
   type FilmChange,
@@ -23,6 +24,8 @@ export interface Film {
   config: FilmConfig | null;
   problem: string | null;
   updatedAt: number;
+  /** Made with a brief (`.kairos/brief.json`). */
+  hasBrief: boolean;
 }
 
 type ConfigResult = { config: FilmConfig; problem: null } | { config: null; problem: string };
@@ -102,7 +105,11 @@ export async function readFilm(filmsDir: string, id: string): Promise<Film | nul
     }
   }
 
-  return { id, path, config: result.config, problem, updatedAt: await lastChange(path) };
+  const hasBrief = await stat(join(path, BRIEF_DATA_FILE)).then(
+    (info) => info.isFile(),
+    () => false,
+  );
+  return { id, path, config: result.config, problem, updatedAt: await lastChange(path), hasBrief };
 }
 
 /** Every film in `filmsDir`, most recently changed first. Folders without `kairos.json` are skipped. */
@@ -144,14 +151,32 @@ function escapeHtml(text: string): string {
     .replaceAll('"', "&quot;");
 }
 
+/** Files at the top of a template folder that describe the template and aren't copied into films. */
+export const TEMPLATE_ONLY_FILES = new Set(["template.json", "preview.png"]);
+/** The brief, written plainly for Claude and the user, and kept as data to edit later. */
+export const BRIEF_FILE = "brief.md";
+export const BRIEF_DATA_FILE = join(".kairos", "brief.json");
+
+export interface CreateOptions {
+  /** A fixed size from the template (instead of the shape's). */
+  size?: { width: number; height: number };
+  /** Length in seconds (default 5). */
+  duration?: number;
+  /** The brief: saved as `.kairos/brief.json`. */
+  brief?: BriefFile;
+  /** The brief as Markdown: saved as `brief.md` and put in `{{brief}}`. */
+  briefText?: string;
+}
+
 /**
- * Makes a new film folder from the starter template and returns its id.
+ * Makes a new film folder from a template folder and returns its id.
  * Names that are taken get a number: `my-intro`, `my-intro-2`, ...
  */
 export async function createFilm(
   filmsDir: string,
   templateDir: string,
   input: NewFilm,
+  options: CreateOptions = {},
 ): Promise<string> {
   await mkdir(filmsDir, { recursive: true });
   const base = slugify(input.title);
@@ -168,7 +193,7 @@ export async function createFilm(
   }
 
   const dir = join(filmsDir, id);
-  const shape = FILM_SHAPES[input.shape];
+  const shape = options.size ?? FILM_SHAPES[input.shape];
   const values: Record<string, string> = {
     "{{title}}": input.title,
     "{{title_html}}": escapeHtml(input.title),
@@ -176,6 +201,7 @@ export async function createFilm(
     "{{title_js}}": JSON.stringify(input.title).slice(1, -1),
     "{{width}}": String(shape.width),
     "{{height}}": String(shape.height),
+    "{{brief}}": options.briefText ?? "No brief: the user didn't fill in a form for this film.",
   };
 
   try {
@@ -184,6 +210,7 @@ export async function createFilm(
       if (!entry.isFile()) continue;
       const source = join(entry.parentPath, entry.name);
       const rel = relative(templateDir, source);
+      if (TEMPLATE_ONLY_FILES.has(rel)) continue;
       const target = join(dir, dirname(rel), RENAMES[entry.name] ?? entry.name);
       await mkdir(dirname(target), { recursive: true });
       if (TEXT_FILES.has(extname(entry.name))) {
@@ -201,11 +228,20 @@ export async function createFilm(
       width: shape.width,
       height: shape.height,
       fps: input.fps ?? DEFAULT_FPS,
-      duration: 5,
+      duration: options.duration ?? 5,
       status: "draft",
       page: "index.html",
     };
     await writeFile(join(dir, CONFIG_FILE), `${JSON.stringify(config, null, 2)}\n`, "utf8");
+    if (options.brief) {
+      await mkdir(join(dir, ".kairos"), { recursive: true });
+      await writeFile(
+        join(dir, BRIEF_DATA_FILE),
+        `${JSON.stringify(options.brief, null, 2)}\n`,
+        "utf8",
+      );
+      await writeFile(join(dir, BRIEF_FILE), options.briefText ?? "", "utf8");
+    }
   } catch (error) {
     await rm(dir, { recursive: true, force: true });
     throw error;

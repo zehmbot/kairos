@@ -34,6 +34,7 @@ const film = (id: string, extra: Partial<FilmSummary> = {}): FilmSummary => ({
   problem: null,
   previewPath: `/${id}/index.html`,
   updatedAt: 0,
+  hasBrief: false,
   ...extra,
 });
 

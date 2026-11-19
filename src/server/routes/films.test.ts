@@ -16,7 +16,7 @@ let app: FastifyInstance;
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "kairos-film-routes-"));
-  studio = await Studio.open({ home: join(root, "home"), templateDir });
+  studio = await Studio.open({ home: join(root, "home"), templatesDir: join(templateDir, "..") });
   await studio.setWorkspace(join(root, "ws"));
   app = Fastify();
   filmRoutes(app, studio);

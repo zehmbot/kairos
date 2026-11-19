@@ -8,6 +8,13 @@ export function filmsDirOf(workspace: string): string {
   return join(workspace, FILMS_FOLDER);
 }
 
+/** The user's own templates live in the workspace, so they travel with it. */
+export const TEMPLATES_FOLDER = "templates";
+
+export function templatesDirOf(workspace: string): string {
+  return join(workspace, TEMPLATES_FOLDER);
+}
+
 export function suggestedWorkspace(home = homedir()): string {
   return join(home, "Kairos");
 }

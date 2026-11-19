@@ -16,7 +16,7 @@ let asked: { title: string; start: string | null }[];
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "kairos-workspace-routes-"));
-  studio = await Studio.open({ home: join(root, "home"), templateDir: root });
+  studio = await Studio.open({ home: join(root, "home"), templatesDir: root });
   asked = [];
   answer = async () => ({ status: "cancelled" });
   app = Fastify();

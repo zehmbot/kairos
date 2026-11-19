@@ -28,12 +28,13 @@ src/server/   Fastify hub: index.ts (entry), security.ts (request guard), studio
               camera.ts (frame pictures), folder-picker.ts/.ps1 (system "choose folder" window),
               claude-cli.ts (runs `claude`: version, mcp add/remove, open a terminal),
               skills.ts (copies skills into Claude Code), renderer.ts (render queue),
-              renders.ts (finished videos), ffmpeg.ts (encoders and command lines), routes/
+              renders.ts (finished videos), ffmpeg.ts (encoders and command lines),
+              templates.ts (templates, briefs, save as template), thumbnails.ts (film card pictures), routes/
 src/mcp/      Kairos tools for Claude Code: server.ts (stdio entry), tools.ts, hub-client.ts (calls the hub)
 src/web/      React UI: components/, pages/, player/, icons/, theme/
 src/film/     bridge.js: plain JS the film server adds to every film page
 src/shared/   Code used by both sides (zod schemas, ports, film-protocol.ts, marks.ts)
-templates/    Starter film copied by "New film" ({{placeholders}} are filled in)
+templates/    Templates Kairos ships, one folder each: template.json + the film's files ({{placeholders}} filled in)
 skills/       The Kairos skills for Claude Code (SKILL.md + supporting files; not formatted by Biome)
 scripts/      Small maintenance scripts
 public/       Static files copied as-is into the UI build
@@ -55,6 +56,18 @@ one write at a time, atomic, and it never overwrites a broken file). The **frame
 puppeteer-core with the installed Chrome or Edge, or `KAIROS_BROWSER`) opens the film page headless, calls
 `window.__kairos.render(t)` from the bridge, adds the marks SVG from `src/shared/marks.ts` and takes a PNG.
 The player overlay draws marks from the same `markGeometry`, so both look the same.
+
+## Templates and briefs
+
+A **template** is a folder with a `template.json` (`TemplateFileSchema`: name, description, defaults, and
+kinds of film, each with its own form of fields: `text`, `longtext`, `choice`, `number`) plus the film's files.
+Kairos' own are in `templates/`, the user's in `<workspace>/templates/`. New film copies the folder (except
+`template.json` and `preview.png`), fills `{{title}}`, `{{title_html}}`, `{{title_js}}`, `{{width}}`,
+`{{height}}` and `{{brief}}`, and renames `CLAUDE.template.md` to `CLAUDE.md`. The answers become the film's
+**brief**: `brief.md` (Markdown, for Claude) and `.kairos/brief.json` (for Edit brief), written only when something
+was answered. Save as template copies a film without `.kairos/`, `renders/`, hidden files and the brief, puts the
+title placeholders back in quoted script strings and `<title>`, and keeps the brief's form. Film cards show a
+frame from `.kairos/thumb.png` (`src/server/thumbnails.ts`), taken again when the film's top-level files change.
 
 ## Rendering
 

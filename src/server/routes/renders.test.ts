@@ -53,7 +53,7 @@ const fakeRenderer = {
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "kairos-render-routes-"));
-  studio = await Studio.open({ home: join(root, "home"), templateDir });
+  studio = await Studio.open({ home: join(root, "home"), templatesDir: join(templateDir, "..") });
   await studio.setWorkspace(join(root, "ws"));
   await createFilm(studio.filmsDir ?? "", templateDir, { title: "Intro", shape: "wide" });
   const filmDir = join(root, "ws", "films", "intro");

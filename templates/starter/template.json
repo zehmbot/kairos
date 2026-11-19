@@ -1,0 +1,22 @@
+{
+  "name": "Starter",
+  "description": "A simple 2D film on a canvas: a title card to build on, any style.",
+  "defaults": { "shape": "wide", "fps": 30, "duration": 5 },
+  "kinds": [
+    {
+      "id": "anything",
+      "name": "Anything",
+      "description": "Say what the film should show, and Claude builds it.",
+      "fields": [
+        {
+          "id": "idea",
+          "label": "What should this film show?",
+          "type": "longtext",
+          "required": false,
+          "placeholder": "A 10-second intro for my channel: the logo flies in, then the name, on a warm night sky.",
+          "hint": "Optional. Claude reads this first when it builds the film."
+        }
+      ]
+    }
+  ]
+}

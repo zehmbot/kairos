@@ -10,6 +10,7 @@ import {
   useOpenFilmFolder,
   useRenders,
 } from "../api.ts";
+import { BriefPanel } from "../components/BriefPanel.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { FrameRateDialog } from "../components/FrameRateDialog.tsx";
 import { MarksLayer } from "../components/MarksLayer.tsx";
@@ -22,6 +23,7 @@ import { PixelIcon } from "../components/PixelIcon.tsx";
 import { PixelPanel } from "../components/PixelPanel.tsx";
 import { Player, type PlayerHandle } from "../components/Player.tsx";
 import { RenderDialog } from "../components/RenderDialog.tsx";
+import { SaveTemplateDialog } from "../components/SaveTemplateDialog.tsx";
 import { useHubEvent } from "../hubEvents.ts";
 import { filmFileUrl } from "../player/audioSync.ts";
 import { noteCovers } from "../player/marks.ts";
@@ -54,6 +56,7 @@ export function FilmPage() {
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [rateOpen, setRateOpen] = useState(false);
   const [renderOpen, setRenderOpen] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
   const renders = useRenders();
   // This film's latest render: shown while it runs, and for a few minutes after it ends. The clock ticks
   // while there's something to show, so "time left" moves and an old message goes away by itself.
@@ -242,6 +245,15 @@ export function FilmPage() {
             >
               Open folder
             </PixelButton>
+            <PixelButton
+              variant="ghost"
+              icon="plus"
+              title="Start new films from this one"
+              disabled={!canReview}
+              onClick={() => setTemplateOpen(true)}
+            >
+              Save as template
+            </PixelButton>
           </div>
         </div>
         {openFolder.isError && <p className="field-error">{openFolder.error.message}</p>}
@@ -305,6 +317,7 @@ export function FilmPage() {
               showMarks={showMarks}
               onShowMarks={setShowMarks}
             />
+            {film.data.hasBrief && <BriefPanel filmId={film.data.id} />}
           </div>
         )}
       </div>
@@ -320,6 +333,12 @@ export function FilmPage() {
           <RenderDialog
             open={renderOpen}
             onClose={() => setRenderOpen(false)}
+            filmId={film.data.id}
+            title={config.title}
+          />
+          <SaveTemplateDialog
+            open={templateOpen}
+            onClose={() => setTemplateOpen(false)}
             filmId={film.data.id}
             title={config.title}
           />

@@ -3,6 +3,11 @@
 This folder is a Kairos film. Kairos plays it live while you work, and the preview reloads by itself every
 time a file here is saved.
 
+## The brief
+
+If this folder has `brief.md`, read it first: it is what the user asked for (their idea, script or answers
+to the template's questions). Build the film from it, and keep to it when you change things later.
+
 ## Files
 
 - `kairos.json`: `title`, `width` and `height` in pixels, `fps` (frames per second, 1 to 120), `duration` in

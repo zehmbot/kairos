@@ -23,7 +23,7 @@ let cameraFails: boolean;
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "kairos-note-routes-"));
-  studio = await Studio.open({ home: join(root, "home"), templateDir });
+  studio = await Studio.open({ home: join(root, "home"), templatesDir: join(templateDir, "..") });
   await studio.setWorkspace(join(root, "ws"));
   const filmsDir = studio.filmsDir ?? "";
   await createFilm(filmsDir, templateDir, { title: "Intro", shape: "wide" });

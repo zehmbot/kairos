@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import {
   ApiErrorSchema,
+  type BriefAnswers,
+  BriefFileSchema,
   CameraSchema,
   ClaudeStatusSchema,
   ExportInfoSchema,
@@ -18,8 +20,10 @@ import {
   PickWorkspaceResultSchema,
   RenderJobSchema,
   RendersOverviewSchema,
+  type SaveTemplate,
   SkillSchema,
   type StartRender,
+  TemplateSummarySchema,
   WorkspaceSchema,
 } from "../shared/types.ts";
 
@@ -66,6 +70,8 @@ export const queryKeys = {
   skills: ["skills"],
   export: ["export"],
   renders: ["renders"],
+  templates: ["templates"],
+  brief: (id: string) => ["films", id, "brief"],
 } as const;
 
 const notesUrl = (filmId: string) => `/api/films/${encodeURIComponent(filmId)}/notes`;
@@ -128,6 +134,62 @@ export function useFilm(id: string) {
     queryKey: queryKeys.film(id),
     queryFn: () => call(FilmSummarySchema, `/api/films/${encodeURIComponent(id)}`),
     retry: false,
+  });
+}
+
+/** Templates for New film: Kairos' own first, then the user's. */
+export function useTemplates() {
+  return useQuery({
+    queryKey: queryKeys.templates,
+    queryFn: () => call(z.array(TemplateSummarySchema), "/api/templates"),
+  });
+}
+
+export const templatePreviewUrl = (id: string) =>
+  `/api/templates/${encodeURIComponent(id)}/preview`;
+
+export function useDeleteTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      callNoContent(`/api/templates/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.templates }),
+  });
+}
+
+/** A film's card picture; `updatedAt` makes the browser ask again after the film changes. */
+export const thumbnailUrl = (film: { id: string; updatedAt: number }) =>
+  `/api/films/${encodeURIComponent(film.id)}/thumbnail?v=${film.updatedAt}`;
+
+const briefUrl = (filmId: string) => `/api/films/${encodeURIComponent(filmId)}/brief`;
+
+export function useBrief(filmId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.brief(filmId),
+    queryFn: () => call(BriefFileSchema, briefUrl(filmId)),
+    enabled,
+  });
+}
+
+export function useSaveBrief(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (answers: BriefAnswers) =>
+      call(BriefFileSchema, briefUrl(filmId), sendJson("PUT", { answers })),
+    onSuccess: (brief) => queryClient.setQueryData(queryKeys.brief(filmId), brief),
+  });
+}
+
+export function useSaveTemplate(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SaveTemplate) =>
+      call(
+        TemplateSummarySchema,
+        `/api/films/${encodeURIComponent(filmId)}/save-as-template`,
+        sendJson("POST", input),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.templates }),
   });
 }
 

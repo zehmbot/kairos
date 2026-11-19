@@ -160,6 +160,10 @@ export function createKairosServer(context: ToolContext): McpServer {
       if (id) {
         const summary = await hub.film(id);
         lines.push(`Film: ${describeFilm(summary)}`);
+        if (summary.hasBrief)
+          lines.push(
+            "Brief: brief.md in the film folder (what the user asked for: read it first).",
+          );
         if (summary.config) {
           const open = (await hub.notes(id)).filter((note) => note.status === "open").length;
           lines.push(`Open notes: ${open}${open ? " (read them with kairos_notes)" : ""}`);
