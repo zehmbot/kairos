@@ -24,8 +24,9 @@ http://127.0.0.1:7342 (`KAIROS_FILM_PORT`). App settings live in `~/.kairos/conf
 
 ```
 src/server/   Fastify hub: index.ts (entry), security.ts (request guard), studio.ts (workspace + watcher),
-              films.ts (scan/create), film-server.ts (serves film pages), notes.ts (frame notes),
-              camera.ts (frame pictures), folder-picker.ts/.ps1 (system "choose folder" window),
+              films.ts (scan/create), trash.ts (deleted films), film-server.ts (serves film pages),
+              notes.ts (frame notes), camera.ts (frame pictures),
+              folder-picker.ts/.ps1 (system "choose folder" window),
               claude-cli.ts (runs `claude`: version, mcp add/remove, open a terminal),
               skills.ts (copies skills into Claude Code), renderer.ts (render queue),
               renders.ts (finished videos), ffmpeg.ts (encoders and command lines),
@@ -50,6 +51,10 @@ server serves it on its own origin (so film code can't reach the API), never cac
 preview. The app changes `kairos.json` only through `changeFilm` in `src/server/films.ts`, which keeps unknown
 fields and never touches a broken file.
 
+**Deleting** a film moves its folder in one step to `<workspace>/.trash/<deleted at, ms>-<id>/` (`src/server/trash.ts`),
+outside `films/`, so it is never listed or watched. Restore moves it back (with a number when the name is taken);
+Delete for good and Empty trash remove folders for real. A film can't be deleted while a render of it runs or waits.
+
 **Frame notes** live in the film folder: `.kairos/notes.json` and `.kairos/notes/<id>.png` (live reload ignores
 `.kairos/`). Times are in seconds and marks are in film pixels. Only the hub writes notes (`src/server/notes.ts`:
 one write at a time, atomic, and it never overwrites a broken file). The **frame camera** (`src/server/camera.ts`,
@@ -68,6 +73,11 @@ Kairos' own are in `templates/`, the user's in `<workspace>/templates/`. New fil
 was answered. Save as template copies a film without `.kairos/`, `renders/`, hidden files and the brief, puts the
 title placeholders back in quoted script strings and `<title>`, and keeps the brief's form. Film cards show a
 frame from `.kairos/thumb.png` (`src/server/thumbnails.ts`), taken again when the film's top-level files change.
+
+Kairos' `starter` (`BLANK_TEMPLATE_ID`) is the **blank film**: New film's "Blank film" choice, and the files a new
+template starts from. It is never shown as a template card. The **Templates page** edits only the user's own
+templates' `template.json` (the template editor, `src/web/templateForm.ts`: question ids come from the question text
+and saved ids are kept, so earlier briefs still match); Kairos' templates can only be duplicated.
 
 ## Rendering
 

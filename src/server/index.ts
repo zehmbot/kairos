@@ -21,6 +21,7 @@ import { noteRoutes } from "./routes/notes.ts";
 import { renderRoutes } from "./routes/renders.ts";
 import { skillRoutes } from "./routes/skills.ts";
 import { templateRoutes } from "./routes/templates.ts";
+import { trashRoutes } from "./routes/trash.ts";
 import { workspaceRoutes } from "./routes/workspace.ts";
 import { allowedHostsFor, requestGuard } from "./security.ts";
 import { claudeSkillsDir, Skills } from "./skills.ts";
@@ -68,8 +69,8 @@ app.addHook("onRequest", requestGuard(uiHosts));
 healthRoutes(app, { version: pkg.version, url, dev, filmPort });
 workspaceRoutes(app, studio);
 const filmServerUrl = `http://${HOST}:${filmPort}`;
-filmRoutes(app, studio, { picture: filmPicture({ studio, camera, filmServerUrl }) });
 templateRoutes(app, studio);
+trashRoutes(app, studio);
 eventRoutes(app, studio.events);
 noteRoutes(app, { studio, camera, filmServerUrl });
 frameRoutes(app, { studio, camera, filmServerUrl });
@@ -97,6 +98,18 @@ const renderer = new Renderer({
   exportInfo: () => exportInfo,
 });
 renderRoutes(app, { studio, renderer, exportInfo: () => exportInfo });
+filmRoutes(app, studio, {
+  picture: filmPicture({ studio, camera, filmServerUrl }),
+  // A film can't be deleted while a render of it runs or waits.
+  rendering: (filmId) =>
+    renderer
+      .jobs()
+      .some(
+        (job) =>
+          job.filmId === filmId &&
+          (job.state === "queued" || job.state === "running" || job.state === "joining"),
+      ),
+});
 
 if (existsSync(webDir)) {
   await app.register(fastifyStatic, { root: webDir });

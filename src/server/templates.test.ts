@@ -83,7 +83,7 @@ describe("listing templates", () => {
     const broken = await findTemplate(builtinDir, userDir, "broken");
     expect(broken?.problem).toContain("can't be read");
     const bad = await findTemplate(builtinDir, userDir, "bad");
-    expect(bad?.problem).toContain("A choice field needs options");
+    expect(bad?.problem).toContain("A choice question needs at least one choice");
     expect(await findTemplate(builtinDir, userDir, "../starter")).toBeNull();
   });
 });

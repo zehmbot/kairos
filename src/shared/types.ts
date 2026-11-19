@@ -90,7 +90,11 @@ export type BriefAnswers = z.infer<typeof BriefAnswersSchema>;
 export const TemplateFieldSchema = z
   .object({
     id: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/, "Field ids use small letters, numbers and _."),
-    label: z.string().min(1).max(120),
+    label: z
+      .string()
+      .trim()
+      .min(1, "Each question needs its text.")
+      .max(120, "Keep each question under 120 letters."),
     /** `longtext` is for scripts and longer answers. */
     type: z.enum(["text", "longtext", "choice", "number"]),
     required: z.boolean().default(false),
@@ -103,16 +107,28 @@ export const TemplateFieldSchema = z
     default: z.union([z.string(), z.number()]).optional(),
   })
   .refine((field) => field.type !== "choice" || (field.options?.length ?? 0) > 0, {
-    message: "A choice field needs options.",
+    message: "A choice question needs at least one choice.",
   });
 export type TemplateField = z.infer<typeof TemplateFieldSchema>;
+
+/**
+ * Kairos' `starter` template is the blank film: New film's "Blank film", and the files new templates start
+ * from. It isn't shown as a template card.
+ */
+export const BLANK_TEMPLATE_ID = "starter";
 
 /** A kind of film a template makes (Story, Educational...), with its own form. */
 export const TemplateKindSchema = z.object({
   id: z.string().regex(TEMPLATE_ID_PATTERN, "Kind ids use small letters, numbers and dashes."),
-  name: z.string().min(1).max(60),
+  name: z.string().trim().min(1, "Each kind needs a name.").max(60),
   description: z.string().max(300).default(""),
-  fields: z.array(TemplateFieldSchema).default([]),
+  fields: z
+    .array(TemplateFieldSchema)
+    .default([])
+    .refine(
+      (fields) => new Set(fields.map((field) => field.id)).size === fields.length,
+      "Two questions have the same id.",
+    ),
 });
 export type TemplateKind = z.infer<typeof TemplateKindSchema>;
 
@@ -128,11 +144,34 @@ export const TemplateDefaultsSchema = z.object({
 
 /** `template.json` in a template folder. */
 export const TemplateFileSchema = z.object({
-  name: z.string().min(1).max(60),
-  description: z.string().max(300).default(""),
+  name: z
+    .string()
+    .trim()
+    .min(1, "Give the template a name.")
+    .max(60, "Keep the name under 60 letters."),
+  description: z.string().max(300, "Keep the description under 300 letters.").default(""),
   defaults: TemplateDefaultsSchema.prefault({}),
-  kinds: z.array(TemplateKindSchema).default([]),
+  kinds: z
+    .array(TemplateKindSchema)
+    .default([])
+    .refine(
+      (kinds) => new Set(kinds.map((kind) => kind.id)).size === kinds.length,
+      "Two kinds have the same id.",
+    ),
 });
+/** POST /api/templates and PUT /api/templates/:id: a template's settings and questions. */
+export type TemplateInput = z.input<typeof TemplateFileSchema>;
+
+/** A film in the workspace trash (`<workspace>/.trash/`), which can be restored. */
+export const TrashEntrySchema = z.object({
+  /** Folder name in the trash: `<deleted at, ms>-<film id>`. */
+  entry: z.string(),
+  /** The film's id before it was deleted. */
+  id: z.string(),
+  title: z.string(),
+  deletedAt: z.string(),
+});
+export type TrashEntry = z.infer<typeof TrashEntrySchema>;
 export type TemplateFile = z.infer<typeof TemplateFileSchema>;
 
 /** GET /api/templates: one template, ready for the New film dialog. */
@@ -188,7 +227,7 @@ export const NewFilmSchema = z.object({
   shape: FilmShapeSchema,
   fps: FpsSchema.default(DEFAULT_FPS),
   /** The template to start from (its folder name). */
-  template: z.string().default("starter"),
+  template: z.string().default(BLANK_TEMPLATE_ID),
   /** The template's kind; the first one when left out. */
   kind: z.string().optional(),
   /** Answers to the kind's form. */

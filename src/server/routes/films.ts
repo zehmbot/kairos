@@ -27,6 +27,7 @@ import {
   summaryOf,
   writeBrief,
 } from "../templates.ts";
+import { deleteFilmForGood, moveToTrash, TrashError } from "../trash.ts";
 import { sendError } from "./errors.ts";
 
 interface IdParams {
@@ -36,6 +37,8 @@ interface IdParams {
 export interface FilmRoutesOptions {
   /** A picture of the film (for a saved template's card), or null when none can be taken. */
   picture?: (film: Film) => Promise<Buffer | null>;
+  /** True while a render of the film is running or waiting (it can't be deleted then). */
+  rendering?: (filmId: string) => boolean;
 }
 
 export function filmRoutes(
@@ -131,6 +134,37 @@ export function filmRoutes(
     const changed = await readFilm(studio.filmsDir ?? "", film.id);
     return changed ? summary(changed) : notFound(reply);
   });
+
+  // Delete: to the workspace trash (it can be restored), or for good with ?forever=true.
+  app.delete<{ Params: IdParams; Querystring: { forever?: string } }>(
+    "/api/films/:id",
+    async (request, reply) => {
+      const film = await filmOr404(reply, request.params.id);
+      if (!film) return reply;
+      const trash = studio.trashDir;
+      const films = studio.filmsDir;
+      if (!trash || !films) return noWorkspace(reply);
+      if (options.rendering?.(film.id)) {
+        return sendError(
+          reply,
+          409,
+          "rendering",
+          "A render of this film is running or waiting. Cancel it first, on the Renders page.",
+        );
+      }
+      try {
+        if (request.query.forever === "true") await deleteFilmForGood(films, film.id);
+        else await moveToTrash(films, trash, film.id);
+      } catch (error) {
+        if (error instanceof TrashError) return sendError(reply, 409, "trash", error.message);
+        throw error;
+      }
+      studio.events.publish({ type: "films-changed", ids: [film.id] });
+      // Its videos went with it.
+      studio.events.publish({ type: "renders-changed", id: film.id });
+      return reply.code(204).send();
+    },
+  );
 
   app.post<{ Params: IdParams }>("/api/films/:id/open-folder", async (request, reply) => {
     const film = await filmOr404(reply, request.params.id);

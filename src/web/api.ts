@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import {
   ApiErrorSchema,
@@ -23,7 +23,9 @@ import {
   type SaveTemplate,
   SkillSchema,
   type StartRender,
+  type TemplateInput,
   TemplateSummarySchema,
+  TrashEntrySchema,
   WorkspaceSchema,
 } from "../shared/types.ts";
 
@@ -71,6 +73,8 @@ export const queryKeys = {
   export: ["export"],
   renders: ["renders"],
   templates: ["templates"],
+  // Under "films": every films change refreshes the trash too.
+  trash: ["films", "~trash"],
   brief: (id: string) => ["films", id, "brief"],
 } as const;
 
@@ -147,6 +151,94 @@ export function useTemplates() {
 
 export const templatePreviewUrl = (id: string) =>
   `/api/templates/${encodeURIComponent(id)}/preview`;
+
+const templateUrl = (id: string) => `/api/templates/${encodeURIComponent(id)}`;
+
+export function useTemplate(id: string | null) {
+  return useQuery({
+    queryKey: [...queryKeys.templates, id],
+    queryFn: () => call(TemplateSummarySchema, templateUrl(id ?? "")),
+    enabled: Boolean(id),
+  });
+}
+
+/** Makes (no id) or changes (id) one of the user's templates. */
+export function useSaveTemplateSettings(id: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TemplateInput) =>
+      call(
+        TemplateSummarySchema,
+        id ? templateUrl(id) : "/api/templates",
+        sendJson(id ? "PUT" : "POST", input),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.templates }),
+  });
+}
+
+export function useDuplicateTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      call(TemplateSummarySchema, `${templateUrl(id)}/duplicate`, { method: "POST" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.templates }),
+  });
+}
+
+export function useOpenTemplateFolder() {
+  return useMutation({
+    mutationFn: (id: string) => callNoContent(`${templateUrl(id)}/open-folder`, { method: "POST" }),
+  });
+}
+
+/** Films and their videos come and go together (delete, restore). */
+const refreshFilmsAndRenders = (queryClient: QueryClient) =>
+  Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.films }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.renders }),
+  ]);
+
+/** Deletes a film: to the trash, or for good. */
+export function useDeleteFilm() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, forever }: { id: string; forever: boolean }) =>
+      callNoContent(`/api/films/${encodeURIComponent(id)}${forever ? "?forever=true" : ""}`, {
+        method: "DELETE",
+      }),
+    // Not awaited: the caller's own onSuccess (leave the film page) must run before the film disappears.
+    onSuccess: () => {
+      void refreshFilmsAndRenders(queryClient);
+    },
+  });
+}
+
+export function useTrash(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.trash,
+    queryFn: () => call(z.array(TrashEntrySchema), "/api/trash"),
+    enabled,
+  });
+}
+
+/** Restores a trashed film, deletes one for good, or empties the trash (no entry). */
+export function useTrashAction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ entry, action }: { entry?: string; action: "restore" | "delete" }) => {
+      const url = entry ? `/api/trash/${encodeURIComponent(entry)}` : "/api/trash";
+      if (action === "restore") {
+        await call(z.object({ id: z.string() }), `${url}/restore`, { method: "POST" });
+      } else {
+        await callNoContent(url, { method: "DELETE" });
+      }
+    },
+    // Not awaited: the caller's own onSuccess (leave the film page) must run before the film disappears.
+    onSuccess: () => {
+      void refreshFilmsAndRenders(queryClient);
+    },
+  });
+}
 
 export function useDeleteTemplate() {
   const queryClient = useQueryClient();

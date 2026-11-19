@@ -213,6 +213,17 @@
   --btn-ink: var(--text);
 }
 
+/* Buttons that delete: red, or a red outline when ghost (red text would be hard to read). */
+.px-btn[data-tone="danger"] {
+  --btn-fill: var(--danger);
+  --btn-ink: var(--text);
+}
+
+.px-btn[data-variant="ghost"][data-tone="danger"] {
+  --btn-fill: var(--surface);
+  --btn-edge: var(--danger);
+}
+
 .px-btn:disabled {
   --btn-fill: var(--c-slate);
   --btn-ink: var(--c-silver);
@@ -533,8 +544,39 @@ code {
   gap: 20px;
 }
 
+/* The card is a link; its delete button sits on top, in the picture's corner. */
+.film-card-wrap {
+  position: relative;
+  display: flex;
+}
+
+.film-card-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0;
+}
+
+.film-card-wrap:hover .film-card-delete,
+.film-card-wrap:focus-within .film-card-delete {
+  opacity: 1;
+}
+
+/* Touch screens have no hover: always show it. */
+@media (hover: none) {
+  .film-card-delete {
+    opacity: 1;
+  }
+}
+
+.delete-warning {
+  color: var(--highlight);
+}
+
 .film-card {
   display: flex;
+  flex: 1;
+  min-width: 0;
   flex-direction: column;
   color: var(--text);
   text-decoration: none;
@@ -1055,6 +1097,32 @@ a.render-title:hover {
   gap: 12px;
 }
 
+/* New film's first step: two big choices. */
+.start-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.start-card {
+  justify-content: flex-start;
+  padding: 24px 16px;
+  font-family: var(--font-body);
+  text-align: center;
+  border: 0;
+}
+
+.start-card:hover,
+.start-card:focus-visible {
+  --option-line: var(--accent);
+  color: var(--accent);
+}
+
+.start-card:focus-visible {
+  outline: var(--px) solid var(--highlight);
+  outline-offset: 2px;
+}
+
 .template-card {
   align-items: stretch;
   text-align: left;
@@ -1096,6 +1164,73 @@ a.render-title:hover {
 
 .template-yours {
   font-size: 8px;
+}
+
+/* Templates page: one tile per template. */
+.template-tile {
+  display: flex;
+  flex-direction: column;
+}
+
+.template-tile .template-preview {
+  height: 128px;
+}
+
+.template-tile-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 16px 16px;
+}
+
+/* Template editor: questions. */
+.question-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.question-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px 16px;
+  background: var(--bg);
+}
+
+.question-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.question-number {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.question-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  align-items: end;
+}
+
+.question-wide {
+  grid-column: 1 / -1;
+}
+
+.question-required {
+  align-self: center;
 }
 
 .field-required {
@@ -1347,6 +1482,11 @@ a.render-title:hover {
 
   .rate-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .question-grid,
+  .start-cards {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .note-row {

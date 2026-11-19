@@ -3,6 +3,7 @@ import type { AppConfig } from "../shared/types.ts";
 import { loadConfig, saveConfig } from "./config.ts";
 import { EventBus } from "./events.ts";
 import type { Film } from "./films.ts";
+import { trashDirOf } from "./trash.ts";
 import { type FilmWatcher, watchFilms } from "./watcher.ts";
 import { filmsDirOf, templatesDirOf } from "./workspace.ts";
 
@@ -40,6 +41,11 @@ export class Studio {
 
   get filmsDir(): string | null {
     return this.workspace ? filmsDirOf(this.workspace) : null;
+  }
+
+  /** Deleted films (`<workspace>/.trash`), or `null` until a workspace is chosen. */
+  get trashDir(): string | null {
+    return this.workspace ? trashDirOf(this.workspace) : null;
   }
 
   /** The user's own templates (`<workspace>/templates`), or `null` until a workspace is chosen. */

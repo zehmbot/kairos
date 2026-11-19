@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import type { Note } from "../../shared/types.ts";
 import {
   useAddNote,
@@ -10,7 +10,9 @@ import {
   useOpenFilmFolder,
   useRenders,
 } from "../api.ts";
+import { BackLink } from "../components/BackLink.tsx";
 import { BriefPanel } from "../components/BriefPanel.tsx";
+import { DeleteFilmDialog } from "../components/DeleteFilmDialog.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { FrameRateDialog } from "../components/FrameRateDialog.tsx";
 import { MarksLayer } from "../components/MarksLayer.tsx";
@@ -32,15 +34,6 @@ import { useNoteDraft } from "../player/useNoteDraft.ts";
 import { filmRender, jobStatus } from "../renderText.ts";
 import { useNow } from "../useNow.ts";
 
-function BackLink() {
-  return (
-    <Link to="/films" className="back-link">
-      <PixelIcon name="arrowLeft" size={16} />
-      All films
-    </Link>
-  );
-}
-
 export function FilmPage() {
   const { id = "" } = useParams();
   const film = useFilm(id);
@@ -57,6 +50,8 @@ export function FilmPage() {
   const [rateOpen, setRateOpen] = useState(false);
   const [renderOpen, setRenderOpen] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const navigate = useNavigate();
   const renders = useRenders();
   // This film's latest render: shown while it runs, and for a few minutes after it ends. The clock ticks
   // while there's something to show, so "time left" moves and an old message goes away by itself.
@@ -71,7 +66,7 @@ export function FilmPage() {
   if (film.isPending) {
     return (
       <div className="page">
-        <BackLink />
+        <BackLink to="/films" label="All films" />
         <p>Loading the film...</p>
       </div>
     );
@@ -80,7 +75,7 @@ export function FilmPage() {
   if (film.isError) {
     return (
       <div className="page">
-        <BackLink />
+        <BackLink to="/films" label="All films" />
         <PixelPanel title="Film">
           <EmptyState icon="film" title="Film not found">
             {film.error.message}
@@ -195,7 +190,7 @@ export function FilmPage() {
   return (
     <div className="page film-page">
       <div className="film-head">
-        <BackLink />
+        <BackLink to="/films" label="All films" />
         <div className="film-title-row">
           <h1>{config?.title ?? film.data.id}</h1>
           {config && <span className="px-tag">{config.status}</span>}
@@ -253,6 +248,15 @@ export function FilmPage() {
               onClick={() => setTemplateOpen(true)}
             >
               Save as template
+            </PixelButton>
+            <PixelButton
+              variant="ghost"
+              data-tone="danger"
+              icon="trash"
+              title="Move this film to the trash"
+              onClick={() => setDeleteOpen(true)}
+            >
+              Delete film
             </PixelButton>
           </div>
         </div>
@@ -344,6 +348,11 @@ export function FilmPage() {
           />
         </>
       )}
+      <DeleteFilmDialog
+        film={deleteOpen ? { id: film.data.id, title: config?.title ?? film.data.id } : null}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={() => navigate("/")}
+      />
     </div>
   );
 }

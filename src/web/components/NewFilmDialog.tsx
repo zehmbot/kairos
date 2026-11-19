@@ -1,12 +1,13 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import {
+  BLANK_TEMPLATE_ID,
   DEFAULT_FPS,
   FILM_SHAPES,
   type FilmShape,
   type TemplateSummary,
 } from "../../shared/types.ts";
-import { templatePreviewUrl, useCreateFilm, useDeleteTemplate, useTemplates } from "../api.ts";
+import { templatePreviewUrl, useCreateFilm, useTemplates } from "../api.ts";
 import { answersOf, firstMissing, initialAnswers } from "../brief.ts";
 import { BriefFields } from "./BriefFields.tsx";
 import { FrameRatePicker, useFrameRate } from "./FrameRatePicker.tsx";
@@ -21,32 +22,41 @@ const SHAPE_BOX = 64;
 interface NewFilmDialogProps {
   open: boolean;
   onClose: () => void;
+  /** Start from this template, at the details step (Use on the Templates page). */
+  templateId?: string;
 }
 
-/** New film in two steps: choose a template (and its kind), then the details and the template's questions. */
-export function NewFilmDialog({ open, onClose }: NewFilmDialogProps) {
+type Step = "start" | "template" | "details";
+
+/**
+ * New film: first "Blank film" or "From a template" (then a template and its kind), then the details and
+ * the template's questions.
+ */
+export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingId = useId();
   const templateName = useId();
   const kindName = useId();
   const templates = useTemplates();
   const create = useCreateFilm();
-  const removeTemplate = useDeleteTemplate();
   const navigate = useNavigate();
   const rate = useFrameRate(DEFAULT_FPS);
 
-  const [step, setStep] = useState<"template" | "details">("template");
-  const [templateId, setTemplateId] = useState("starter");
+  const [step, setStep] = useState<Step>("start");
+  const [templateId, setTemplateId] = useState(BLANK_TEMPLATE_ID);
+  // Set when the dialog opens: the chosen template's defaults are applied once the templates are here.
+  const [needsDefaults, setNeedsDefaults] = useState(false);
   const [kindId, setKindId] = useState("");
   const [title, setTitle] = useState("");
   const [shape, setShape] = useState<FilmShape>("wide");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const list = templates.data ?? [];
-  const template = list.find((entry) => entry.id === templateId) ?? list[0];
+  const choices = list.filter((entry) => entry.id !== BLANK_TEMPLATE_ID);
+  const template = list.find((entry) => entry.id === templateId);
   const kind = template?.kinds.find((entry) => entry.id === kindId) ?? template?.kinds[0];
+  const isBlank = templateId === BLANK_TEMPLATE_ID;
   const { reset } = create;
   const resetRate = rate.reset;
 
@@ -57,14 +67,15 @@ export function NewFilmDialog({ open, onClose }: NewFilmDialogProps) {
     setShape(next.defaults.shape);
     resetRate(next.defaults.fps);
     setAnswers(initialAnswers(nextKind?.fields ?? []));
-    setConfirmDelete(false);
   };
 
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
     if (open && !dialog.open) {
-      setStep("template");
+      setStep(preset ? "details" : "start");
+      setTemplateId(preset ?? BLANK_TEMPLATE_ID);
+      setNeedsDefaults(true);
       setTitle("");
       setFormError(null);
       reset();
@@ -72,17 +83,26 @@ export function NewFilmDialog({ open, onClose }: NewFilmDialogProps) {
     } else if (!open && dialog.open) {
       dialog.close();
     }
-  }, [open, reset]);
+  }, [open, preset, reset]);
 
-  // When the templates arrive (or the chosen one is gone), start from the first one.
-  const firstId = list[0]?.id;
-  const known = list.some((entry) => entry.id === templateId);
+  // Once the templates are here, apply the chosen template's defaults (shape, frame rate, its form).
   useEffect(() => {
-    if (open && !known && firstId) {
-      const first = list.find((entry) => entry.id === firstId);
-      if (first) choose(first);
-    }
+    if (!needsDefaults || !template) return;
+    setNeedsDefaults(false);
+    choose(template);
   });
+
+  /** "Blank film" or "From a template" on the first step. */
+  const startBlank = () => {
+    const blank = list.find((entry) => entry.id === BLANK_TEMPLATE_ID);
+    if (blank) choose(blank);
+    setStep("details");
+  };
+  const startFromTemplate = () => {
+    const first = choices.find((entry) => !entry.problem);
+    if (isBlank && first) choose(first);
+    setStep("template");
+  };
 
   const create_ = () => {
     if (!template || !kind || rate.fps === null) return;
@@ -124,21 +144,55 @@ export function NewFilmDialog({ open, onClose }: NewFilmDialogProps) {
         onSubmit={(event) => {
           event.preventDefault();
           if (step === "template") setStep("details");
-          else create_();
+          else if (step === "details") create_();
         }}
       >
         <h2 id={headingId} className="dialog-title">
-          New film {step === "details" && template ? `· ${template.name}` : ""}
+          New film
+          {step === "details" && template ? ` · ${isBlank ? "Blank film" : template.name}` : ""}
         </h2>
 
-        {step === "template" ? (
+        {step === "start" ? (
+          <>
+            <p>How do you want to start?</p>
+            <div className="start-cards">
+              <button type="button" className="choice-card start-card" onClick={startBlank}>
+                <PixelIcon name="film" size={32} />
+                <span className="choice-label">Blank film</span>
+                <span className="choice-sub">A simple film you build with Claude, any style.</span>
+              </button>
+              <button type="button" className="choice-card start-card" onClick={startFromTemplate}>
+                <PixelIcon name="template" size={32} />
+                <span className="choice-label">From a template</span>
+                <span className="choice-sub">
+                  Start from a ready look, and answer its questions (a script, a topic...).
+                </span>
+              </button>
+            </div>
+            {templates.isError && <p className="field-error">{templates.error.message}</p>}
+            <div className="form-actions">
+              <PixelButton variant="ghost" onClick={onClose}>
+                Cancel
+              </PixelButton>
+            </div>
+          </>
+        ) : step === "template" ? (
           <>
             <fieldset className="choice-picker">
-              <legend className="field-label">Start from a template</legend>
+              <legend className="field-label">Choose a template</legend>
               {templates.isPending && <p>Loading templates...</p>}
               {templates.isError && <p className="field-error">{templates.error.message}</p>}
+              {templates.isSuccess && choices.length === 0 && (
+                <p>
+                  There are no templates yet. Make one on the{" "}
+                  <Link to="/templates" onClick={onClose}>
+                    Templates page
+                  </Link>
+                  , or open a film and press Save as template.
+                </p>
+              )}
               <div className="template-cards">
-                {list.map((entry) => (
+                {choices.map((entry) => (
                   <label
                     key={entry.id}
                     className="choice-card template-card"
@@ -194,50 +248,14 @@ export function NewFilmDialog({ open, onClose }: NewFilmDialogProps) {
               </fieldset>
             )}
 
-            {template?.source === "yours" && (
-              <div className="note-actions">
-                {confirmDelete ? (
-                  <>
-                    <span className="note-confirm">Delete the "{template.name}" template?</span>
-                    <PixelButton
-                      data-size="small"
-                      icon="trash"
-                      disabled={removeTemplate.isPending}
-                      onClick={() =>
-                        removeTemplate.mutate(template.id, {
-                          onSuccess: () => setConfirmDelete(false),
-                        })
-                      }
-                    >
-                      Delete
-                    </PixelButton>
-                    <PixelButton
-                      variant="ghost"
-                      data-size="small"
-                      onClick={() => setConfirmDelete(false)}
-                    >
-                      Keep
-                    </PixelButton>
-                  </>
-                ) : (
-                  <PixelButton
-                    variant="ghost"
-                    data-size="small"
-                    icon="trash"
-                    onClick={() => setConfirmDelete(true)}
-                  >
-                    Delete this template
-                  </PixelButton>
-                )}
-              </div>
-            )}
-            {removeTemplate.error && <p className="field-error">{removeTemplate.error.message}</p>}
-
             <div className="form-actions">
-              <PixelButton variant="ghost" onClick={onClose}>
-                Cancel
+              <PixelButton variant="ghost" icon="arrowLeft" onClick={() => setStep("start")}>
+                Back
               </PixelButton>
-              <PixelButton type="submit" disabled={!template || Boolean(template.problem)}>
+              <PixelButton
+                type="submit"
+                disabled={!template || isBlank || Boolean(template.problem)}
+              >
                 Next
               </PixelButton>
             </div>
@@ -301,7 +319,11 @@ export function NewFilmDialog({ open, onClose }: NewFilmDialogProps) {
               <p className="field-error">{formError ?? create.error?.message}</p>
             )}
             <div className="form-actions">
-              <PixelButton variant="ghost" icon="arrowLeft" onClick={() => setStep("template")}>
+              <PixelButton
+                variant="ghost"
+                icon="arrowLeft"
+                onClick={() => setStep(isBlank ? "start" : "template")}
+              >
                 Back
               </PixelButton>
               <PixelButton

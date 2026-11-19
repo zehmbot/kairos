@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { useFilms, useWorkspace } from "../api.ts";
+import { DeleteFilmDialog } from "../components/DeleteFilmDialog.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { FilmCard } from "../components/FilmCard.tsx";
 import { NewFilmDialog } from "../components/NewFilmDialog.tsx";
 import { Notice } from "../components/Notice.tsx";
 import { PixelButton } from "../components/PixelButton.tsx";
 import { PixelPanel } from "../components/PixelPanel.tsx";
+import { TrashPanel } from "../components/TrashPanel.tsx";
 import { WorkspacePicker } from "../components/WorkspacePicker.tsx";
 
 export function FilmsPage() {
@@ -13,6 +15,7 @@ export function FilmsPage() {
   const hasWorkspace = Boolean(workspace.data?.path);
   const films = useFilms(hasWorkspace);
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<{ id: string; title: string } | null>(null);
 
   const newFilmButton = (
     <PixelButton icon="plus" onClick={() => setCreating(true)}>
@@ -36,7 +39,11 @@ export function FilmsPage() {
     return (
       <div className="film-grid">
         {films.data.map((film) => (
-          <FilmCard key={film.id} film={film} />
+          <FilmCard
+            key={film.id}
+            film={film}
+            onDelete={() => setDeleting({ id: film.id, title: film.config?.title ?? film.id })}
+          />
         ))}
       </div>
     );
@@ -80,7 +87,10 @@ export function FilmsPage() {
         </PixelPanel>
       )}
 
+      {hasWorkspace && <TrashPanel />}
+
       <NewFilmDialog open={creating} onClose={() => setCreating(false)} />
+      <DeleteFilmDialog film={deleting} onClose={() => setDeleting(null)} />
     </div>
   );
 }

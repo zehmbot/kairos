@@ -7,9 +7,20 @@ interface PixelButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "ghost";
 }
 
-export function PixelButton({ icon, variant = "primary", children, ...rest }: PixelButtonProps) {
+export function PixelButton({
+  icon,
+  variant = "primary",
+  className,
+  children,
+  ...rest
+}: PixelButtonProps) {
   return (
-    <button type="button" className="px-btn" data-variant={variant} {...rest}>
+    <button
+      type="button"
+      className={className ? `px-btn ${className}` : "px-btn"}
+      data-variant={variant}
+      {...rest}
+    >
       {icon && <PixelIcon name={icon} size={16} />}
       {children != null && <span>{children}</span>}
     </button>

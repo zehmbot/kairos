@@ -176,3 +176,102 @@ describe("film card pictures", () => {
     expect((await app.inject("/api/films/nope/thumbnail")).statusCode).toBe(404);
   });
 });
+
+describe("making and changing templates", () => {
+  const settings = {
+    name: "Quiz",
+    description: "A question a day.",
+    defaults: { shape: "square", fps: 60, duration: 12 },
+    kinds: [
+      {
+        id: "default",
+        name: "Default",
+        fields: [
+          { id: "topic", label: "Topic", type: "text", required: true },
+          { id: "mood", label: "Mood", type: "choice", options: ["Calm", "Fun"] },
+        ],
+      },
+    ],
+  };
+  const put = (url: string, payload: object) => app.inject({ method: "PUT", url, payload });
+
+  it("makes a new one from the blank film, and films start from it", async () => {
+    const made = await post("/api/templates", settings);
+    expect(made.statusCode).toBe(201);
+    expect(made.json()).toMatchObject({ id: "quiz", source: "yours", hasPreview: false });
+    const dir = join(root, "ws", "templates", "quiz");
+    // The blank film's files, without its template.json or picture.
+    expect(await readFile(join(dir, "film.js"), "utf8")).toContain("renderOut");
+    const file = JSON.parse(await readFile(join(dir, "template.json"), "utf8"));
+    expect(file.name).toBe("Quiz");
+    expect((await post("/api/templates", settings)).json()).toMatchObject({ id: "quiz-2" });
+
+    const film = await post("/api/films", {
+      title: "Day one",
+      shape: "square",
+      template: "quiz",
+      brief: { topic: "Moons", mood: "Fun" },
+    });
+    expect(film.statusCode).toBe(201);
+  });
+
+  it("refuses broken settings with the reason", async () => {
+    const noName = await post("/api/templates", { ...settings, name: "  " });
+    expect(noName.statusCode).toBe(400);
+    expect(noName.json().message).toBe("Give the template a name.");
+    const noChoices = await post("/api/templates", {
+      ...settings,
+      kinds: [{ id: "a", name: "A", fields: [{ id: "x", label: "X", type: "choice" }] }],
+    });
+    expect(noChoices.json().message).toBe("A choice question needs at least one choice.");
+    const twice = await post("/api/templates", {
+      ...settings,
+      kinds: [
+        {
+          id: "a",
+          name: "A",
+          fields: [
+            { id: "x", label: "X", type: "text" },
+            { id: "x", label: "Y", type: "text" },
+          ],
+        },
+      ],
+    });
+    expect(twice.json().message).toBe("Two questions have the same id.");
+  });
+
+  it("changes the user's own, but not Kairos' ones", async () => {
+    const changed = await put("/api/templates/story", settings);
+    expect(changed.statusCode).toBe(200);
+    expect(changed.json()).toMatchObject({ id: "story", name: "Quiz" });
+    // Its files stay as they were.
+    const filmJs = await readFile(join(root, "ws", "templates", "story", "film.js"), "utf8");
+    expect(filmJs).toContain("renderOut");
+    expect((await put("/api/templates/starter", settings)).statusCode).toBe(409);
+    expect((await put("/api/templates/nope", settings)).statusCode).toBe(404);
+    expect((await put("/api/templates/story", { name: "" })).statusCode).toBe(400);
+  });
+
+  it("duplicates a template into one of the user's", async () => {
+    const copy = await post("/api/templates/starter/duplicate", {});
+    expect(copy.statusCode).toBe(201);
+    expect(copy.json()).toMatchObject({
+      id: "starter-copy",
+      name: "Starter copy",
+      source: "yours",
+    });
+    const again = await post("/api/templates/story/duplicate", {});
+    expect(again.json()).toMatchObject({ id: "story-copy", name: "Story copy", hasPreview: true });
+    expect((again.json() as TemplateSummary).kinds[0]?.fields[0]?.id).toBe("script");
+  });
+
+  it("opens a template's folder", async () => {
+    const opened: string[] = [];
+    const other = Fastify();
+    templateRoutes(other, studio, { open: (path) => opened.push(path) });
+    const answer = await other.inject({ method: "POST", url: "/api/templates/story/open-folder" });
+    expect(answer.statusCode).toBe(204);
+    expect(opened).toEqual([join(root, "ws", "templates", "story")]);
+    await other.close();
+  });
+});

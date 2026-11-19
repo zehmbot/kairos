@@ -7,6 +7,7 @@ import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promi
 import { basename, join, relative, sep } from "node:path";
 import { z } from "zod";
 import {
+  BLANK_TEMPLATE_ID,
   type BriefAnswers,
   type BriefFile,
   BriefFileSchema,
@@ -15,12 +16,14 @@ import {
   type FilmShape,
   type SaveTemplate,
   type TemplateField,
+  type TemplateFile,
   TemplateFileSchema,
+  type TemplateInput,
   type TemplateKind,
   type TemplateSummary,
 } from "../shared/types.ts";
 import { writeFileAtomic } from "./atomic-write.ts";
-import { BRIEF_DATA_FILE, BRIEF_FILE, slugify } from "./films.ts";
+import { BRIEF_DATA_FILE, BRIEF_FILE, slugify, TEMPLATE_ONLY_FILES } from "./films.ts";
 import { isSafeFilmId } from "./workspace.ts";
 
 export const TEMPLATE_FILE = "template.json";
@@ -101,7 +104,7 @@ export async function listTemplates(
   userDir: string | null,
 ): Promise<Template[]> {
   const ours = (await templatesIn(builtinDir, "kairos")).sort((a, b) =>
-    a.id === "starter" ? -1 : b.id === "starter" ? 1 : a.name.localeCompare(b.name),
+    a.id === BLANK_TEMPLATE_ID ? -1 : b.id === BLANK_TEMPLATE_ID ? 1 : a.name.localeCompare(b.name),
   );
   const taken = new Set(ours.map((template) => template.id));
   const yours = userDir
@@ -362,4 +365,89 @@ export async function writeBrief(filmDir: string, brief: BriefFile, title: strin
 export function summaryOf(template: Template): TemplateSummary {
   const { dir: _dir, ...summary } = template;
   return summary;
+}
+
+/** A free folder name for a new template of the user's, from its name. */
+async function freeId(userDir: string, name: string): Promise<string> {
+  const base = slugify(name);
+  for (let n = 1; n < 1000; n++) {
+    const candidate = n === 1 ? base : `${base}-${n}`;
+    if (!(await exists(join(userDir, candidate)))) return candidate;
+  }
+  throw new TemplateError("Too many templates with this name.");
+}
+
+/** Checks a template's settings and questions, with plain-words problems. */
+function checkTemplate(input: TemplateInput): TemplateFile {
+  const parsed = TemplateFileSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new TemplateError(
+      parsed.error.issues[0]?.message ?? "This template's settings have a problem.",
+    );
+  }
+  return parsed.data;
+}
+
+const writeTemplateFile = (dir: string, file: TemplateFile) =>
+  writeFileAtomic(join(dir, TEMPLATE_FILE), `${JSON.stringify(file, null, 2)}\n`);
+
+/**
+ * Makes a new template of the user's: the blank film's files (Kairos' `starter`) with these settings and
+ * questions. Returns its id.
+ */
+export async function createTemplate(
+  builtinDir: string,
+  userDir: string,
+  input: TemplateInput,
+): Promise<string> {
+  const file = checkTemplate(input);
+  await mkdir(userDir, { recursive: true });
+  const id = await freeId(userDir, file.name);
+  const dir = join(userDir, id);
+  const blank = join(builtinDir, BLANK_TEMPLATE_ID);
+  try {
+    await cp(blank, dir, {
+      recursive: true,
+      filter: (path) => !TEMPLATE_ONLY_FILES.has(relative(blank, path)),
+    });
+    await writeTemplateFile(dir, file);
+  } catch (error) {
+    await rm(dir, { recursive: true, force: true });
+    throw error;
+  }
+  return id;
+}
+
+/** Changes the settings and questions of one of the user's templates (its files stay as they are). */
+export async function updateTemplate(
+  userDir: string,
+  id: string,
+  input: TemplateInput,
+): Promise<void> {
+  const dir = isSafeFilmId(id) ? join(userDir, id) : null;
+  if (!dir || !(await exists(join(dir, TEMPLATE_FILE)))) {
+    throw new TemplateError("This template doesn't exist (any more).");
+  }
+  await writeTemplateFile(dir, checkTemplate(input));
+}
+
+/** Copies a template (Kairos' or the user's) into a new template of the user's, "<name> copy". */
+export async function duplicateTemplate(template: Template, userDir: string): Promise<string> {
+  if (template.problem)
+    throw new TemplateError(`This template can't be copied: ${template.problem}`);
+  await mkdir(userDir, { recursive: true });
+  const name = `${template.name} copy`.slice(0, 60);
+  const id = await freeId(userDir, name);
+  const dir = join(userDir, id);
+  try {
+    await cp(template.dir, dir, { recursive: true });
+    const file = TemplateFileSchema.parse(
+      JSON.parse(await readFile(join(dir, TEMPLATE_FILE), "utf8")),
+    );
+    await writeTemplateFile(dir, { ...file, name });
+  } catch (error) {
+    await rm(dir, { recursive: true, force: true });
+    throw error;
+  }
+  return id;
 }
