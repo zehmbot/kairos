@@ -116,8 +116,8 @@ export function TemplateEditorPage() {
         <h1>{heading}</h1>
         <p>
           {editing
-            ? "Change its settings and the questions people answer before Claude builds the film."
-            : "Set the questions people answer before Claude builds the film. New templates start from the blank film."}
+            ? "Change its settings and the questions you answer before Claude builds the film."
+            : "Set the questions you answer before Claude builds the film. New templates start from the blank film."}
         </p>
       </div>
 
@@ -234,8 +234,8 @@ export function TemplateEditorPage() {
               )}
               {kind.questions.length === 0 ? (
                 <p className="hint">
-                  No questions yet: people will only give the film a name. Add questions for what
-                  Claude needs to know, like a script, a topic or a mood.
+                  No questions yet: you only give the film a name. Add questions for what Claude
+                  needs to know, like a script, a topic or a mood.
                 </p>
               ) : (
                 <ol className="question-list">
