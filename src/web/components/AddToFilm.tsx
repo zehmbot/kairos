@@ -134,7 +134,36 @@ export function useFilmAdds(filmId: string, now: () => number, onTab: (tab: Side
     }
   };
 
-  return { addFiles, addAsset, status, error, message, clearMessage: () => setMessage(null) };
+  /** Sounds dropped on the timeline: at that time, on that track (several files: one track each). */
+  const addSoundsAt = async (files: readonly File[], start: number, lane: number) => {
+    setError(null);
+    setMessage(null);
+    try {
+      for (const [i, file] of files.entries()) {
+        setStatus(`Adding ${file.name}…`);
+        await uploadFile(
+          `${uploadUrl(filmId, "sound", file.name, start)}&lane=${Math.min(31, lane + i)}`,
+          file,
+          (f) => setStatus(`Adding ${file.name}… ${Math.round(f * 100)}%`),
+        );
+        refresh("sound");
+      }
+    } catch (problem) {
+      setError((problem as Error).message);
+    } finally {
+      setStatus(null);
+    }
+  };
+
+  return {
+    addFiles,
+    addAsset,
+    addSoundsAt,
+    status,
+    error,
+    message,
+    clearMessage: () => setMessage(null),
+  };
 }
 
 /** Files dropped (or picked) without a purpose yet, or a library asset. */

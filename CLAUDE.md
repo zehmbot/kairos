@@ -122,12 +122,21 @@ shared with the player (`src/shared/frames.ts`, frame `f` at `t = f / fps`). `sr
 which H.264 encoders really work (NVIDIA, AMD, Intel, then x264) with a 1-frame test encode. Progress goes over
 SSE (`render-progress`, `renders-changed`). On this machine a 1080p film renders at about 55 frames per second.
 
-**Sound:** `audio` in `kairos.json` is a list of tracks (`file`, `start` in seconds, `volume` 0 to 2; a single
-file name also works, see `AudioTrackSchema`). `readFilm` reports missing files as the film's problem. The
-preview plays one `<audio>` element per track (`src/web/player/useFilmAudio.ts`): the player's clock leads,
-tracks start at their `start` and are moved back in step when they drift over 80 ms. The render mixes the
-tracks while joining the chunks (`mixFilter` in `src/server/ffmpeg.ts`: `adelay`, `volume`, `amix` with
-`normalize=0`, `apad`, cut with `-t` at the film's length, AAC 192k).
+**Sound:** `audio` in `kairos.json` is a list of tracks (`file`, `start` in seconds, `volume` 0 to 2, and for the
+timeline `from` / `length` to trim the file, `lane`, `muted`; a single file name also works, see
+`AudioTrackSchema`). `changeFilm` writes tracks short (`compactTrack`: no default values). `readFilm` reports
+missing files as the film's problem. The preview plays one `<audio>` element per track
+(`src/web/player/useFilmAudio.ts`): the player's clock leads, tracks start at their `start` (at `from` in the
+file) and are moved back in step when they drift over 80 ms. The render mixes the tracks while joining the chunks
+(`mixFilter` in `src/server/ffmpeg.ts`: `atrim` for trimmed tracks, `adelay`, `volume`, `amix` with
+`normalize=0`, `apad`, cut with `-t` at the film's length, AAC 192k; muted tracks are left out).
+
+**Timeline:** under the player (`src/web/components/Timeline.tsx`, the math in `src/web/timeline.ts`): the film's
+scenes, then sound lanes with waveforms (`src/web/player/waveform.ts`, read through
+`GET /api/films/:id/sounds/file` because the film server is another origin). Clips move, trim and snap (playhead,
+scene and clip edges); a drag saves the last pointer position, not the last drawn one. Every change saves the
+whole list with `PUT /api/films/:id/audio`; Undo/Redo keep the lists before. Sounds dropped on the timeline land
+at that time and lane (`?lane=`); other new sounds get a free lane (`nextLane`, `src/shared/lanes.ts`).
 
 ## Claude Code
 

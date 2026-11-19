@@ -10,6 +10,7 @@ import {
   useOpenFilmFolder,
   useReferences,
   useRenders,
+  useSaveAudio,
 } from "../api.ts";
 import {
   AddDialog,
@@ -38,6 +39,7 @@ import { RenderDialog } from "../components/RenderDialog.tsx";
 import { SaveTemplateDialog } from "../components/SaveTemplateDialog.tsx";
 import { SideTabs } from "../components/SideTabs.tsx";
 import { SoundPanel } from "../components/SoundPanel.tsx";
+import { Timeline } from "../components/Timeline.tsx";
 import { groupFiles, type Purpose, purposesFor } from "../filmAdd.ts";
 import { useHubEvent } from "../hubEvents.ts";
 import { filmFileUrl } from "../player/audioSync.ts";
@@ -92,6 +94,7 @@ export function FilmPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const navigate = useNavigate();
   const references = useReferences(id, Boolean(film.data));
+  const saveAudio = useSaveAudio(id);
   const [tab, setTab] = useFilmTab(id);
   const [addOpen, setAddOpen] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
@@ -221,10 +224,28 @@ export function FilmPage() {
           reloadKey={reloadKey}
           overlay={overlay}
           noteMarks={openNotes}
+          timeline={({ t, scenes, seekTime }) => (
+            <Timeline
+              duration={config.duration}
+              time={t}
+              scenes={scenes}
+              notes={openNotes}
+              tracks={config.audio}
+              soundUrl={(file) =>
+                `/api/films/${encodeURIComponent(film.data.id)}/sounds/file?path=${encodeURIComponent(file)}`
+              }
+              onSeek={seekTime}
+              onChange={(next) => saveAudio.mutate(next)}
+              onAddSounds={(files, start, lane) => void adds.addSoundsAt(files, start, lane)}
+            />
+          )}
           audio={config.audio.map((track) => ({
             url: filmFileUrl(filmOrigin, film.data.id, track.file),
             start: track.start,
             volume: track.volume,
+            from: track.from,
+            length: track.length,
+            muted: track.muted,
           }))}
         />
         <p className="hint preview-hint">

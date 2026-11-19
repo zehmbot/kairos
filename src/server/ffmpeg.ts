@@ -140,6 +140,10 @@ export interface SoundTrack {
   start: number;
   /** 1 = as it is, 0 to 2. */
   volume: number;
+  /** Where in the file it starts playing, in seconds (default 0). */
+  from?: number;
+  /** How long it plays, in seconds (default: to the end of the file). */
+  length?: number;
 }
 
 /**
@@ -149,7 +153,16 @@ export interface SoundTrack {
 export function mixFilter(tracks: readonly SoundTrack[]): string {
   const parts = tracks.map((track, i) => {
     const delay = Math.round(track.start * 1000);
+    // A trimmed track: cut the file first, then start its clock at 0 again.
+    const trim =
+      (track.from ?? 0) > 0 || track.length !== undefined
+        ? [
+            `atrim=start=${track.from ?? 0}${track.length !== undefined ? `:duration=${track.length}` : ""}`,
+            "asetpts=PTS-STARTPTS",
+          ]
+        : [];
     const steps = [
+      ...trim,
       "aresample=48000",
       ...(delay > 0 ? [`adelay=delays=${delay}:all=1`] : []),
       `volume=${track.volume}`,

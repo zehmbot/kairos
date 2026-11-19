@@ -1,7 +1,10 @@
+import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
 import type { FastifyInstance, FastifyReply } from "fastify";
+import { nextLane } from "../../shared/lanes.ts";
+import { contentTypeOf, mediaKindOf } from "../../shared/media.ts";
 import { AudioChangeSchema, AudioTrackSchema, FromAssetSchema } from "../../shared/types.ts";
 import { assetFile, copyAssetToFilm } from "../assets.ts";
 import { changeFilm, type Film, FilmConfigError, readFilm } from "../films.ts";
@@ -49,8 +52,14 @@ export function soundRoutes(app: FastifyInstance, studio: Studio): void {
     film: Film & { config: NonNullable<Film["config"]> },
     file: string,
     start: number,
+    lane?: number,
   ) {
-    const track = AudioTrackSchema.parse({ file, start: Math.max(0, start) });
+    // A new sound gets its own timeline track, unless it was dropped on one.
+    const track = AudioTrackSchema.parse({
+      file,
+      start: Math.max(0, start),
+      lane: lane ?? nextLane(film.config.audio),
+    });
     const config = await changeFilm(film.path, { audio: [...film.config.audio, track] });
     studio.events.publish({ type: "films-changed", ids: [film.id] });
     return reply.code(201).send({ track, audio: config.audio });
@@ -67,7 +76,7 @@ export function soundRoutes(app: FastifyInstance, studio: Studio): void {
     }
   }
 
-  app.post<{ Params: IdParams; Querystring: { name?: string; start?: string } }>(
+  app.post<{ Params: IdParams; Querystring: { name?: string; start?: string; lane?: string } }>(
     "/api/films/:id/sounds",
     async (request, reply) => {
       const film = await filmOr(reply, request.params.id);
@@ -75,7 +84,14 @@ export function soundRoutes(app: FastifyInstance, studio: Studio): void {
       return guard(reply, async () => {
         const name = checkUploadName(request.query.name, ["sound"]);
         const saved = await saveUpload(request.body as Readable, join(film.path, "audio"), name);
-        return addTrack(reply, film, `audio/${saved}`, Number(request.query.start) || 0);
+        const lane = Number(request.query.lane);
+        return addTrack(
+          reply,
+          film,
+          `audio/${saved}`,
+          Number(request.query.start) || 0,
+          Number.isInteger(lane) && lane >= 0 && lane <= 31 ? lane : undefined,
+        );
       });
     },
   );
@@ -96,6 +112,25 @@ export function soundRoutes(app: FastifyInstance, studio: Studio): void {
       return addTrack(reply, film, file, input.data.start ?? 0);
     });
   });
+
+  // A sound file of the film, for the timeline's waveforms (the app can't read the film server's files).
+  app.get<{ Params: IdParams; Querystring: { path?: string } }>(
+    "/api/films/:id/sounds/file",
+    async (request, reply) => {
+      const films = studio.filmsDir;
+      const film = films ? await readFilm(films, request.params.id) : null;
+      const path = film && request.query.path ? resolveInside(film.path, request.query.path) : null;
+      const info =
+        path && mediaKindOf(path) === "sound" ? await stat(path).catch(() => null) : null;
+      if (!path || !info?.isFile())
+        return sendError(reply, 404, "not-found", "No such sound file.");
+      return reply
+        .type(contentTypeOf(path))
+        .header("content-length", info.size)
+        .header("cache-control", "no-store")
+        .send(createReadStream(path));
+    },
+  );
 
   // The whole list: start times, volumes, removed tracks. Every file must be inside the film.
   app.put<{ Params: IdParams }>("/api/films/:id/audio", async (request, reply) => {

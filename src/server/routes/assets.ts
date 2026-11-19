@@ -3,6 +3,7 @@ import { mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
 import type { FastifyInstance, FastifyReply } from "fastify";
+import { nextLane } from "../../shared/lanes.ts";
 import { contentTypeOf, KIND_FOLDERS, type MediaKind, mediaKindOf } from "../../shared/media.ts";
 import { AudioTrackSchema } from "../../shared/types.ts";
 import { assetFile, copyAssetToFilm, deleteAsset, importAsset, listAssets } from "../assets.ts";
@@ -89,6 +90,7 @@ export function assetRoutes(
           const track = AudioTrackSchema.parse({
             file: path,
             start: Math.max(0, Number(request.body?.start) || 0),
+            lane: nextLane(film.config.audio),
           });
           await changeFilm(film.path, { audio: [...film.config.audio, track] });
         }

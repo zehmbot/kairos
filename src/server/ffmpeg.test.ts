@@ -113,6 +113,15 @@ describe("mixing sound", () => {
     );
   });
 
+  it("trims a track: where in the file it starts and how long it plays", () => {
+    expect(mixFilter([{ path: "a.wav", start: 2, volume: 1, from: 1.5, length: 3 }])).toBe(
+      "[1:a]atrim=start=1.5:duration=3,asetpts=PTS-STARTPTS,aresample=48000,adelay=delays=2000:all=1,volume=1[a0];[a0]apad[aout]",
+    );
+    expect(mixFilter([{ path: "a.wav", start: 0, volume: 1, length: 2 }])).toBe(
+      "[1:a]atrim=start=0:duration=2,asetpts=PTS-STARTPTS,aresample=48000,volume=1[a0];[a0]apad[aout]",
+    );
+  });
+
   it("adds the sound while joining, cut at the film's length", () => {
     const args = joinArgs("list.txt", "out.mp4", { tracks, duration: 5 });
     expect(args.filter((arg) => arg === "-i")).toHaveLength(3);

@@ -55,16 +55,38 @@ describe("sounds", () => {
   it("adds an uploaded sound as a track at the given time", async () => {
     const answer = await upload("/api/films/intro/sounds?name=My%20Rain.MP3&start=2.5");
     expect(answer.statusCode).toBe(201);
-    expect(answer.json().track).toEqual({ file: "audio/my-rain.mp3", start: 2.5, volume: 1 });
+    expect(answer.json().track).toMatchObject({ file: "audio/my-rain.mp3", start: 2.5, volume: 1 });
     expect(await readFile(join(filmDir(), "audio", "my-rain.mp3"), "utf8")).toBe(
       "RIFF....fake sound",
     );
-    expect((await film()).config?.audio).toEqual([
+    expect((await film()).config?.audio).toMatchObject([
       { file: "audio/my-rain.mp3", start: 2.5, volume: 1 },
     ]);
-    // Other kairos.json fields are kept.
+    // Other kairos.json fields are kept, and the track is written short (no default values).
     const config = JSON.parse(await readFile(join(filmDir(), "kairos.json"), "utf8"));
     expect(config.title).toBe("Intro");
+    expect(config.audio).toEqual([{ file: "audio/my-rain.mp3", start: 2.5, volume: 1, lane: 0 }]);
+    // The next sound gets the next timeline track, unless it was dropped on one.
+    await upload("/api/films/intro/sounds?name=b.mp3");
+    await upload("/api/films/intro/sounds?name=c.mp3&lane=0&start=8");
+    expect(
+      (await film()).config?.audio.map((track) => [track.file, track.lane, track.start]),
+    ).toEqual([
+      ["audio/my-rain.mp3", 0, 2.5],
+      ["audio/b.mp3", 1, 0],
+      ["audio/c.mp3", 0, 8],
+    ]);
+
+    // The app reads the sound back for the timeline's waveform; nothing else in the film.
+    const file = await app.inject("/api/films/intro/sounds/file?path=audio/my-rain.mp3");
+    expect(file.headers["content-type"]).toBe("audio/mpeg");
+    expect(file.body).toBe("RIFF....fake sound");
+    expect((await app.inject("/api/films/intro/sounds/file?path=kairos.json")).statusCode).toBe(
+      404,
+    );
+    expect((await app.inject("/api/films/intro/sounds/file?path=../../x.mp3")).statusCode).toBe(
+      404,
+    );
 
     const wrong = await upload("/api/films/intro/sounds?name=clip.mp4");
     expect(wrong.statusCode).toBe(400);
@@ -77,7 +99,14 @@ describe("sounds", () => {
       app.inject({ method: "PUT", url: "/api/films/intro/audio", payload: { audio } });
     const changed = await put([{ file: "audio/a.mp3", start: 1, volume: 0.5 }]);
     expect(changed.statusCode).toBe(200);
-    expect((await film()).config?.audio).toEqual([{ file: "audio/a.mp3", start: 1, volume: 0.5 }]);
+    expect((await film()).config?.audio).toMatchObject([
+      { file: "audio/a.mp3", start: 1, volume: 0.5 },
+    ]);
+    // The timeline fields are kept.
+    await put([{ file: "audio/a.mp3", start: 1, from: 0.5, length: 2, lane: 1, muted: true }]);
+    expect((await film()).config?.audio).toEqual([
+      { file: "audio/a.mp3", start: 1, volume: 1, from: 0.5, length: 2, lane: 1, muted: true },
+    ]);
     expect((await put([])).statusCode).toBe(200);
     expect((await film()).config?.audio).toEqual([]);
 
@@ -123,7 +152,7 @@ describe("assets", () => {
 
     const sound = await use("sounds/theme.mp3", { film: "intro", start: 3 });
     expect(sound.json()).toEqual({ path: "audio/theme.mp3" });
-    expect((await film()).config?.audio).toEqual([
+    expect((await film()).config?.audio).toMatchObject([
       { file: "audio/theme.mp3", start: 3, volume: 1 },
     ]);
     expect((await use("sounds/theme.mp3", { film: "nope" })).statusCode).toBe(404);

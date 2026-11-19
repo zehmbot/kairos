@@ -78,7 +78,9 @@ export function useFilmAudio(
     (force: boolean) => {
       const t = time();
       for (const { element, track } of audios) {
-        const position = trackPosition(track.start, t, element.duration);
+        const position = track.muted
+          ? null
+          : trackPosition(track.start, t, element.duration, track.from, track.length);
         if (!playing || position === null) {
           if (!element.paused) element.pause();
           continue;

@@ -165,7 +165,7 @@ describe("sound", () => {
     await makeFilm("one", { title: "One", duration: 5, audio: "music.mp3" });
     await writeFile(join(filmsDir, "one", "music.mp3"), "mp3");
     expect((await readFilm(filmsDir, "one"))?.config?.audio).toEqual([
-      { file: "music.mp3", start: 0, volume: 1 },
+      { file: "music.mp3", start: 0, volume: 1, from: 0, muted: false },
     ]);
 
     await makeFilm("two", {
@@ -181,8 +181,8 @@ describe("sound", () => {
     const film = await readFilm(filmsDir, "two");
     expect(film?.problem).toBeNull();
     expect(film?.config?.audio).toEqual([
-      { file: "a.wav", start: 0, volume: 0.5 },
-      { file: "b.wav", start: 1.2, volume: 1 },
+      { file: "a.wav", start: 0, volume: 0.5, from: 0, muted: false },
+      { file: "b.wav", start: 1.2, volume: 1, from: 0, muted: false },
     ]);
 
     await makeFilm("none", { title: "None", duration: 5 });

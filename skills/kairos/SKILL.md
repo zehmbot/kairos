@@ -84,7 +84,15 @@ Sound files live in the film folder (for example `audio/`) and are listed in `ka
 
 - `start`: when the track begins on the film's timeline, in seconds (default 0).
 - `volume`: 0 to 2 (default 1). Put music under a voice at about 0.3-0.5.
+- `from` and `length` (seconds, optional): trim the file. It plays from `from` seconds into the file, for
+  `length` seconds (left out: to the end of the file).
+- `lane` (optional): which track the clip sits on in the Kairos timeline (0 = the first). Several clips can
+  share a lane, like a voice track with many lines.
+- `muted` (optional): the clip stays in the film but makes no sound.
 - A single `"audio": "file.mp3"` also works.
+
+The user sees and edits these on the timeline under the preview (move, trim, mute), so keep them as they are
+unless asked to change the sound.
 
 Kairos plays the tracks in step with the preview and mixes them into the rendered MP4, cut at the film's
 `duration`. The page itself never plays sound: Kairos does. Time the picture to the sound (a beat, a word) with

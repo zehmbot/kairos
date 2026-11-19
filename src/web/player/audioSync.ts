@@ -10,6 +10,12 @@ export interface PreviewTrack {
   start: number;
   /** 0 to 2 (the preview can't go above 1: louder tracks play at full volume). */
   volume: number;
+  /** Where in the file it starts playing, in seconds. */
+  from?: number;
+  /** How long it plays, in seconds (left out: to the end of the file). */
+  length?: number;
+  /** Muted tracks make no sound. */
+  muted?: boolean;
 }
 
 /** How far a track may drift from the picture before it is moved back in step, in seconds. */
@@ -19,11 +25,21 @@ export const DRIFT_LIMIT = 0.08;
  * Where a track's file should be at film time `t`, in seconds into the file, or `null` when the track
  * is silent then (it hasn't started yet, or it already ended).
  */
-export function trackPosition(start: number, t: number, fileDuration = Number.NaN): number | null {
+export function trackPosition(
+  start: number,
+  t: number,
+  fileDuration = Number.NaN,
+  /** Trimmed start: where in the file it begins playing. */
+  from = 0,
+  /** Trimmed end: how long it plays. */
+  length?: number,
+): number | null {
   const local = t - start;
   if (local < 0) return null;
-  if (Number.isFinite(fileDuration) && local >= fileDuration) return null;
-  return local;
+  if (length !== undefined && local >= length) return null;
+  const position = from + local;
+  if (Number.isFinite(fileDuration) && position >= fileDuration) return null;
+  return position;
 }
 
 /** True when a playing track is too far from where the picture is. */

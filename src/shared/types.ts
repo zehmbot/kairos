@@ -37,8 +37,28 @@ export const AudioTrackSchema = z.object({
     .min(0, "An audio track's volume goes from 0 to 2.")
     .max(2, "An audio track's volume goes from 0 to 2.")
     .default(1),
+  /** Where in the file it starts playing, in seconds (a trimmed start). */
+  from: z.number().min(0, "An audio track's `from` can't be negative.").default(0),
+  /** How long it plays, in seconds (a trimmed end). Left out: to the end of the file. */
+  length: z.number().positive("An audio track's `length` must be more than 0.").optional(),
+  /** Which timeline track it sits on (0 = the first). Left out: one track each, in order. */
+  lane: z.number().int().min(0).max(31).optional(),
+  /** Muted tracks stay in the film but make no sound (preview and video). */
+  muted: z.boolean().default(false),
 });
 export type AudioTrack = z.infer<typeof AudioTrackSchema>;
+
+/** A track as written in kairos.json: the defaults (`from: 0`, `muted: false`) are left out. */
+export function compactTrack(track: AudioTrack): z.input<typeof AudioTrackSchema> {
+  const { from, muted, length, lane, ...rest } = track;
+  return {
+    ...rest,
+    ...(from > 0 ? { from } : {}),
+    ...(length !== undefined ? { length } : {}),
+    ...(lane !== undefined ? { lane } : {}),
+    ...(muted ? { muted } : {}),
+  };
+}
 
 /** `"audio": "file.mp3"` (one track) or a list of tracks. Always read as a list. */
 const AudioSchema = z

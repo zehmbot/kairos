@@ -32,6 +32,14 @@
   --danger: var(--c-red);
   --ok: var(--c-lime);
   --note: var(--c-red);
+
+  /* Timeline tracks: the film, then sound tracks in turn. Clips are these colors mixed into the background. */
+  --track-film: var(--c-blue);
+  --track-sound-0: var(--c-mint);
+  --track-sound-1: var(--c-yellow);
+  --track-sound-2: var(--c-orange);
+  --track-sound-3: var(--c-lime);
+  --playhead: var(--c-white);
   --icon-accent: var(--accent);
 
   /* One "big pixel": the unit for borders and steps */

@@ -137,11 +137,14 @@ export function DropZone({
         depth.current = Math.max(0, depth.current - 1);
         if (depth.current === 0) setActive(false);
       }}
+      // Reset first (capture), even when an area inside handles the drop itself (the timeline).
+      onDropCapture={() => {
+        depth.current = 0;
+        setActive(false);
+      }}
       onDrop={(event) => {
         if (!hasFiles(event)) return;
         event.preventDefault();
-        depth.current = 0;
-        setActive(false);
         onFiles([...event.dataTransfer.files], zoneOf(event.target));
       }}
     >

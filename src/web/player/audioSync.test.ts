@@ -8,6 +8,10 @@ describe("sound in the preview", () => {
     expect(trackPosition(1.2, 1)).toBeNull(); // not started yet
     expect(trackPosition(0, 12, 10)).toBeNull(); // the file already ended
     expect(trackPosition(0, 4, Number.NaN)).toBe(4); // length not known yet
+    // Trimmed: starts 1.5 s into the file and plays for 2 s.
+    expect(trackPosition(3, 3.5, 10, 1.5, 2)).toBeCloseTo(2);
+    expect(trackPosition(3, 5.1, 10, 1.5, 2)).toBeNull();
+    expect(trackPosition(0, 9, 10, 1.5)).toBeNull(); // 10.5 s into a 10 s file
   });
 
   it("only moves a track when it drifted too far", () => {
@@ -27,5 +31,17 @@ describe("sound in the preview", () => {
     expect(filmFileUrl("http://127.0.0.1:7342", "my film", "audio/voice over.wav")).toBe(
       "http://127.0.0.1:7342/my%20film/audio/voice%20over.wav",
     );
+  });
+});
+
+describe("waveform peaks", () => {
+  it("keeps the loudest sample of each bucket, over all channels", async () => {
+    const { peaksOf } = await import("./waveform.ts");
+    const left = new Float32Array([0, 0.5, -0.2, 0, 0.1, -0.9]);
+    const right = new Float32Array([0.7, 0, 0, 0, 0, 0]);
+    // 6 samples at 300 per second, 100 buckets per second: 3 samples per bucket.
+    expect([...peaksOf([left, right], 300)].map((v) => Math.round(v * 10) / 10)).toEqual([
+      0.7, 0.9,
+    ]);
   });
 });

@@ -270,10 +270,20 @@ export class Renderer {
         chunks.map((chunk) => concatLine(join(dir, chunkFile(chunk)))).join("\n"),
       );
       const joined = join(dir, "joined.mp4");
-      // The film's sound tracks are mixed in here (readFilm already checked they exist).
+      // The film's sound tracks are mixed in here (readFilm already checked they exist). Muted ones are left out.
       const tracks = config.audio.flatMap((track) => {
-        const file = resolveInside(film.path, track.file);
-        return file ? [{ path: file, start: track.start, volume: track.volume }] : [];
+        const file = track.muted ? null : resolveInside(film.path, track.file);
+        return file
+          ? [
+              {
+                path: file,
+                start: track.start,
+                volume: track.volume,
+                from: track.from,
+                length: track.length,
+              },
+            ]
+          : [];
       });
       await runFfmpeg(ffmpeg, joinArgs(list, joined, { tracks, duration: config.duration }));
       const version = await nextVersion(film.path, film.id);

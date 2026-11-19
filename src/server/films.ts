@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   type AudioTrack,
   type BriefFile,
+  compactTrack,
   DEFAULT_FPS,
   FILM_SHAPES,
   type FilmChange,
@@ -275,7 +276,11 @@ export async function changeFilm(
   if (typeof json !== "object" || json === null || Array.isArray(json)) {
     throw new FilmConfigError(`${CONFIG_FILE} must hold an object, so Kairos won't change it.`);
   }
-  const next = { ...json, ...change };
+  // Sound tracks are written short: without their default values.
+  const next = {
+    ...json,
+    ...("audio" in change ? { ...change, audio: change.audio.map(compactTrack) } : change),
+  };
   const parsed = FilmConfigSchema.safeParse(next);
   if (!parsed.success) {
     throw new FilmConfigError(

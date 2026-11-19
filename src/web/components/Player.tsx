@@ -32,10 +32,21 @@ interface PlayerProps {
   noteMarks?: readonly { id: string; t: number; until: number | null }[];
   /** The film's sound tracks, played in step with the picture. */
   audio?: readonly PreviewTrack[];
+  /** Drawn under the controls, in step with the player (the timeline). */
+  timeline?: (state: TimelineState) => ReactNode;
   ref?: Ref<PlayerHandle>;
 }
 
 const NO_AUDIO: readonly PreviewTrack[] = [];
+
+/** What the timeline needs from the player. */
+export interface TimelineState {
+  /** Time of the frame showing now, in seconds. */
+  t: number;
+  scenes: readonly { name: string; start: number; end?: number }[];
+  /** Jumps to a time (keeps playing if it was). */
+  seekTime: (t: number) => void;
+}
 
 /** Lets the film page drive the player (jump to a note, pause to add one). */
 export interface PlayerHandle {
@@ -74,6 +85,7 @@ export function Player({
   overlay,
   noteMarks = [],
   audio = NO_AUDIO,
+  timeline,
   ref,
 }: PlayerProps) {
   const player = useFilmPlayer({ src, fps, duration });
@@ -293,6 +305,11 @@ export function Player({
         </span>
         {scene && <span className="px-tag">{scene.name}</span>}
       </div>
+      {timeline?.({
+        t,
+        scenes: player.scenes,
+        seekTime: (time) => seek(frameAt(time, fps, total)),
+      })}
     </div>
   );
 }

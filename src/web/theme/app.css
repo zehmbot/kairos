@@ -1808,3 +1808,302 @@ video.asset-media {
 .purpose-file {
   overflow-wrap: anywhere;
 }
+
+/* ---------- Timeline ---------- */
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.timeline-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.timeline-title {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.timeline-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.timeline-grid {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  background: var(--bg);
+  box-shadow: 0 0 0 var(--px) var(--line);
+}
+
+.timeline-heads {
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 0 6px;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 2px solid var(--surface);
+  border-right: var(--px) solid var(--line);
+}
+
+.timeline-head-film {
+  color: var(--track-film);
+}
+
+.timeline-head-new {
+  color: var(--line);
+}
+
+.timeline-mute {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 0;
+  cursor: pointer;
+  box-shadow: 0 0 0 2px var(--line);
+}
+
+.timeline-mute[aria-pressed="true"] {
+  color: var(--c-night);
+  background: var(--danger);
+  box-shadow: 0 0 0 2px var(--danger);
+}
+
+.timeline-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.timeline-content {
+  position: relative;
+  min-width: 100%;
+  touch-action: none;
+  user-select: none;
+}
+
+.timeline-ruler {
+  position: relative;
+  cursor: col-resize;
+  background: var(--bar);
+  border-bottom: 2px solid var(--line);
+}
+
+.timeline-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding: 4px 0 0 4px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+  border-left: 2px solid var(--line);
+  white-space: nowrap;
+}
+
+.timeline-lane {
+  position: relative;
+  cursor: col-resize;
+  border-bottom: 2px solid var(--surface);
+}
+
+.timeline-scene {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  overflow: hidden;
+  padding: 0 6px;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--text);
+  background: color-mix(in srgb, var(--track-film) 70%, var(--bg));
+  border: 0;
+  border-right: 2px solid var(--bg);
+  cursor: pointer;
+}
+
+.timeline-scene:hover {
+  background: var(--track-film);
+}
+
+.timeline-note {
+  position: absolute;
+  bottom: 0;
+  min-width: 4px;
+  height: 6px;
+  background: var(--note);
+  pointer-events: none;
+}
+
+.lane-c0 {
+  --lane: var(--track-sound-0);
+}
+
+.lane-c1 {
+  --lane: var(--track-sound-1);
+}
+
+.lane-c2 {
+  --lane: var(--track-sound-2);
+}
+
+.lane-c3 {
+  --lane: var(--track-sound-3);
+}
+
+.timeline-head.lane-c0,
+.timeline-head.lane-c1,
+.timeline-head.lane-c2,
+.timeline-head.lane-c3 {
+  color: var(--lane);
+}
+
+.timeline-clip {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  overflow: hidden;
+  color: var(--lane);
+  background: color-mix(in srgb, var(--lane) 28%, var(--bg));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--lane) 60%, var(--bg));
+  cursor: grab;
+}
+
+.timeline-clip:active {
+  cursor: grabbing;
+}
+
+.timeline-clip[data-selected] {
+  box-shadow: inset 0 0 0 2px var(--text);
+}
+
+.timeline-clip[data-muted],
+.timeline-sound[data-muted] .timeline-clip {
+  opacity: 0.45;
+}
+
+.timeline-wave {
+  position: absolute;
+  inset: 4px 0;
+  width: 100%;
+  height: calc(100% - 8px);
+  color: var(--lane);
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+.timeline-clip-name {
+  position: absolute;
+  top: 2px;
+  left: 6px;
+  max-width: calc(100% - 12px);
+  overflow: hidden;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  white-space: nowrap;
+  color: var(--text);
+  text-shadow: 0 2px 0 var(--bg);
+  pointer-events: none;
+}
+
+/* Grab an edge to trim. */
+.timeline-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+}
+
+.timeline-edge-start {
+  left: 0;
+}
+
+.timeline-edge-end {
+  right: 0;
+}
+
+.timeline-clip:hover .timeline-edge {
+  background: color-mix(in srgb, var(--text) 35%, transparent);
+}
+
+.timeline-new-text {
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  transform: translateY(-50%);
+  font-size: 14px;
+  color: var(--line);
+  pointer-events: none;
+}
+
+.timeline-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--playhead);
+  pointer-events: none;
+}
+
+.timeline-playhead::before {
+  position: absolute;
+  top: 0;
+  left: -5px;
+  width: 12px;
+  height: 8px;
+  content: "";
+  background: var(--playhead);
+}
+
+.timeline-clipbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  background: var(--bg);
+  box-shadow: 0 0 0 var(--px) var(--line);
+}
+
+.timeline-clipname {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+}
+
+.timeline-volume {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timeline-volume input {
+  width: 120px;
+  accent-color: var(--accent);
+}
