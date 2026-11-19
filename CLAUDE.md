@@ -26,12 +26,14 @@ http://127.0.0.1:7342 (`KAIROS_FILM_PORT`). App settings live in `~/.kairos/conf
 src/server/   Fastify hub: index.ts (entry), security.ts (request guard), studio.ts (workspace + watcher),
               films.ts (scan/create), film-server.ts (serves film pages), notes.ts (frame notes),
               camera.ts (frame pictures), folder-picker.ts/.ps1 (system "choose folder" window),
-              claude-cli.ts (runs `claude`: version, mcp add/remove, open a terminal), routes/
+              claude-cli.ts (runs `claude`: version, mcp add/remove, open a terminal),
+              skills.ts (copies skills into Claude Code), routes/
 src/mcp/      Kairos tools for Claude Code: server.ts (stdio entry), tools.ts, hub-client.ts (calls the hub)
 src/web/      React UI: components/, pages/, player/, icons/, theme/
 src/film/     bridge.js: plain JS the film server adds to every film page
 src/shared/   Code used by both sides (zod schemas, ports, film-protocol.ts, marks.ts)
 templates/    Starter film copied by "New film" ({{placeholders}} are filled in)
+skills/       The Kairos skills for Claude Code (SKILL.md + supporting files; not formatted by Biome)
 scripts/      Small maintenance scripts
 public/       Static files copied as-is into the UI build
 ```
@@ -61,6 +63,15 @@ hub over HTTP (`KAIROS_PORT`) and never touches files itself. Tools default to t
 in. `kairos_notes` and `kairos_frame` return PNG pictures, which Claude sees. Keep each answer under Claude Code's
 25,000-token limit: a 1280×720 picture costs about 1,200 tokens, so `kairos_notes` pages through notes. Stdout
 carries the protocol, so the MCP server logs to stderr only.
+
+**Skills** come from `skills/` (Kairos) and `~/.kairos/skills/` (the user's own). Turning one on copies it into
+`~/.claude/skills/<name>/` with a `.kairos-skill` marker (source + content hash). Kairos only changes folders that
+carry its marker, and the hub refreshes unedited copies at start. `KAIROS_CLAUDE_DIR` moves `~/.claude` (tests).
+Skills must stay frame-exact and match the film contract; keep each `SKILL.md` under 500 lines.
+
+**3D:** the film server serves the pinned `three` package at `/__kairos/lib/three/` (`build/` and `examples/jsm/`
+only), so films use an import map. The camera starts Chrome with `--enable-unsafe-swiftshader` so WebGL works
+without a GPU.
 
 ## Conventions
 

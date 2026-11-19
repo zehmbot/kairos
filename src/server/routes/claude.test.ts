@@ -22,6 +22,8 @@ let installed: boolean;
 let connected: boolean;
 let openedIn: string[];
 let captureError: string | null;
+let skillsTurnedOn: number;
+let skillsFail: boolean;
 
 class FakeClaude implements ClaudeTools {
   async status(): Promise<ClaudeStatus> {
@@ -66,8 +68,13 @@ beforeEach(async () => {
   connected = false;
   openedIn = [];
   captureError = null;
+  skillsTurnedOn = 0;
+  skillsFail = false;
   app = Fastify();
-  claudeRoutes(app, studio, new FakeClaude());
+  claudeRoutes(app, studio, new FakeClaude(), async () => {
+    if (skillsFail) throw new Error("disk full");
+    skillsTurnedOn++;
+  });
   frameRoutes(app, { studio, camera, filmServerUrl: "http://127.0.0.1:7342" });
 });
 
@@ -89,6 +96,15 @@ describe("Claude routes", () => {
     expect(
       (await app.inject({ method: "POST", url: "/api/claude/disconnect" })).json().connected,
     ).toBe(false);
+  });
+
+  it("turns on the Kairos skills after connecting, without failing because of them", async () => {
+    await app.inject({ method: "POST", url: "/api/claude/connect" });
+    expect(skillsTurnedOn).toBe(1);
+    skillsFail = true;
+    const response = await app.inject({ method: "POST", url: "/api/claude/connect" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().connected).toBe(true);
   });
 
   it("explains when Claude Code isn't installed", async () => {

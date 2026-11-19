@@ -7,7 +7,7 @@
  * script to each film page as it serves it.
  */
 import { readFile } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
@@ -17,6 +17,13 @@ import { isSafeFilmId, resolveInside } from "./workspace.ts";
 
 export const BRIDGE_PATH = "/__kairos/bridge.js";
 const bridgeDir = fileURLToPath(new URL("../film/", import.meta.url));
+
+/** three.js for 3D films, one pinned version for preview, pictures and render (works offline). */
+export const THREE_PATH = "/__kairos/lib/three/";
+// "three" resolves to <package>/build/three.module.js.
+const threeDir = dirname(dirname(fileURLToPath(import.meta.resolve("three"))));
+/** Only these parts of the three.js package are served. */
+const THREE_FOLDERS = ["build/", "examples/jsm/"];
 
 export interface FilmServerOptions {
   /** Current films folder (it changes when the user picks another workspace). */
@@ -58,6 +65,14 @@ export async function buildFilmServer(options: FilmServerOptions): Promise<Fasti
   await app.register(fastifyStatic, { root: bridgeDir, serve: false });
 
   app.get(BRIDGE_PATH, (_request, reply) => reply.sendFile("bridge.js"));
+
+  // Films import three.js with an import map: "three" -> /__kairos/lib/three/build/three.module.js.
+  app.get<{ Params: { "*": string } }>(`${THREE_PATH}*`, (request, reply) => {
+    const path = request.params["*"];
+    const file = resolveInside(threeDir, path);
+    if (!file || !THREE_FOLDERS.some((folder) => path.startsWith(folder))) return notFound(reply);
+    return reply.sendFile(relative(threeDir, file).split(sep).join("/"), threeDir);
+  });
 
   app.get("/", (_request, reply) =>
     reply

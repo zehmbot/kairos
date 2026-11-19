@@ -120,7 +120,15 @@ export class Camera {
       const launching = puppeteer.launch({
         executablePath: this.browser.path,
         headless: true,
-        args: ["--no-first-run", "--no-default-browser-check", "--hide-scrollbars", "--mute-audio"],
+        args: [
+          "--no-first-run",
+          "--no-default-browser-check",
+          "--hide-scrollbars",
+          "--mute-audio",
+          // 3D films (WebGL): fall back to software drawing when the GPU can't be used. Only the
+          // user's own films are opened here, so the warning about untrusted pages doesn't apply.
+          "--enable-unsafe-swiftshader",
+        ],
       });
       this.#running = launching;
       launching.then(

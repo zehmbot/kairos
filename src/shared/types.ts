@@ -213,6 +213,58 @@ export const ClaudeStatusSchema = z.object({
 });
 export type ClaudeStatus = z.infer<typeof ClaudeStatusSchema>;
 
+/** Skill folder names: what Claude Code shows as `/name`. */
+export const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+export const SkillNameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(SKILL_NAME_PATTERN, "Use small letters, numbers and dashes, like my-style.")
+  .refine(
+    (name) => name !== "synced" && !name.startsWith("anthropic-skills"),
+    "Claude Code keeps this name for itself. Pick another one.",
+  );
+
+/**
+ * A skill as the Skills page shows it.
+ * - `on`: Kairos copied it into Claude Code's skills folder, and the copy is current.
+ * - `off`: not in Claude Code.
+ * - `update`: on, but the copy is older than the skill (or was edited in Claude's folder).
+ * - `taken`: Claude Code already has a different skill with this name, which Kairos leaves alone.
+ */
+export const SkillSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  source: z.enum(["kairos", "yours"]),
+  state: z.enum(["on", "off", "update", "taken"]),
+  /** Folder the skill comes from. */
+  path: z.string(),
+});
+export type Skill = z.infer<typeof SkillSchema>;
+
+/** POST /api/skills: write a new skill of your own. */
+export const NewSkillSchema = z.object({
+  name: SkillNameSchema,
+  description: z
+    .string()
+    .trim()
+    .min(1, "Say when Claude should use this skill.")
+    .max(1000, "Keep the description under 1000 letters."),
+  instructions: z
+    .string()
+    .trim()
+    .min(1, "Write what Claude should do.")
+    .max(100_000, "That's very long: put details in extra files in the skill's folder."),
+});
+export type NewSkill = z.infer<typeof NewSkillSchema>;
+
+/** POST /api/skills/pick: the folder window's answer. */
+export const PickSkillResultSchema = z.object({
+  status: z.enum(["picked", "cancelled", "unsupported"]),
+});
+export type PickSkillResult = z.infer<typeof PickSkillResultSchema>;
+
 /** Messages on GET /api/events (Server-Sent Events). */
 export const HubEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("films-changed"), ids: z.array(z.string()) }),

@@ -99,7 +99,7 @@ function ClaudePanel() {
           <p>
             Connect Kairos to Claude Code so Claude can read your notes with their pictures, look at
             any frame to check its work, and mark notes fixed. This adds Kairos to Claude Code for
-            all your projects.
+            all your projects, and turns on the Kairos skills (see the Skills page).
           </p>
           <dl className="kv">
             <dt>Claude Code</dt>

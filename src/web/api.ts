@@ -9,10 +9,13 @@ import {
   HealthSchema,
   type NewFilm,
   type NewNote,
+  type NewSkill,
   type Note,
   NoteSchema,
   type NoteUpdate,
+  PickSkillResultSchema,
   PickWorkspaceResultSchema,
+  SkillSchema,
   WorkspaceSchema,
 } from "../shared/types.ts";
 
@@ -56,6 +59,7 @@ export const queryKeys = {
   notes: (id: string) => ["films", id, "notes"],
   camera: ["camera"],
   claude: ["claude"],
+  skills: ["skills"],
 } as const;
 
 const notesUrl = (filmId: string) => `/api/films/${encodeURIComponent(filmId)}/notes`;
@@ -209,6 +213,57 @@ export function useConnectClaude() {
         method: "POST",
       }),
     onSuccess: (status) => queryClient.setQueryData(queryKeys.claude, status),
+  });
+}
+
+/** Kairos skills and the user's own, with their state in Claude Code. */
+export function useSkills() {
+  return useQuery({
+    queryKey: queryKeys.skills,
+    queryFn: () => call(z.array(SkillSchema), "/api/skills"),
+  });
+}
+
+/** Every change answers with the new list of skills. */
+function useSkillChange<V>(request: (value: V) => [url: string, init: RequestInit]) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (value: V) => call(z.array(SkillSchema), ...request(value)),
+    onSuccess: (list) => queryClient.setQueryData(queryKeys.skills, list),
+  });
+}
+
+const skillUrl = (name: string) => `/api/skills/${encodeURIComponent(name)}`;
+
+/** Turns a skill on, off, or updates Claude's copy. */
+export function useSkillSwitch() {
+  return useSkillChange(({ name, to }: { name: string; to: "on" | "off" | "update" }) => [
+    `${skillUrl(name)}/${to}`,
+    { method: "POST" },
+  ]);
+}
+
+export function useDeleteSkill() {
+  return useSkillChange((name: string) => [skillUrl(name), { method: "DELETE" }]);
+}
+
+export function useCreateSkill() {
+  return useSkillChange((skill: NewSkill) => ["/api/skills", sendJson("POST", skill)]);
+}
+
+/** Opens the system folder window to add a skill folder. */
+export function usePickSkill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => call(PickSkillResultSchema, "/api/skills/pick", { method: "POST" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.skills }),
+  });
+}
+
+export function useOpenSkillFolder() {
+  return useMutation({
+    mutationFn: (name: string) =>
+      callNoContent(`${skillUrl(name)}/open-folder`, { method: "POST" }),
   });
 }
 

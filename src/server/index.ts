@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import fastifyStatic from "@fastify/static";
@@ -15,8 +16,10 @@ import { filmRoutes } from "./routes/films.ts";
 import { frameRoutes } from "./routes/frames.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { noteRoutes } from "./routes/notes.ts";
+import { skillRoutes } from "./routes/skills.ts";
 import { workspaceRoutes } from "./routes/workspace.ts";
 import { allowedHostsFor, requestGuard } from "./security.ts";
+import { claudeSkillsDir, Skills } from "./skills.ts";
 import { Studio } from "./studio.ts";
 
 const { values: args } = parseArgs({
@@ -34,6 +37,7 @@ const url = `http://${HOST}:${port}`;
 const webDir = fileURLToPath(new URL("../../dist/web/", import.meta.url));
 const templateDir = fileURLToPath(new URL("../../templates/starter/", import.meta.url));
 const mcpServerPath = fileURLToPath(new URL("../mcp/server.ts", import.meta.url));
+const builtinSkillsDir = fileURLToPath(new URL("../../skills/", import.meta.url));
 
 // In dev, the Vite UI on DEV_WEB_PORT calls this API through its proxy.
 const uiHosts = allowedHostsFor(dev ? [port, DEV_WEB_PORT] : [port]);
@@ -41,6 +45,18 @@ const uiOrigins = [...uiHosts].map((host) => `http://${host}`);
 
 const studio = await Studio.open({ home: kairosHome(), templateDir });
 const camera = new Camera(findBrowser());
+const skills = new Skills({
+  builtinDir: builtinSkillsDir,
+  userDir: join(kairosHome(), "skills"),
+  claudeDir: claudeSkillsDir(),
+});
+// Kairos ships newer skills from time to time: refresh the copies that are on (and weren't edited).
+try {
+  const updated = await skills.refresh();
+  if (updated.length > 0) console.log(`Updated skills: ${updated.join(", ")}`);
+} catch (error) {
+  console.warn(`Could not update the skills: ${(error as Error).message}`);
+}
 
 const app = Fastify({ logger: false, forceCloseConnections: true });
 app.addHook("onRequest", requestGuard(uiHosts));
@@ -56,7 +72,9 @@ claudeRoutes(
   app,
   studio,
   claudeTools({ serverPath: mcpServerPath, hubPort: port, defaultPort: DEFAULT_HUB_PORT }),
+  () => skills.turnOnDefaults(),
 );
+skillRoutes(app, skills);
 
 if (existsSync(webDir)) {
   await app.register(fastifyStatic, { root: webDir });

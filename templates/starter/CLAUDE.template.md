@@ -33,3 +33,9 @@ When the Kairos tools are connected (Kairos → Settings → Claude Code), use t
   throws.
 - When a note is done, mark it with `kairos_note_update` (`status: "fixed"`). Never edit `.kairos/` by hand.
 - `kairos_film_settings` changes the title, length, frame rate or status with checks.
+
+## Skills
+
+Kairos adds skills to Claude Code (turn them on or off in Kairos → Skills). Use them when they fit: `kairos` (how
+this folder works), `kairos-directing` (idea, shots, rhythm), `kairos-camera` (framing, lenses, camera moves),
+`kairos-3d` (three.js films) and `kairos-captions` (words on screen).

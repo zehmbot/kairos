@@ -6,6 +6,7 @@ const LINKS: { to: string; label: string; icon: IconName }[] = [
   { to: "/films", label: "Films", icon: "film" },
   { to: "/renders", label: "Renders", icon: "render" },
   { to: "/assets", label: "Assets", icon: "folder" },
+  { to: "/skills", label: "Skills", icon: "skill" },
   { to: "/settings", label: "Settings", icon: "gear" },
 ];
 

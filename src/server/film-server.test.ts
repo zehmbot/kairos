@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { BRIDGE_PATH, buildFilmServer, injectBridge } from "./film-server.ts";
+import { BRIDGE_PATH, buildFilmServer, injectBridge, THREE_PATH } from "./film-server.ts";
 
 const PORT = 7342;
 const HOST = `127.0.0.1:${PORT}`;
@@ -110,5 +110,28 @@ describe("film server", () => {
     expect((await get("/my-intro/index.html", { "sec-fetch-site": "cross-site" })).statusCode).toBe(
       403,
     );
+  });
+});
+
+describe("three.js for 3D films", () => {
+  it("serves the pinned three.js build and its addons as JavaScript", async () => {
+    const core = await get(`${THREE_PATH}build/three.module.js`);
+    expect(core.statusCode).toBe(200);
+    expect(core.headers["content-type"]).toContain("javascript");
+    const addon = await get(`${THREE_PATH}examples/jsm/geometries/RoundedBoxGeometry.js`);
+    expect(addon.statusCode).toBe(200);
+  });
+
+  it("serves nothing else from the package", async () => {
+    for (const path of [
+      "package.json",
+      "src/Three.js",
+      "build/../package.json",
+      "build/%2e%2e/package.json",
+      "examples/jsm/../../package.json",
+      "build/..%5c..%5cpackage.json",
+    ]) {
+      expect((await get(`${THREE_PATH}${path}`)).statusCode, path).toBe(404);
+    }
   });
 });

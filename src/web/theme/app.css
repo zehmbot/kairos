@@ -922,6 +922,64 @@ code {
   color: var(--highlight);
 }
 
+/* ---------- Skills ---------- */
+
+.px-dialog-wide {
+  width: min(680px, calc(100vw - 48px));
+}
+
+.skill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.skill-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.skill-row[data-state="on"] {
+  --box-line: var(--accent);
+}
+
+.skill-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.skill-name {
+  font-size: 12px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.skill-state[data-state="on"] {
+  color: var(--c-night);
+  background: var(--ok);
+}
+
+.skill-state[data-state="off"] {
+  color: var(--text-muted);
+  background: var(--bg);
+}
+
+.skill-state[data-state="update"] {
+  color: var(--c-night);
+  background: var(--highlight);
+}
+
+.skill-description {
+  color: var(--text-muted);
+}
+
 /* ---------- Film page: video on the left, notes on the right ---------- */
 
 .page.film-page {

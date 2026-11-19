@@ -5,8 +5,16 @@ import { readFilm } from "../films.ts";
 import type { Studio } from "../studio.ts";
 import { sendError } from "./errors.ts";
 
-/** Claude Code on this computer: status, connect/disconnect the Kairos tools, open Claude in a film. */
-export function claudeRoutes(app: FastifyInstance, studio: Studio, claude: ClaudeTools): void {
+/**
+ * Claude Code on this computer: status, connect/disconnect the Kairos tools, open Claude in a film.
+ * `afterConnect` runs once the tools are connected (it turns on the Kairos skills).
+ */
+export function claudeRoutes(
+  app: FastifyInstance,
+  studio: Studio,
+  claude: ClaudeTools,
+  afterConnect?: () => Promise<unknown>,
+): void {
   const handle = async (reply: FastifyReply, action: () => Promise<ClaudeStatus | undefined>) => {
     try {
       const result = await action();
@@ -18,7 +26,18 @@ export function claudeRoutes(app: FastifyInstance, studio: Studio, claude: Claud
   };
 
   app.get("/api/claude", (_request, reply) => handle(reply, () => claude.status()));
-  app.post("/api/claude/connect", (_request, reply) => handle(reply, () => claude.connect()));
+  app.post("/api/claude/connect", (_request, reply) =>
+    handle(reply, async () => {
+      const status = await claude.connect();
+      if (status.connected && afterConnect) {
+        // Skills are a bonus: a problem with them doesn't undo the connection.
+        await afterConnect().catch((error: Error) =>
+          console.warn(`Kairos skills were not turned on: ${error.message}`),
+        );
+      }
+      return status;
+    }),
+  );
   app.post("/api/claude/disconnect", (_request, reply) => handle(reply, () => claude.disconnect()));
 
   app.post<{ Params: { id: string } }>("/api/films/:id/open-claude", async (request, reply) => {

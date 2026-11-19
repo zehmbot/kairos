@@ -7,6 +7,7 @@ import { FilmPage } from "./pages/FilmPage.tsx";
 import { FilmsPage } from "./pages/FilmsPage.tsx";
 import { RendersPage } from "./pages/RendersPage.tsx";
 import { SettingsPage } from "./pages/SettingsPage.tsx";
+import { SkillsPage } from "./pages/SkillsPage.tsx";
 
 export function App() {
   useHubEventStream();
@@ -21,6 +22,7 @@ export function App() {
           <Route path="/films/:id" element={<FilmPage />} />
           <Route path="/renders" element={<RendersPage />} />
           <Route path="/assets" element={<AssetsPage />} />
+          <Route path="/skills" element={<SkillsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/films" replace />} />
         </Routes>
