@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Blocky sheets</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/__kairos/lib/three/build/three.module.js",
+          "three/addons/": "/__kairos/lib/three/examples/jsm/"
+        }
+      }
+    </script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #1a1c2c;
+      }
+
+      canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Sheets: every character, pose, face, prop and place of this film's engine on one picture, with checks.
+      sheet.html?sheet=cast|poses|faces|props|places&place=home&who=milo. Kairos shows them in the Sheets tab, and
+      Claude with kairos_sheet. The problems found are in window.KAIROS_CHECKS.
+    -->
+    <script type="module">
+      import { createSheet } from "./blocky/sheet.js";
+      import * as story from "./story.js";
+
+      const sheet = createSheet({ story, params: new URLSearchParams(location.search) });
+      window.KAIROS_CHECKS = sheet.checks;
+      window.READY = sheet.ready;
+      window.renderOut = () => {
+        sheet.render();
+        window.KAIROS_CHECKS = [...sheet.checks];
+      };
+    </script>
+  </body>
+</html>

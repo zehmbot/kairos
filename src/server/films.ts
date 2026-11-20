@@ -31,6 +31,8 @@ export interface Film {
   updatedAt: number;
   /** Made with a brief (`.kairos/brief.json`). */
   hasBrief: boolean;
+  /** The film has sheets (`sheet.html`, from the Blocky template): every character, pose, prop and place. */
+  hasSheets: boolean;
 }
 
 type ConfigResult = { config: FilmConfig; problem: null } | { config: null; problem: string };
@@ -123,7 +125,19 @@ export async function readFilm(filmsDir: string, id: string): Promise<Film | nul
     (info) => info.isFile(),
     () => false,
   );
-  return { id, path, config: result.config, problem, updatedAt: await lastChange(path), hasBrief };
+  const hasSheets = await stat(join(path, SHEET_PAGE)).then(
+    (info) => info.isFile(),
+    () => false,
+  );
+  return {
+    id,
+    path,
+    config: result.config,
+    problem,
+    updatedAt: await lastChange(path),
+    hasBrief,
+    hasSheets,
+  };
 }
 
 /** Every film in `filmsDir`, most recently changed first. Folders without `kairos.json` are skipped. */
@@ -170,6 +184,8 @@ export const TEMPLATE_ONLY_FILES = new Set(["template.json", "preview.png"]);
 /** The brief, written plainly for Claude and the user, and kept as data to edit later. */
 export const BRIEF_FILE = "brief.md";
 export const BRIEF_DATA_FILE = join(".kairos", "brief.json");
+/** A template's sheets page (Blocky): every character, pose, face, prop and place, with checks. */
+export const SHEET_PAGE = "sheet.html";
 
 export interface CreateOptions {
   /** A fixed size from the template (instead of the shape's). */

@@ -1,6 +1,16 @@
 // Furniture, buildings, nature and small objects, all from softened boxes and simple shapes.
-// Every builder returns a THREE.Group standing on y = 0 (unless said otherwise).
+// Every builder returns a THREE.Group standing on y = 0 (unless said otherwise). Furniture fits the figures (see
+// sizes.js): seats at their knee height, tables and doors at real sizes. `userData.kind` marks what the Places
+// sheet checks ("door", "table", "seat").
+
+/** Marks a piece for the Places sheet's size checks. */
+const kind = (object, name) => {
+  object.userData.kind = name;
+  return object;
+};
+
 import * as THREE from "three";
+import { BED_HEIGHT, meters, SEAT_HEIGHT } from "./sizes.js";
 import { block, cachedGeometry, canvasTexture, mesh, paint, rng, roundedBox } from "./util.js";
 
 const group = (...children) => {
@@ -23,32 +33,53 @@ export const glow = (color, intensity = 1) =>
 export function sofa(color = "#4f7f8a", width = 9) {
   const cushion = paint(color, { roughness: 0.9 });
   const frame = paint(new THREE.Color(color).multiplyScalar(0.8).getStyle(), { roughness: 0.9 });
+  // The seat cushion's top is at the figures' knee height.
+  const seat = SEAT_HEIGHT;
   const g = group(
-    block(width, 1.1, 3.4, null, 0, 0.2, 0, { material: frame, radius: 0.2 }),
-    block(width - 1.8, 0.45, 3.0, null, 0, 1.08, 0.15, { material: cushion, radius: 0.2 }),
-    block(width, 2.6, 1.0, null, 0, 0.2, -1.2, { material: frame, radius: 0.25 }),
-    block(1.0, 2.0, 3.4, null, -width / 2 + 0.5, 0.2, 0, { material: frame, radius: 0.25 }),
-    block(1.0, 2.0, 3.4, null, width / 2 - 0.5, 0.2, 0, { material: frame, radius: 0.25 }),
+    block(width, seat - 0.38, 3.4, null, 0, 0.12, 0, { material: frame, radius: 0.18 }),
+    kind(
+      block(width - 1.8, 0.3, 3.0, null, 0, seat - 0.3, 0.15, { material: cushion, radius: 0.15 }),
+      "seat",
+    ),
+    block(width, 2.5, 1.0, null, 0, 0.12, -1.2, { material: frame, radius: 0.25 }),
+    block(1.0, seat + 0.9, 3.4, null, -width / 2 + 0.5, 0.12, 0, { material: frame, radius: 0.25 }),
+    block(1.0, seat + 0.9, 3.4, null, width / 2 - 0.5, 0.12, 0, { material: frame, radius: 0.25 }),
   );
   for (const x of [-width / 4, width / 4]) {
     g.add(
-      block(width / 2 - 1.1, 1.7, 0.6, null, x, 1.4, -0.6, { material: cushion, radius: 0.25 }),
+      block(width / 2 - 1.1, 1.6, 0.6, null, x, seat, -0.6, { material: cushion, radius: 0.25 }),
     );
   }
   for (const x of [-width / 2 + 0.4, width / 2 - 0.4]) {
-    for (const z of [-1.4, 1.4]) g.add(block(0.3, 0.2, 0.3, "#3a2a20", x, 0, z));
+    for (const z of [-1.4, 1.4]) g.add(block(0.3, 0.12, 0.3, "#3a2a20", x, 0, z));
   }
   return g;
 }
 
-export function table(w = 5, d = 2.4, h = 1.6, color = "#8b5a35") {
+/** A plain chair (desks, tables): its seat at the figures' knee height. */
+export function chair(color = "#8b5a35") {
+  const wood = paint(color, { roughness: 0.55 });
+  const seat = SEAT_HEIGHT;
+  const g = group(
+    kind(block(1.9, 0.2, 1.9, null, 0, seat - 0.2, 0, { material: wood, radius: 0.06 }), "seat"),
+    block(1.9, 2.2, 0.2, null, 0, seat, -0.85, { material: wood, radius: 0.06 }),
+  );
+  for (const x of [-0.8, 0.8]) {
+    for (const z of [-0.8, 0.8])
+      g.add(block(0.2, seat - 0.2, 0.2, null, x, 0, z, { material: wood }));
+  }
+  return g;
+}
+
+/** A table `h` units high (a desk: 2.2, 75 cm; a coffee table: 1.35, 46 cm). */
+export function table(w = 5, d = 2.4, h = 1.35, color = "#8b5a35") {
   const wood = paint(color, { roughness: 0.55 });
   const g = group(block(w, 0.3, d, null, 0, h - 0.3, 0, { material: wood, radius: 0.08 }));
   for (const x of [-w / 2 + 0.35, w / 2 - 0.35]) {
     for (const z of [-d / 2 + 0.35, d / 2 - 0.35])
       g.add(block(0.3, h - 0.3, 0.3, null, x, 0, z, { material: wood }));
   }
-  return g;
+  return kind(g, "table");
 }
 
 export function floorLamp(on, color = "#ffd59a") {
@@ -81,14 +112,16 @@ export function tableLamp(on) {
   return g;
 }
 
+/** A bed: the mattress top at `BED_HEIGHT` (low, so a figure sitting on its edge nearly reaches the floor). */
 export function bed(color = "#e46a6a") {
   const wood = paint("#9a6a42", { roughness: 0.6 });
+  const top = BED_HEIGHT;
   return group(
-    block(5.4, 1.0, 9.4, null, 0, 0.2, 0, { material: wood, radius: 0.12 }),
-    block(5.6, 3.6, 0.6, null, 0, 0, -4.6, { material: wood, radius: 0.15 }),
-    block(5.0, 0.9, 9.0, "#f4f1ea", 0, 1.1, 0, { radius: 0.25 }),
-    block(5.2, 0.5, 6.0, color, 0, 1.75, 1.5, { radius: 0.2, roughness: 0.95 }),
-    block(3.4, 0.6, 1.6, "#ffffff", 0, 2.0, -3.4, { radius: 0.3, roughness: 0.95 }),
+    block(5.4, top - 0.9, 9.4, null, 0, 0.15, 0, { material: wood, radius: 0.12 }),
+    block(5.6, 3.2, 0.6, null, 0, 0, -4.6, { material: wood, radius: 0.15 }),
+    block(5.0, 0.8, 9.0, "#f4f1ea", 0, top - 0.8, 0, { radius: 0.25 }),
+    block(5.2, 0.45, 6.0, color, 0, top - 0.25, 1.5, { radius: 0.2, roughness: 0.95 }),
+    block(3.4, 0.55, 1.6, "#ffffff", 0, top - 0.05, -3.4, { radius: 0.3, roughness: 0.95 }),
   );
 }
 
@@ -195,10 +228,14 @@ export function windowPane(w, h, skyColor, intensity = 1) {
   );
 }
 
+/** A door: 2.1 m by 90 cm. */
 export function door(color = "#8b5a35") {
-  return group(
-    block(3.2, 7, 0.3, color, 0, 0, 0, { radius: 0.06 }),
-    block(0.25, 0.25, 0.3, "#e0b84a", 1.1, 3.4, 0.2),
+  return kind(
+    group(
+      block(meters(0.9), meters(2.1), 0.3, color, 0, 0, 0, { radius: 0.06 }),
+      block(0.25, 0.25, 0.3, "#e0b84a", meters(0.9) / 2 - 0.4, meters(1.0), 0.2),
+    ),
+    "door",
   );
 }
 
@@ -289,8 +326,9 @@ export function house(seed, lit) {
     Math.floor(random() * 6)
   ];
   const roofColor = ["#7a3b3b", "#3b4a7a", "#4a4a4a", "#8a5a35"][Math.floor(random() * 4)];
-  const w = 9 + random() * 3;
-  const h = 6 + random() * 2;
+  // A one-story house at real size: walls about 3 m high, a 2.1 m door, windows a figure can look through.
+  const w = 10 + random() * 3;
+  const h = meters(2.9) + random() * 1.2;
   const d = 8;
   const siding = canvasTexture(
     `siding:${walls}`,
@@ -322,13 +360,12 @@ export function house(seed, lit) {
   const windowMaterial = lit
     ? glow("#ffcf7a", 1.1)
     : paint("#6f9fc8", { roughness: 0.15, metalness: 0.2 });
-  for (const x of [-w / 4 - 0.4, w / 4 + 0.4]) {
-    const pane = mesh(roundedBox(1.8, 1.8, 0.2, 0.05), windowMaterial, { cast: false });
-    pane.position.set(x, h * 0.62, d / 2 + 0.02);
-    g.add(pane, block(2.2, 0.25, 0.4, "#f4f4f4", x, h * 0.62 - 1.1, d / 2 + 0.1));
+  for (const x of [-w / 4 - 0.6, w / 4 + 0.6]) {
+    const pane = mesh(roundedBox(2.6, 2.6, 0.2, 0.05), windowMaterial, { cast: false });
+    pane.position.set(x, meters(1.5), d / 2 + 0.02);
+    g.add(pane, block(3.0, 0.25, 0.4, "#f4f4f4", x, meters(1.5) - 1.55, d / 2 + 0.1));
   }
   const frontDoor = door(["#b13e53", "#29366f", "#257179", "#5d275d"][Math.floor(random() * 4)]);
-  frontDoor.scale.setScalar(0.75);
   frontDoor.position.set(0, 0, d / 2 + 0.05);
   g.add(frontDoor);
   return g;
@@ -376,11 +413,13 @@ export function car(color = "#3b5dc9") {
 export function bench() {
   const wood = paint("#a0683e", { roughness: 0.7 });
   const iron = paint("#2b2f3a", { roughness: 0.5 });
+  const seat = SEAT_HEIGHT;
   const g = group(
-    block(6, 0.3, 1.8, null, 0, 1.2, 0, { material: wood, radius: 0.08 }),
-    block(6, 1.2, 0.25, null, 0, 1.9, -0.8, { material: wood, radius: 0.08 }),
+    kind(block(6, 0.3, 1.8, null, 0, seat - 0.3, 0, { material: wood, radius: 0.08 }), "seat"),
+    block(6, 1.4, 0.25, null, 0, seat + 0.4, -0.8, { material: wood, radius: 0.08 }),
   );
-  for (const x of [-2.6, 2.6]) g.add(block(0.25, 1.2, 1.6, null, x, 0, 0, { material: iron }));
+  for (const x of [-2.6, 2.6])
+    g.add(block(0.25, seat - 0.3, 1.6, null, x, 0, 0, { material: iron }));
   return g;
 }
 
@@ -658,6 +697,41 @@ export const PROPS = {
     m.rotation.z = Math.PI / 2;
     m.position.y = 0.9;
     return group(m, block(0.4, 0.8, 0.4, "#e8344e", -1.0, 0.1, 0));
+  },
+  // A plain AA battery, standing (no brand): dark body, copper top, a metal tip.
+  battery: () => {
+    const body = mesh(
+      cachedGeometry("batteryBody", () => new THREE.CylinderGeometry(0.28, 0.28, 1.5, 20)),
+      paint("#1d1f26", { roughness: 0.4 }),
+    );
+    body.position.y = 0.75;
+    const top = mesh(
+      cachedGeometry("batteryTop", () => new THREE.CylinderGeometry(0.285, 0.285, 0.45, 20)),
+      paint("#d98a3a", { metalness: 0.5, roughness: 0.35 }),
+    );
+    top.position.y = 1.3;
+    const tip = mesh(
+      cachedGeometry("batteryTip", () => new THREE.CylinderGeometry(0.1, 0.1, 0.12, 12)),
+      paint("#c9ccd4", { metalness: 0.8, roughness: 0.25 }),
+    );
+    tip.position.y = 1.58;
+    return group(body, top, tip);
+  },
+  // A computer mouse (no brand): a rounded body with a scroll wheel and the line between its buttons.
+  mouse: () => {
+    const body = mesh(
+      cachedGeometry("mouseBody", () => new THREE.SphereGeometry(1, 28, 18)),
+      paint("#2b2d36", { roughness: 0.35 }),
+    );
+    body.scale.set(0.62, 0.36, 1.0);
+    body.position.y = 0.02;
+    const wheel = mesh(
+      cachedGeometry("mouseWheel", () => new THREE.CylinderGeometry(0.1, 0.1, 0.08, 16)),
+      paint("#9aa0b0", { roughness: 0.5 }),
+    );
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(0, 0.36, 0.42);
+    return group(body, wheel, block(0.03, 0.02, 0.5, "#14151a", 0, 0.36, 0.62));
   },
 };
 

@@ -10,6 +10,7 @@ import { getPlace, LIGHTS } from "./places.js";
 import { poseAt, TRAVEL } from "./poses.js";
 import { PROPS } from "./props.js";
 import { frameShot } from "./shots.js";
+import { fitSize, SIZES } from "./sizes.js";
 import { lineAt, planShots } from "./timing.js";
 import { clamp, hash } from "./util.js";
 import { loadVoices } from "./voice.js";
@@ -20,7 +21,8 @@ const SKY = {
   night: { top: "#04081a", horizon: "#1a2a5c" },
 };
 
-function makeSky() {
+/** The sky dome (gradient, stars and a moon at night); the Places sheet uses it too. */
+export function makeSky() {
   const material = new THREE.ShaderMaterial({
     uniforms: { top: { value: new THREE.Color() }, horizon: { value: new THREE.Color() } },
     vertexShader: /* glsl */ `
@@ -218,7 +220,9 @@ export function createEngine({ width: W, height: H, story }) {
   function prop(key, name) {
     let p = props.get(key);
     if (!p && PROPS[name]) {
-      p = PROPS[name]();
+      // Every object at its real size (sizes.js): a phone is a phone, in a hand or on a table.
+      p = fitSize(PROPS[name](), SIZES[name] ?? 0);
+      p.userData.fit = p.scale.x;
       p.visible = false;
       props.set(key, p);
     }
@@ -338,7 +342,8 @@ export function createEngine({ width: W, height: H, story }) {
       if (held) {
         const p = prop(`${id}:${held}`, held);
         if (p) {
-          p.scale.setScalar(0.55);
+          // The hand is inside the figure, which is scaled by its size: undo that, so the object keeps its size.
+          p.scale.setScalar(p.userData.fit / a.size);
           p.rotation.set(Math.PI / 2, 0, 0);
           a.hand.add(p);
           p.visible = true;

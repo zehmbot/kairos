@@ -1,4 +1,4 @@
-// Blocky toy figures: box body, arms and legs with softened edges, a rounded head with a drawn face.
+// Blocky toy figures: a jointed body of softened boxes (15 parts), a rounded head with a drawn face.
 // A figure is about 5.3 units tall (times its `size`), standing on y = 0 and facing +z.
 import * as THREE from "three";
 import { faceTexture } from "./faces.js";
@@ -326,12 +326,112 @@ function addHair(head, spec) {
   }
 }
 
-// ---------- The figure ----------
+// ---------- The figure: a jointed toy ----------
+
+/**
+ * Every joint, the pose keys that move it and how far it can turn (radians). Poses can ask for more: the figure
+ * stops at the limit, and the Poses sheet says so.
+ */
+export const JOINTS = {
+  neck: {
+    keys: ["headX", "headY", "headZ"],
+    ranges: [
+      [-0.6, 0.7],
+      [-1.3, 1.3],
+      [-0.5, 0.5],
+    ],
+  },
+  waist: {
+    keys: ["lean", "twist", "tilt"],
+    ranges: [
+      [-0.6, 1.3],
+      [-1.0, 1.0],
+      [-0.5, 0.5],
+    ],
+  },
+  shoulderL: {
+    keys: ["armL.0", "armL.1"],
+    ranges: [
+      [-3.3, 1.3],
+      [-0.7, 3.1],
+    ],
+  },
+  shoulderR: {
+    keys: ["armR.0", "armR.1"],
+    ranges: [
+      [-3.3, 1.3],
+      [-0.7, 3.1],
+    ],
+  },
+  elbowL: { keys: ["elbowL"], ranges: [[0, 2.6]] },
+  elbowR: { keys: ["elbowR"], ranges: [[0, 2.6]] },
+  wristL: { keys: ["wristL"], ranges: [[-1.0, 1.0]] },
+  wristR: { keys: ["wristR"], ranges: [[-1.0, 1.0]] },
+  hipL: {
+    keys: ["legL", "legLz"],
+    ranges: [
+      [-2.3, 1.0],
+      [-0.4, 1.0],
+    ],
+  },
+  hipR: {
+    keys: ["legR", "legRz"],
+    ranges: [
+      [-2.3, 1.0],
+      [-0.4, 1.0],
+    ],
+  },
+  kneeL: { keys: ["kneeL"], ranges: [[0, 2.6]] },
+  kneeR: { keys: ["kneeR"], ranges: [[0, 2.6]] },
+  ankleL: { keys: ["ankleL"], ranges: [[-0.8, 0.8]] },
+  ankleR: { keys: ["ankleR"], ranges: [[-0.8, 0.8]] },
+};
+
+/** A pose value by key ("armL.1" is the second number of armL). */
+function poseValue(pose, key) {
+  const [name, index] = key.split(".");
+  const value = pose[name];
+  if (index !== undefined) return Array.isArray(value) ? (value[Number(index)] ?? 0) : 0;
+  return typeof value === "number" ? value : 0;
+}
+
+/** The pose's value for each key of a joint, kept within its ranges; `over` lists what was past a limit. */
+function jointAngles(pose, name, over) {
+  const joint = JOINTS[name];
+  return joint.keys.map((key, i) => {
+    const value = poseValue(pose, key);
+    const [min, max] = joint.ranges[i];
+    if (value < min - 1e-6 || value > max + 1e-6) over.push({ joint: name, key, value, min, max });
+    return Math.min(max, Math.max(min, value));
+  });
+}
+
+/** A rounded joint cap across x (elbows, knees, the waist): hides the seam when the joint bends. */
+const capAcross = (radius, length, material) => {
+  const m = mesh(
+    cachedGeometry(`capX:${radius}:${length}`, () => {
+      const g = new THREE.CylinderGeometry(radius, radius, length, 24);
+      g.rotateZ(Math.PI / 2);
+      return g;
+    }),
+    material,
+  );
+  return m;
+};
+const ball = (radius, material) =>
+  mesh(
+    cachedGeometry(`ball:${radius}`, () => new THREE.SphereGeometry(radius, 24, 16)),
+    material,
+  );
 
 /**
  * Builds a character from a cast entry. Returns the group plus `apply(pose)` and `face(expression, state)`.
  * Spec: skin, hair, hairColor, hat, hatColor, top, shirt, shirt2, sleeves ("long" | "short"), pants, shoes,
  * beard (a color), size (1 = adult), features { glasses, freckles, lashes }.
+ *
+ * The rig, standing (units, size 1): ankles at 0.34, knees at 1.14, hips and waist at 2, shoulders at 3.52,
+ * elbows at 3, wrists at 2.45, the neck at 4. Each part hangs from its joint, and a rounded cap at each joint keeps
+ * the parts joined at any angle.
  */
 export function makeCharacter(spec) {
   const size = spec.size ?? 1;
@@ -349,23 +449,56 @@ export function makeCharacter(spec) {
   const pants = paint(spec.pants ?? "#2f3e63", { roughness: 0.8 });
   const shoes = paint(spec.shoes ?? "#2a2a30", { roughness: 0.5 });
 
-  // Legs hang from the hips (y = 2).
-  const legs = [];
+  /** Pairs of parts that must touch (a joint's parent part and its child part), for the sheet's checks. */
+  const links = [];
+
+  // Hips: a pelvis in the pants' color, hidden under the chest until the waist bends.
+  const pelvis = mesh(roundedBox(1.96, 0.5, 0.98, 0.12), pants);
+  pelvis.position.y = 2;
+  body.add(pelvis);
+
+  // Legs: hip → knee → ankle.
+  const hips = [];
+  const knees = [];
+  const ankles = [];
   for (const side of [1, -1]) {
-    const pivot = new THREE.Group();
-    pivot.position.set(side * 0.5, 2, 0);
-    const leg = mesh(roundedBox(0.96, 1.72, 1.0, 0.12), pants);
-    leg.position.y = -0.86;
+    const hip = new THREE.Group();
+    hip.position.set(side * 0.5, 2, 0);
+    const hipCap = capAcross(0.48, 0.94, pants);
+    const thigh = mesh(roundedBox(0.96, 0.9, 1.0, 0.12), pants);
+    thigh.position.y = -0.45;
+    hip.add(hipCap, thigh);
+    const knee = new THREE.Group();
+    knee.position.y = -0.86;
+    const kneeCap = capAcross(0.48, 0.94, pants);
+    const shin = mesh(roundedBox(0.96, 0.84, 1.0, 0.12), pants);
+    shin.position.y = -0.4;
+    knee.add(kneeCap, shin);
+    const ankle = new THREE.Group();
+    ankle.position.y = -0.8;
     const shoe = mesh(roundedBox(1.0, 0.34, 1.08, 0.12), shoes);
-    shoe.position.set(0, -1.83, 0.04);
-    pivot.add(leg, shoe);
-    body.add(pivot);
-    legs.push(pivot);
+    shoe.position.set(0, -0.17, 0.04);
+    ankle.add(shoe);
+    knee.add(ankle);
+    hip.add(knee);
+    body.add(hip);
+    hips.push(hip);
+    knees.push(knee);
+    ankles.push(ankle);
+    const s = side === 1 ? "L" : "R";
+    links.push(
+      { joint: `hip${s}`, parent: [pelvis], child: [hipCap, thigh] },
+      { joint: `knee${s}`, parent: [thigh], child: [kneeCap, shin] },
+      { joint: `ankle${s}`, parent: [shin], child: [shoe] },
+    );
   }
 
+  // The waist: the chest turns on the hips.
   const torso = new THREE.Group();
   torso.position.y = 2;
   body.add(torso);
+  const waistCap = capAcross(0.5, 1.94, pants);
+  torso.add(waistCap);
   const chest = mesh(roundedBox(2, 2, 1, 0.14), [
     shirtSide,
     shirtSide,
@@ -376,38 +509,87 @@ export function makeCharacter(spec) {
   ]);
   chest.position.y = 1;
   torso.add(chest);
+  links.push({ joint: "waist", parent: [pelvis], child: [waistCap, chest] });
   if (spec.top === "hoodie") {
     const hood = mesh(roundedBox(1.5, 0.5, 0.5, 0.2), sleeve);
     hood.position.set(0, 2.02, -0.42);
     torso.add(hood);
   }
 
-  // Arms hang from the shoulders. The right hand has an anchor for things the character holds.
-  const arms = [];
+  // Arms: shoulder → elbow → wrist. Sleeves cover the upper arm (short) or the whole arm (long).
+  const short = spec.sleeves === "short";
+  const shoulders = [];
+  const elbows = [];
+  const wrists = [];
   const hand = new THREE.Group();
   for (const side of [1, -1]) {
-    const pivot = new THREE.Group();
-    pivot.position.set(side * 1.5, 1.86, 0);
-    const short = spec.sleeves === "short";
-    const sleeveLength = short ? 0.62 : 1.56;
-    const upper = mesh(roundedBox(0.96, sleeveLength, 1.0, 0.12), sleeve);
-    upper.position.y = 0.1 - sleeveLength / 2;
-    const palm = mesh(roundedBox(0.9, 1.9 - sleeveLength, 0.94, 0.12), skin);
-    palm.position.y = 0.1 - sleeveLength - (1.9 - sleeveLength) / 2;
-    pivot.add(upper, palm);
-    if (side === -1) {
-      hand.position.set(0, -1.85, 0.35);
-      pivot.add(hand);
+    const shoulder = new THREE.Group();
+    shoulder.position.set(side * 1.5, 1.52, 0);
+    const shoulderCap = ball(0.47, sleeve);
+    const upper = new THREE.Group();
+    if (short) {
+      // A short sleeve, then bare arm down to the elbow.
+      const cloth = mesh(roundedBox(0.96, 0.62, 1.0, 0.12), sleeve);
+      cloth.position.y = 0.44 - 0.31;
+      const arm = mesh(roundedBox(0.92, 0.4, 0.96, 0.12), skin);
+      arm.position.y = -0.18 - 0.17;
+      upper.add(cloth, arm);
+    } else {
+      const cloth = mesh(roundedBox(0.96, 0.96, 1.0, 0.12), sleeve);
+      cloth.position.y = -0.04;
+      upper.add(cloth);
     }
-    torso.add(pivot);
-    arms.push(pivot);
+    shoulder.add(shoulderCap, upper);
+    const elbow = new THREE.Group();
+    elbow.position.y = -0.52;
+    const elbowCap = capAcross(0.47, 0.92, short ? skin : sleeve);
+    const forearm = mesh(
+      roundedBox(short ? 0.92 : 0.96, 0.6, short ? 0.96 : 1.0, 0.12),
+      short ? skin : sleeve,
+    );
+    forearm.position.y = -0.28;
+    elbow.add(elbowCap, forearm);
+    const wrist = new THREE.Group();
+    wrist.position.y = -0.55;
+    const wristCap = capAcross(0.45, 0.88, skin);
+    const palm = mesh(roundedBox(0.9, 0.42, 0.94, 0.12), skin);
+    palm.position.y = -0.18;
+    wrist.add(wristCap, palm);
+    if (side === -1) {
+      // Things held in the right hand sit in front of the palm.
+      hand.position.set(0, -0.3, 0.42);
+      wrist.add(hand);
+    }
+    elbow.add(wrist);
+    shoulder.add(elbow);
+    torso.add(shoulder);
+    shoulders.push(shoulder);
+    elbows.push(elbow);
+    wrists.push(wrist);
+    const s = side === 1 ? "L" : "R";
+    links.push(
+      { joint: `shoulder${s}`, parent: [chest], child: [shoulderCap, ...upper.children] },
+      { joint: `elbow${s}`, parent: [...upper.children], child: [elbowCap, forearm] },
+      { joint: `wrist${s}`, parent: [forearm], child: [wristCap, palm] },
+    );
   }
 
-  // Head with its drawn face.
+  // The neck and the head with its drawn face.
+  const neck = new THREE.Group();
+  neck.position.y = 2;
+  torso.add(neck);
+  const neckCap = mesh(
+    cachedGeometry("neck", () => new THREE.CylinderGeometry(0.36, 0.38, 0.22, 20)),
+    skin,
+  );
+  neckCap.position.y = 0.04;
+  neck.add(neckCap);
   const head = new THREE.Group();
-  head.position.y = 2 + HEAD_H / 2 + 0.04;
-  torso.add(head);
-  head.add(mesh(headGeometry(), skin));
+  head.position.y = HEAD_H / 2 + 0.04;
+  neck.add(head);
+  const skull = mesh(headGeometry(), skin);
+  head.add(skull);
+  links.push({ joint: "neck", parent: [chest], child: [neckCap, skull] });
   const faceMaterial = new THREE.MeshStandardMaterial({
     transparent: true,
     roughness: 0.6,
@@ -435,6 +617,8 @@ export function makeCharacter(spec) {
     size,
     /** Things held in the right hand go in here. */
     hand,
+    /** The parts each joint holds together (the Poses sheet checks that they still touch). */
+    links,
     /** Where the eyes are, in world space (the camera aims here). */
     headWorld(target = new THREE.Vector3()) {
       return head.getWorldPosition(target);
@@ -442,18 +626,36 @@ export function makeCharacter(spec) {
     chestWorld(target = new THREE.Vector3()) {
       return chest.getWorldPosition(target);
     },
-    /** Sets every joint from a pose (see poses.js). */
+    /**
+     * Sets every joint from a pose (see poses.js), each within its range. Returns what the pose asked past a
+     * joint's limit (the figure stops there).
+     */
     apply(pose) {
+      const over = [];
       body.position.set(0, pose.bodyY ?? 0, pose.bodyZ ?? 0);
       body.rotation.set(pose.bodyX ?? 0, 0, pose.bodyZr ?? 0);
-      torso.rotation.set(pose.lean ?? 0, pose.twist ?? 0, pose.tilt ?? 0);
-      head.rotation.set(pose.headX ?? 0, pose.headY ?? 0, pose.headZ ?? 0);
-      const [lx = 0, lz = 0] = pose.armL ?? [];
-      const [rx = 0, rz = 0] = pose.armR ?? [];
-      arms[0].rotation.set(lx, 0, lz);
-      arms[1].rotation.set(rx, 0, -rz);
-      legs[0].rotation.set(pose.legL ?? 0, 0, pose.legLz ?? 0);
-      legs[1].rotation.set(pose.legR ?? 0, 0, -(pose.legRz ?? 0));
+      const [lean, twist, tilt] = jointAngles(pose, "waist", over);
+      torso.rotation.set(lean, twist, tilt);
+      const [hx, hy, hz] = jointAngles(pose, "neck", over);
+      neck.rotation.set(hx, hy, hz);
+      const [lx, lz] = jointAngles(pose, "shoulderL", over);
+      const [rx, rz] = jointAngles(pose, "shoulderR", over);
+      shoulders[0].rotation.set(lx, 0, lz);
+      shoulders[1].rotation.set(rx, 0, -rz);
+      // Elbows and wrists bend forward (toward +z); knees bend back; ankles tip the foot.
+      elbows[0].rotation.set(-jointAngles(pose, "elbowL", over)[0], 0, 0);
+      elbows[1].rotation.set(-jointAngles(pose, "elbowR", over)[0], 0, 0);
+      wrists[0].rotation.set(-jointAngles(pose, "wristL", over)[0], 0, 0);
+      wrists[1].rotation.set(-jointAngles(pose, "wristR", over)[0], 0, 0);
+      const [llx, llz] = jointAngles(pose, "hipL", over);
+      const [rlx, rlz] = jointAngles(pose, "hipR", over);
+      hips[0].rotation.set(llx, 0, llz);
+      hips[1].rotation.set(rlx, 0, -rlz);
+      knees[0].rotation.set(jointAngles(pose, "kneeL", over)[0], 0, 0);
+      knees[1].rotation.set(jointAngles(pose, "kneeR", over)[0], 0, 0);
+      ankles[0].rotation.set(jointAngles(pose, "ankleL", over)[0], 0, 0);
+      ankles[1].rotation.set(jointAngles(pose, "ankleR", over)[0], 0, 0);
+      return over;
     },
     /** Shows an expression; `blink` closes the eyes, `talk` (0-2) opens the mouth. */
     face(expression, state) {

@@ -89,7 +89,16 @@ shot types, the cast, faces, poses, captions) and `blocky/*.js` turns it into fr
 drawn faces, six places with day/evening/night light, framing computed for any film size, word-by-word captions
 and icons on a 2D layer, and bloom, focus blur, vignette and grain. Lights stay dim and the exposure high, so only
 lamps, windows and fire glow. Everything is a pure function of `t` (seeded randomness only). The `kairos-blocky`
-skill is its style guide. **The voice leads:** `blocky/voice.js` reads the film's voices while it loads
+skill is its style guide. **Real sizes and jointed figures:** `blocky/sizes.js` sets one scale (an adult figure
+is 5.3 units = 1.8 m) and every prop's real size; the engine fits each prop to it (`fitSize`), places use it, and
+seats sit at the figures' knee height. Figures are jointed toys (`characters.js`: neck, waist, shoulders, elbows,
+wrists, hips, knees, ankles, each with a rounded cap and a range in `JOINTS`; `apply(pose)` clamps and reports
+what a pose asked past a limit). **Sheets:** `sheet.html` + `blocky/sheet.js` draw the cast, poses, faces, props
+or a place on one 1920×1080 picture and leave the problems their checks found (unsized or mis-sized props, joints
+past their limits, parts off the body, doors, tables and seats at the wrong size) in `window.KAIROS_CHECKS`. The
+film server adds the bridge to a film's other top-level pages, `GET /api/films/:id/sheet` draws one with the camera
+(problems in `x-kairos-checks`), the film page's Sheets tab shows them (`hasSheets`), and Claude uses
+`kairos_sheet`. **The voice leads:** `blocky/voice.js` reads the film's voices while it loads
 (`kairos.json` clips, `voice/script.json`, `voice/lines.json`), and `blocky/timing.js` (`planShots`) starts each
 spoken shot just before its line (a shot names it with `line`, the script line's `id`, or has the same words).
 Captions show the voice's real words, and the speaker's mouth moves on them. The story's length goes to

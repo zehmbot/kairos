@@ -24,6 +24,7 @@ beforeAll(async () => {
   );
   await writeFile(join(dir, "film.js"), "window.renderOut = () => {};");
   await writeFile(join(dir, "assets", "page.html"), "<html><head></head></html>");
+  await writeFile(join(dir, "sheet.html"), "<html><head></head></html>");
   await writeFile(join(dir, ".kairos", "notes.json"), "[]");
   await writeFile(join(filmsDir, "secret.txt"), "secret");
 
@@ -63,6 +64,10 @@ describe("film server", () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers["content-type"]).toContain("text/html");
     expect(response.body).toContain(`<script src="${BRIDGE_PATH}"`);
+  });
+
+  it("adds the bridge to the film's other top-level pages (a template's sheets)", async () => {
+    expect((await get("/my-intro/sheet.html")).body).toContain(BRIDGE_PATH);
   });
 
   it("serves the page for the bare film folder too", async () => {

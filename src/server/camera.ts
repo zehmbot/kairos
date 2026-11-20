@@ -173,8 +173,13 @@ export class Camera {
     return (await this.captureFrame(request)).png;
   }
 
-  /** A picture, and how long the film says its story lasts (`window.KAIROS_LENGTH`, null when it doesn't say). */
-  captureFrame(request: CaptureRequest): Promise<{ png: Buffer; length: number | null }> {
+  /**
+   * A picture, how long the film says its story lasts (`window.KAIROS_LENGTH`, null when it doesn't say) and the
+   * problems the page found (`window.KAIROS_CHECKS`: a template's sheets).
+   */
+  captureFrame(
+    request: CaptureRequest,
+  ): Promise<{ png: Buffer; length: number | null; checks: string[] | null }> {
     const result = this.#queue.then(() => this.#capture(request));
     this.#queue = result.catch(() => undefined);
     return result;
@@ -208,7 +213,9 @@ export class Camera {
     return this.#running;
   }
 
-  async #capture(request: CaptureRequest): Promise<{ png: Buffer; length: number | null }> {
+  async #capture(
+    request: CaptureRequest,
+  ): Promise<{ png: Buffer; length: number | null; checks: string[] | null }> {
     clearTimeout(this.#idleTimer);
     const browser = await this.#launch();
     const page = await browser.newPage();
@@ -219,9 +226,14 @@ export class Camera {
       );
       const film = await openFilm(page, request.url, request.width, request.height, scale);
       await film.draw(request.t);
-      const length = await page.evaluate(() => {
-        const value = Number((window as { KAIROS_LENGTH?: unknown }).KAIROS_LENGTH);
-        return Number.isFinite(value) && value > 0 ? value : null;
+      const { length, checks } = await page.evaluate(() => {
+        const page = window as { KAIROS_LENGTH?: unknown; KAIROS_CHECKS?: unknown };
+        const value = Number(page.KAIROS_LENGTH);
+        const list = page.KAIROS_CHECKS;
+        return {
+          length: Number.isFinite(value) && value > 0 ? value : null,
+          checks: Array.isArray(list) ? list.slice(0, 200).map(String) : null,
+        };
       });
       // Video clips over the film, as the preview and the render show them (the marks go over them).
       const clips = request.film?.config.video.length
@@ -258,7 +270,7 @@ export class Camera {
           if (layer) document.documentElement.appendChild(layer);
         }, svg);
       }
-      return { png: Buffer.from(await page.screenshot({ type: "png" })), length };
+      return { png: Buffer.from(await page.screenshot({ type: "png" })), length, checks };
     } finally {
       await page.close().catch(() => undefined);
       this.#idleTimer = setTimeout(() => void this.close(), this.#idleMs);

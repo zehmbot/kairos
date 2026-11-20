@@ -150,3 +150,20 @@ describe("Blocky reads the film's voices", () => {
     expect(voiceLinesFrom({}, script, made)).toEqual([]);
   });
 });
+
+describe("Blocky sizes", () => {
+  it("sizes a built object to its real size, at the figure's scale", async () => {
+    const { PROPS } = await import("../../templates/blocky/blocky/props.js");
+    const { fitSize, longestSide, meters, UNITS_PER_METER, sizeWords } = await import(
+      "../../templates/blocky/blocky/sizes.js"
+    );
+    // The mouse is built about 2 units long; it becomes 11 cm of a 1.8 m figure 5.3 units tall.
+    const mouse = PROPS.mouse();
+    expect(longestSide(mouse)).toBeGreaterThan(1.5);
+    fitSize(mouse, 0.11);
+    expect(longestSide(mouse)).toBeCloseTo(meters(0.11), 5);
+    expect(UNITS_PER_METER).toBeCloseTo(5.3 / 1.8, 5);
+    expect(sizeWords(0.11)).toBe("11 cm");
+    expect(sizeWords(2.1)).toBe("2.1 m");
+  });
+});

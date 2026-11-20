@@ -41,6 +41,7 @@ import { Player, type PlayerHandle } from "../components/Player.tsx";
 import { ReferencesPanel } from "../components/ReferencesPanel.tsx";
 import { RenderDialog } from "../components/RenderDialog.tsx";
 import { SaveTemplateDialog } from "../components/SaveTemplateDialog.tsx";
+import { SheetsPanel } from "../components/SheetsPanel.tsx";
 import { SideTabs } from "../components/SideTabs.tsx";
 import { SoundPanel } from "../components/SoundPanel.tsx";
 import { Timeline } from "../components/Timeline.tsx";
@@ -55,7 +56,7 @@ import { filmRender, jobStatus } from "../renderText.ts";
 import { useNow } from "../useNow.ts";
 import { useVoiceSummary } from "../voiceSummary.ts";
 
-const SIDE_TABS: readonly SideTab[] = ["notes", "sound", "voice", "references", "brief"];
+const SIDE_TABS: readonly SideTab[] = ["notes", "sound", "voice", "references", "brief", "sheets"];
 const NO_TRACKS: readonly AudioTrack[] = [];
 
 /** The side tab shown for a film, remembered per film in this browser. */
@@ -371,6 +372,7 @@ export function FilmPage() {
       : { id: "voice" as const, label: "Voice", count: voiceSummary.lines.length },
     { id: "references" as const, label: "References", count: references.data?.length ?? 0 },
     ...(film.data.hasBrief ? [{ id: "brief" as const, label: "Brief" }] : []),
+    ...(film.data.hasSheets ? [{ id: "sheets" as const, label: "Sheets" }] : []),
   ];
   const shownTab = tabs.some((entry) => entry.id === tab) ? tab : "notes";
 
@@ -565,6 +567,9 @@ export function FilmPage() {
                 )}
                 {shownTab === "references" && <ReferencesPanel filmId={film.data.id} />}
                 {shownTab === "brief" && film.data.hasBrief && <BriefPanel filmId={film.data.id} />}
+                {shownTab === "sheets" && film.data.hasSheets && (
+                  <SheetsPanel filmId={film.data.id} />
+                )}
               </SideTabs>
             </div>
           )}

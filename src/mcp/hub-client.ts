@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { STORY_LENGTH_HEADER } from "../shared/film-protocol.ts";
+import { CHECKS_HEADER, STORY_LENGTH_HEADER } from "../shared/film-protocol.ts";
 import {
   ApiErrorSchema,
   type Asset,
@@ -91,6 +91,12 @@ export interface Hub {
   noteImage(id: string, note: Note): Promise<Buffer>;
   updateNote(id: string, noteId: string, status: NoteStatus): Promise<Note>;
   /** A fresh PNG of the frame at `t` seconds. */
+  /** A sheet of a Blocky film (cast, poses, faces, props, places) and the problems its checks found. */
+  sheet(
+    id: string,
+    name: string,
+    options?: { place?: string; who?: string },
+  ): Promise<{ png: Buffer; checks: string[] }>;
   /** A frame, and how long the film says its story lasts (null when it doesn't say). */
   frame(id: string, t: number): Promise<{ png: Buffer; length: number | null }>;
   changeFilm(id: string, change: FilmChange): Promise<FilmSummary>;
@@ -189,6 +195,21 @@ export class HubClient implements Hub {
       `/api/films/${encodeURIComponent(id)}/notes/${encodeURIComponent(noteId)}`,
       this.#send("PATCH", { status }),
     );
+  }
+
+  async sheet(id: string, name: string, options: { place?: string; who?: string } = {}) {
+    const query = new URLSearchParams({ name });
+    if (options.place) query.set("place", options.place);
+    if (options.who) query.set("who", options.who);
+    const response = await this.#fetch(`/api/films/${encodeURIComponent(id)}/sheet?${query}`);
+    let checks: string[] = [];
+    try {
+      const header = response.headers.get(CHECKS_HEADER);
+      checks = header ? z.array(z.string()).parse(JSON.parse(decodeURIComponent(header))) : [];
+    } catch {
+      checks = [];
+    }
+    return { png: Buffer.from(await response.arrayBuffer()), checks };
   }
 
   async frame(id: string, t: number) {

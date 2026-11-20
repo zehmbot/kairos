@@ -117,6 +117,18 @@ describe("sounds", () => {
   });
 });
 
+describe("sheets", () => {
+  it("knows which films have sheets (the Blocky template's sheet.html)", async () => {
+    expect((await film()).hasSheets).toBe(false);
+    const made = await app.inject({
+      method: "POST",
+      url: "/api/films",
+      payload: { title: "Toy", shape: "wide", template: "blocky", brief: { story: "A test." } },
+    });
+    expect(made.json().hasSheets).toBe(true);
+  });
+});
+
 describe("video clips", () => {
   it("puts an uploaded video or picture on the timeline, written short", async () => {
     const video = await upload("/api/films/intro/clips?name=Intro%20Clip.mp4&start=1.5");

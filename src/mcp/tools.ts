@@ -544,6 +544,54 @@ export function createKairosServer(context: ToolContext): McpServer {
   );
 
   server.registerTool(
+    "kairos_sheet",
+    {
+      title: "Look at a Blocky sheet",
+      description:
+        "For films made with the Blocky template: a picture of every character (cast: front, three-quarter, side, back), every pose, every face, every prop at its real size (props), or a place from four angles in day, evening and night (places), drawn with this film's own engine. It also lists the problems its checks found: a prop without a real size in blocky/sizes.js or at the wrong size, a pose that pushes a joint past its limit or pulls a part off the body, a door, table or seat at the wrong size. Look at the props sheet after adding a prop, the cast sheet after adding a character, the poses sheet after adding a pose.",
+      inputSchema: {
+        film: filmArg,
+        sheet: z.enum(["cast", "poses", "faces", "props", "places"]),
+        place: z
+          .enum(["home", "bedroom", "school", "town", "park", "forest"])
+          .optional()
+          .describe("For the places sheet (default home)."),
+        who: z
+          .string()
+          .optional()
+          .describe("For the poses and faces sheets: a character's id (default the first one)."),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    safely(
+      async ({
+        film,
+        sheet,
+        place,
+        who,
+      }: {
+        film?: string;
+        sheet: string;
+        place?: string;
+        who?: string;
+      }) => {
+        const id = await filmId(film);
+        const summary = await hub.film(id);
+        if (!summary.hasSheets) {
+          return problem(
+            `"${id}" has no sheets: they come with the Blocky template (its sheet.html and blocky/ folder).`,
+          );
+        }
+        const { png, checks } = await hub.sheet(id, sheet, { place, who });
+        const found = checks.length
+          ? `Problems found:\n${checks.map((check) => `- ${check}`).join("\n")}`
+          : "No problems found.";
+        return { content: [text(`The ${sheet} sheet of "${id}". ${found}`), image(png)] };
+      },
+    ),
+  );
+
+  server.registerTool(
     "kairos_references",
     {
       title: "Look at the film's references",

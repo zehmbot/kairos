@@ -257,6 +257,57 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
     60_000,
   );
 
+  it("draws Blocky sheets and their checks catch sizes and joints", async () => {
+    const blocky = fileURLToPath(new URL("../../templates/blocky/", import.meta.url));
+    const id = await createFilm(
+      filmsDir,
+      blocky,
+      { title: "Sheets", shape: "wide" },
+      { size: { width: 640, height: 360 } },
+    );
+    const dir = join(filmsDir, id);
+    const sheet = (name: string) =>
+      camera.captureFrame({
+        url: `http://127.0.0.1:${port}/${id}/sheet.html?sheet=${name}`,
+        width: 1920,
+        height: 1080,
+        t: 0,
+        maxSide: 960,
+      });
+    // The template's own sheets have no problems.
+    for (const name of ["cast", "poses", "props", "places"]) {
+      const { png, checks } = await sheet(name);
+      expect(png.readUInt32BE(16)).toBe(960);
+      expect({ name, checks }).toEqual({ name, checks: [] });
+    }
+
+    // A prop without a real size, and a pose that bends an elbow past its limit, are caught.
+    const props = join(dir, "blocky", "props.js");
+    const propsCode = await readFile(props, "utf8");
+    await writeFile(
+      props,
+      propsCode.replace(
+        "export const PROPS = {",
+        'export const PROPS = {\n  rock: () => block(4, 4, 4, "#888888"),',
+      ),
+    );
+    const poses = join(dir, "blocky", "poses.js");
+    const posesCode = await readFile(poses, "utf8");
+    await writeFile(
+      poses,
+      posesCode.replace(
+        "export const POSES = {",
+        "export const POSES = {\n  bend: (u, p) => ({ ...base(u, p), elbowR: 3.1 }),",
+      ),
+    );
+    expect((await sheet("props")).checks).toEqual([
+      expect.stringContaining("rock has no real size in sizes.js"),
+    ]);
+    expect((await sheet("poses")).checks).toEqual([
+      expect.stringContaining("bend: elbowR asks 3.10, past the joint's limit (0 to 2.6)"),
+    ]);
+  }, 180_000);
+
   it("explains when the film can't be drawn", async () => {
     await expect(
       camera.capture({

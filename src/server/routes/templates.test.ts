@@ -27,7 +27,7 @@ const camera: Pick<Camera, "browser" | "capture" | "captureFrame"> = {
   },
   captureFrame: async () => {
     captures++;
-    return { png: PNG, length: null };
+    return { png: PNG, length: null, checks: null };
   },
 };
 

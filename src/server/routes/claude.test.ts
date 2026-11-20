@@ -60,7 +60,7 @@ const camera: Pick<Camera, "browser" | "capture" | "captureFrame"> = {
   },
   captureFrame: async () => {
     if (captureError) throw new Error(captureError);
-    return { png: PNG, length: storyLength };
+    return { png: PNG, length: storyLength, checks: null };
   },
 };
 
@@ -143,6 +143,12 @@ describe("frame route", () => {
     const timed = await app.inject("/api/films/intro/frame?t=2.5");
     expect(timed.headers["x-kairos-story-length"]).toBe("6.425");
     storyLength = null;
+  });
+
+  it("draws sheets only for films that have them", async () => {
+    const none = await app.inject("/api/films/intro/sheet?name=props");
+    expect(none.statusCode).toBe(404);
+    expect(none.json().message).toContain("Blocky template");
   });
 
   it("checks the time", async () => {

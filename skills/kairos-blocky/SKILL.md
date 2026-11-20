@@ -102,6 +102,7 @@ few words at a time. The film's `CLAUDE.md` has the `story.js` reference. This s
   - kids at size 0.75-0.9, adults at 1.
 
   Write the user's description into the look (a red cap becomes `hat: "cap", hatColor: "#d83a3a"`).
+  Then look at the cast sheet (`kairos_sheet` with `cast`): each new character from four sides.
 - **Two or three people per shot** read best in a vertical frame. Use a wide shot for crowds.
 - **Never copy a game's or brand's characters, avatars, logos or names**, or another creator's recurring
   character. Blocky is its own world.
@@ -113,6 +114,18 @@ few words at a time. The film's `CLAUDE.md` has the `story.js` reference. This s
 - For dialogue inside narration, keep the quotes in the words: `say: '"Made you look!"'`.
 - **Style:** the default `words` style fits narrated stories. `lines` (two lines, key words colored) suits slower,
   calmer stories.
+
+## Sizes and sheets
+
+- **Real sizes:** a Blocky figure is 1.8 m tall and everything around it is at its real size: a phone 15 cm, a
+  battery 5 cm, a mouse 11 cm, a door 2.1 m, a desk 75 cm. A new prop needs its real size in `blocky/sizes.js`
+  (`SIZES`: its longest side in meters); the engine sizes it from that. Never make an object bigger to be seen:
+  show it with an `insert` shot instead.
+- **Jointed figures:** poses can bend elbows, wrists, knees and ankles, turn at the waist and move the head on its
+  neck. A new pose in `poses.js` uses those keys; every joint stops at its limit.
+- **Sheets:** `kairos_sheet` draws every character (`cast`), pose (`poses`), face (`faces`), prop at real size
+  (`props`) or a place from four angles in each light (`places`), and lists the problems its checks found. Look at
+  the matching sheet after adding a prop, a character, a pose or changing a place, and fix every problem.
 
 ## Check your work
 

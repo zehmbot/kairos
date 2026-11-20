@@ -50,3 +50,6 @@ export type PlayerMessage =
 
 /** The frame route's answer header: how long the film says its story lasts (`window.KAIROS_LENGTH`). */
 export const STORY_LENGTH_HEADER = "x-kairos-story-length";
+
+/** The sheet route's answer header: the problems the sheet's checks found (JSON, URI-encoded). */
+export const CHECKS_HEADER = "x-kairos-checks";

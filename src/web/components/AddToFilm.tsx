@@ -17,7 +17,7 @@ import { AssetPicker } from "./AssetPicker.tsx";
 import { PixelButton } from "./PixelButton.tsx";
 import { PixelIcon } from "./PixelIcon.tsx";
 
-export type SideTab = "notes" | "sound" | "voice" | "references" | "brief";
+export type SideTab = "notes" | "sound" | "voice" | "references" | "brief" | "sheets";
 
 const KIND_LABEL: Record<MediaKind, [string, string]> = {
   sound: ["sound", "sounds"],

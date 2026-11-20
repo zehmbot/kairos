@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { STORY_LENGTH_HEADER } from "../../shared/film-protocol.ts";
+import { CHECKS_HEADER, STORY_LENGTH_HEADER } from "../../shared/film-protocol.ts";
 import type { Camera } from "../camera.ts";
-import { type Film, readFilm } from "../films.ts";
+import { type Film, readFilm, SHEET_PAGE } from "../films.ts";
 import type { Studio } from "../studio.ts";
 import { filmThumbnail, thumbnailTime } from "../thumbnails.ts";
 import { sendError } from "./errors.ts";
@@ -109,4 +109,51 @@ export function frameRoutes(app: FastifyInstance, options: FrameRoutesOptions): 
       return sendError(reply, 422, "frame-failed", (error as Error).message);
     }
   });
+
+  // A sheet of a film that has them (Blocky): every character, pose, face, prop or place on one picture, and the
+  // problems its checks found (sizes, joints) in the `x-kairos-checks` header (JSON, URI-encoded).
+  app.get<{ Params: { id: string }; Querystring: { name?: string; place?: string; who?: string } }>(
+    "/api/films/:id/sheet",
+    async (request, reply) => {
+      const dir = studio.filmsDir;
+      if (!dir) return sendError(reply, 409, "no-workspace", "Choose a workspace folder first.");
+      const film = await readFilm(dir, request.params.id);
+      if (!film) return sendError(reply, 404, "not-found", "This film doesn't exist (any more).");
+      if (!film.hasSheets) {
+        return sendError(
+          reply,
+          404,
+          "no-sheets",
+          "This film has no sheets (they come with the Blocky template).",
+        );
+      }
+      if (!camera.browser) {
+        return sendError(
+          reply,
+          409,
+          "no-camera",
+          "Kairos could not find Chrome or Edge to take pictures.",
+        );
+      }
+      const query = new URLSearchParams({ sheet: request.query.name ?? "cast" });
+      if (request.query.place) query.set("place", request.query.place);
+      if (request.query.who) query.set("who", request.query.who);
+      try {
+        const { png, checks } = await camera.captureFrame({
+          url: `${options.filmServerUrl}/${encodeURIComponent(film.id)}/${SHEET_PAGE}?${query}`,
+          width: 1920,
+          height: 1080,
+          t: 0,
+          maxSide: 1920,
+        });
+        return reply
+          .type("image/png")
+          .header("cache-control", "no-store")
+          .header(CHECKS_HEADER, encodeURIComponent(JSON.stringify(checks ?? [])))
+          .send(png);
+      } catch (error) {
+        return sendError(reply, 422, "frame-failed", (error as Error).message);
+      }
+    },
+  );
 }

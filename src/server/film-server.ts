@@ -103,7 +103,8 @@ export async function buildFilmServer(options: FilmServerOptions): Promise<Fasti
     const file = resolveInside(dir, request.params["*"] || page);
     if (!file) return notFound(reply);
 
-    if (file === resolveInside(dir, page)) {
+    // The film page, and other pages at the film's top level (a template's sheets), get the bridge.
+    if (file === resolveInside(dir, page) || (/\.html?$/i.test(file) && dirname(file) === dir)) {
       const html = await readFile(file, "utf8").catch(() => null);
       if (html === null) return notFound(reply);
       return reply.type("text/html; charset=utf-8").send(injectBridge(html, options.parentOrigins));

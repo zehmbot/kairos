@@ -647,6 +647,8 @@ export const FilmSummarySchema = z.object({
   updatedAt: z.number(),
   /** The film was made with a brief (`brief.md` + `.kairos/brief.json`). */
   hasBrief: z.boolean(),
+  /** The film has sheets (Blocky): its characters, poses, faces, props and places on pictures. */
+  hasSheets: z.boolean().default(false),
 });
 export type FilmSummary = z.infer<typeof FilmSummarySchema>;
 

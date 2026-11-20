@@ -44,6 +44,7 @@ const film = (id: string, extra: Partial<FilmSummary> = {}): FilmSummary => ({
   previewPath: `/${id}/index.html`,
   updatedAt: 0,
   hasBrief: false,
+  hasSheets: false,
   ...extra,
 });
 
@@ -109,6 +110,13 @@ class FakeHub implements Hub {
     if (!found) throw new HubError("This note doesn't exist (any more).", 404);
     found.status = status;
     return found;
+  }
+  sheetChecks: string[] = [];
+  sheetsAsked: { id: string; name: string; place?: string }[] = [];
+  async sheet(id: string, name: string, options: { place?: string } = {}) {
+    await this.film(id);
+    this.sheetsAsked.push({ id, name, place: options.place });
+    return { png: PNG, checks: this.sheetChecks };
   }
   storyLength: number | null = null;
   async frame() {
@@ -383,6 +391,7 @@ describe("Kairos tools", () => {
       "kairos_renders",
       "kairos_say",
       "kairos_script",
+      "kairos_sheet",
       "kairos_status",
       "kairos_use_asset",
       "kairos_voices",
@@ -436,6 +445,25 @@ describe("Kairos tools", () => {
 
     const tooMany = await call("kairos_notes", { limit: MAX_NOTES + 1 });
     expect(tooMany.isError).toBe(true);
+  });
+
+  it("shows a Blocky sheet and the problems its checks found", async () => {
+    const hub = new FakeHub();
+    await connect(hub);
+    // A film without sheets says where they come from.
+    const none = await call("kairos_sheet", { sheet: "props" });
+    expect(none.isError).toBe(true);
+    expect(texts(none)).toContain("they come with the Blocky template");
+
+    hub.films_ = hub.films_.map((entry) => ({ ...entry, hasSheets: true }));
+    hub.sheetChecks = [
+      "rock has no real size in sizes.js: it shows at the size it was built (74 cm).",
+    ];
+    const shown = await call("kairos_sheet", { sheet: "places", place: "town" });
+    expect(texts(shown)).toContain('The places sheet of "intro". Problems found:');
+    expect(texts(shown)).toContain("- rock has no real size in sizes.js");
+    expect(images(shown)).toHaveLength(1);
+    expect(hub.sheetsAsked.at(-1)).toEqual({ id: "intro", name: "places", place: "town" });
   });
 
   it("shows a frame, or the film's error", async () => {

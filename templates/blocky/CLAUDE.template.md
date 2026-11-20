@@ -108,7 +108,8 @@ export const SHOTS = [
 - **Faces:** neutral, happy, grin, laugh, sad, crying, shocked, scared, angry, furious (red face), smug, sleepy,
   dizzy, love, embarrassed, thinking, suspicious. Eyes blink by themselves.
 - **Icons:** music, heart, ?, !, zzz, sparkle, sweat, anger, idea.
-- **Props:** letter, phone, cake, gift, book, ball, key, cup, photo, trophy, megaphone.
+- **Props:** letter, phone, cake, gift, book, ball, key, cup, photo, trophy, megaphone, battery, mouse. Each
+  shows at its real size (`blocky/sizes.js`): a battery is 5 cm, a mouse 11 cm, in a hand or on a table.
 - **SETTINGS:**
   - `captions: { style, highlight, key, position, size }`:
     - `style`: "words" (2-3 words, the spoken one in yellow), "lines" (two lines, key words in color) or "none";
@@ -140,7 +141,23 @@ export const SHOTS = [
 - **the camera:** `shots.js`;
 - **captions and extras:** `captions.js`, `overlays.js`;
 - **the look:** `effects.js`;
-- **the timeline:** `engine.js`, with `timing.js` (shots follow the voices) and `voice.js` (reads them).
+- **the timeline:** `engine.js`, with `timing.js` (shots follow the voices) and `voice.js` (reads them);
+- **sizes:** `sizes.js` (an adult figure is 1.8 m; every prop's real size; seats at the figures' knee height);
+- **sheets:** `sheet.js` and `../sheet.html` (every character, pose, face, prop and place on one picture, with
+  checks).
+
+**Real sizes.** Every object is as big as it is in life, next to figures 1.8 m tall. A new prop in `props.js` needs
+its real size in `SIZES` (its longest side, in meters): the engine sizes it from that. Places follow the same
+scale (a door is 2.1 m, a desk 75 cm); seats sit at the figures' knee height so their feet reach the floor.
+
+**The figures are jointed toys:** a head on a neck, a chest on the hips (the waist), arms with shoulders, elbows
+and wrists, legs with hips, knees and ankles. Pose keys: `armL/armR` ([forward, out]), `elbowL/R`, `wristL/R`,
+`legL/legR`, `kneeL/R`, `ankleL/R`, `lean`, `twist`, `tilt`, `headX/Y/Z`, `bodyY`, `bodyX`. Each joint stops at its
+limit (`JOINTS` in `characters.js`); an elbow or a knee bends one way only.
+
+**Sheets: check your work there.** `kairos_sheet` shows a sheet and the problems its checks found: `props` after
+adding a prop (is it the right size?), `cast` after adding or changing a character, `poses` after adding a pose
+(every part attached, no joint past its limit), `places` after changing a place. Fix every problem it lists.
 
 Change it only when the story needs something it doesn't have (a new place, a pose, a prop). Keep
 `renderOut(t)` a pure function of `t`: no timers, clocks or unseeded random numbers. Our characters and world
