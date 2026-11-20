@@ -338,6 +338,7 @@ export async function saveAsTemplate(
         fps: film.config.fps,
         duration: film.config.duration,
         ...(shape ? {} : { size: { width: film.config.width, height: film.config.height } }),
+        ...(film.config.narration ? { narration: film.config.narration } : {}),
       },
       kinds: brief
         ? [{ id: brief.kind, name: brief.kindName, description: "", fields: brief.fields }]

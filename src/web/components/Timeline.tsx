@@ -30,6 +30,7 @@ import {
   trimStart,
   withLanes,
 } from "../timeline.ts";
+import { EffectsMenu } from "./EffectsMenu.tsx";
 import { PixelButton } from "./PixelButton.tsx";
 
 const RULER_H = 24;
@@ -122,6 +123,8 @@ export interface TimelineProps {
   selectFile?: { file: string; n: number } | null;
   /** Files whose clips are out of date (a voice made before its words or voice changed). */
   stale?: ReadonlySet<string>;
+  /** Adds one of Kairos' sound effects at a time (the Effects lane). */
+  onAddEffect?: (sound: string, start: number) => void;
 }
 
 type Drag =
@@ -165,6 +168,7 @@ export function Timeline({
   onClipClick,
   selectFile,
   stale,
+  onAddEffect,
 }: TimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -468,6 +472,15 @@ export function Timeline({
     const inLane = sounds.filter((track) => track.lane === lane);
     return inLane.length > 0 && inLane.every((track) => track.file.startsWith("voice/"));
   };
+  /** The Effects lane: sound effects only. */
+  const isEffectsLane = (lane: number) => {
+    const inLane = sounds.filter((track) => track.lane === lane);
+    return inLane.length > 0 && inLane.every((track) => track.sfx);
+  };
+  const laneKind = (lane: number) =>
+    isVoiceLane(lane) ? " lane-voice" : isEffectsLane(lane) ? " lane-fx" : "";
+  const laneName = (lane: number) =>
+    isVoiceLane(lane) ? "Voice" : isEffectsLane(lane) ? "Effects" : `Sound ${lane + 1}`;
   const laneMuted = (lane: number) => {
     const inLane = sounds.filter((track) => track.lane === lane);
     return inLane.length > 0 && inLane.every((track) => track.muted);
@@ -478,6 +491,7 @@ export function Timeline({
       <div className="timeline-bar">
         <span className="timeline-title">Timeline</span>
         <div className="timeline-tools">
+          {onAddEffect && <EffectsMenu onPick={(sound) => onAddEffect(sound, time)} />}
           <PixelButton
             variant="ghost"
             data-size="small"
@@ -546,10 +560,10 @@ export function Timeline({
           {laneIds.map((lane) => (
             <div
               key={lane}
-              className={`timeline-head lane-c${lane % 4}${isVoiceLane(lane) ? " lane-voice" : ""}`}
+              className={`timeline-head lane-c${lane % 4}${laneKind(lane)}`}
               style={{ height: LANE_H }}
             >
-              <span>{isVoiceLane(lane) ? "Voice" : `Sound ${lane + 1}`}</span>
+              <span>{laneName(lane)}</span>
               <button
                 type="button"
                 className="timeline-mute"
@@ -685,7 +699,7 @@ export function Timeline({
               {laneIds.map((lane) => (
                 <div
                   key={lane}
-                  className={`timeline-lane timeline-sound lane-c${lane % 4}${isVoiceLane(lane) ? " lane-voice" : ""}`}
+                  className={`timeline-lane timeline-sound lane-c${lane % 4}${laneKind(lane)}`}
                   data-muted={laneMuted(lane) ? "true" : undefined}
                   style={{ height: LANE_H }}
                   onPointerDown={startScrub}

@@ -2915,3 +2915,65 @@ video.asset-media {
 .film-card-working {
   color: var(--primary);
 }
+
+/* ---------- Sound effects: the Effects lane and its menu ---------- */
+
+.lane-fx {
+  --lane: var(--track-fx);
+}
+
+.effects-menu {
+  position: relative;
+}
+
+.effects-menu-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 2px;
+  min-width: 200px;
+  max-height: 320px;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+  background: var(--surface);
+}
+
+.effects-menu-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.effects-menu-pick {
+  flex: 1;
+  padding: 4px 6px;
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.effects-menu-pick:hover,
+.effects-menu-pick:focus-visible {
+  color: var(--bg);
+  background: var(--accent);
+}
+
+/* ---------- Music under the voice ---------- */
+
+.music-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.sound-music {
+  font-size: 14px;
+}

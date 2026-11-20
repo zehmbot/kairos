@@ -45,18 +45,33 @@ export const AudioTrackSchema = z.object({
   lane: z.number().int().min(0).max(31).optional(),
   /** Muted tracks stay in the film but make no sound (preview and video). */
   muted: z.boolean().default(false),
+  /** A sound effect: it sits on the timeline's Effects lane. */
+  sfx: z.boolean().optional(),
+  /** The effect the film placed it for (its key); left out for one you added. */
+  key: z.string().max(120).optional(),
+  /** You moved this effect: it keeps its place when the story changes. */
+  moved: z.boolean().optional(),
+  /** Plays again and again until the film ends (music). */
+  loop: z.boolean().optional(),
+  /** Gets quieter while voices talk (music under the narration). */
+  duck: z.boolean().optional(),
 });
 export type AudioTrack = z.infer<typeof AudioTrackSchema>;
 
 /** A track as written in kairos.json: the defaults (`from: 0`, `muted: false`) are left out. */
 export function compactTrack(track: AudioTrack): z.input<typeof AudioTrackSchema> {
-  const { from, muted, length, lane, ...rest } = track;
+  const { from, muted, length, lane, sfx, key, moved, loop, duck, ...rest } = track;
   return {
     ...rest,
     ...(from > 0 ? { from } : {}),
     ...(length !== undefined ? { length } : {}),
     ...(lane !== undefined ? { lane } : {}),
     ...(muted ? { muted } : {}),
+    ...(sfx ? { sfx } : {}),
+    ...(key !== undefined ? { key } : {}),
+    ...(moved ? { moved } : {}),
+    ...(loop ? { loop } : {}),
+    ...(duck ? { duck } : {}),
   };
 }
 
@@ -449,6 +464,13 @@ export const FilmConfigSchema = z.object({
   video: z.array(VideoClipSchema).max(200).default([]),
   /** Who speaks in the film and with which fish.audio voice. */
   voices: FilmVoicesSchema.optional(),
+  /**
+   * How the voice lines sit on the timeline: "timed" (each at its own start, the default) or "packed" (back to
+   * back, trimmed to their words, so the narration never stops).
+   */
+  narration: z.enum(["timed", "packed"]).optional(),
+  /** Effect sounds the film placed and you deleted: they don't come back (their keys). */
+  sfxRemoved: z.array(z.string().max(120)).max(2000).optional(),
 });
 export type FilmConfig = z.infer<typeof FilmConfigSchema>;
 
@@ -523,6 +545,8 @@ export const TemplateDefaultsSchema = z.object({
   shape: FilmShapeSchema.default("wide"),
   fps: FpsSchema.default(DEFAULT_FPS),
   duration: z.number().positive().default(5),
+  /** "packed": the narration never stops (the voice lines are packed back to back). */
+  narration: z.enum(["timed", "packed"]).optional(),
   size: z
     .object({ width: z.number().int().positive(), height: z.number().int().positive() })
     .optional(),
@@ -631,6 +655,8 @@ export const NewFilmSchema = z.object({
   language: z.string().max(10).optional(),
   /** Claude makes the film from its brief right away, in the background. */
   make: z.boolean().default(false),
+  /** Music from the asset library (its id), under the voice: it loops and gets quieter while voices talk. */
+  music: z.string().max(400).optional(),
 });
 /** What the client sends (`fps`, `template` and `brief` may be left out). */
 export type NewFilm = z.input<typeof NewFilmSchema>;

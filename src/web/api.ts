@@ -1,6 +1,6 @@
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { CHECKS_HEADER } from "../shared/film-protocol.ts";
+import { CHECKS_HEADER, type FilmSound } from "../shared/film-protocol.ts";
 import {
   ApiErrorSchema,
   AssetSchema,
@@ -912,6 +912,41 @@ export function usePickVoice() {
   return useMutation({
     mutationFn: (input: { type?: VoiceType; language?: string; avoid?: string[] }) =>
       call(FilmVoiceSchema, "/api/voice/pick", sendJson("POST", input)),
+  });
+}
+
+/** Kairos' own sound effects (for the Effects lane's menu). */
+export function useSounds() {
+  return useQuery({
+    queryKey: ["sounds"],
+    queryFn: () => call(z.array(z.object({ name: z.string(), label: z.string() })), "/api/sounds"),
+    staleTime: Infinity,
+  });
+}
+
+/** The address of one of Kairos' sounds, to listen to it. */
+export const soundUrl = (name: string) => `/api/sounds/${encodeURIComponent(name)}`;
+
+/** Tells Kairos the effect sounds the film places: the Effects lane follows. */
+export function syncFilmSounds(filmId: string, sounds: readonly FilmSound[]) {
+  return call(
+    z.object({ changed: z.boolean() }),
+    `${filmUrl(filmId)}/fx`,
+    sendJson("PUT", { sounds }),
+  );
+}
+
+/** Adds one of Kairos' sounds to the Effects lane. */
+export function useAddEffectSound(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { sound: string; start: number }) =>
+      call(
+        z.object({ audio: z.array(z.unknown()) }),
+        `${filmUrl(filmId)}/fx`,
+        sendJson("POST", input),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.film(filmId) }),
   });
 }
 

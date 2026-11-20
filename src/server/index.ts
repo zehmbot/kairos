@@ -15,6 +15,7 @@ import { kairosHome } from "./config.ts";
 import { probeExport } from "./ffmpeg.ts";
 import { buildFilmServer } from "./film-server.ts";
 import { scanFilms } from "./films.ts";
+import { FilmSoundsSchema, syncEffectSounds } from "./fx.ts";
 import { Renderer } from "./renderer.ts";
 import { assetRoutes } from "./routes/assets.ts";
 import { claudeRoutes } from "./routes/claude.ts";
@@ -146,6 +147,10 @@ const renderer = new Renderer({
   browser: camera.browser,
   filmServerUrl,
   exportInfo: () => exportInfo,
+  syncSounds: async (dir, sounds) => {
+    const parsed = FilmSoundsSchema.safeParse(sounds);
+    if (parsed.success) await syncEffectSounds(dir, parsed.data);
+  },
 });
 renderRoutes(app, { studio, renderer, exportInfo: () => exportInfo });
 assetRoutes(app, studio);

@@ -114,9 +114,12 @@ export function SoundPanel({ filmId, tracks, duration, fileUrl, now, focus }: So
                 const key = `${track.file}#${seen[track.file]}`;
                 const length = durations[fileUrl(track.file)];
                 const left = Math.min(100, (track.start / duration) * 100);
-                const width = length
-                  ? Math.max(1, Math.min(100 - left, (length / duration) * 100))
-                  : 0;
+                // Music that loops plays to the end of the film.
+                const width = track.loop
+                  ? 100 - left
+                  : length
+                    ? Math.max(1, Math.min(100 - left, (length / duration) * 100))
+                    : 0;
                 const startId = `${baseId}-start-${index}`;
                 const volumeId = `${baseId}-volume-${index}`;
                 return (
@@ -170,6 +173,25 @@ export function SoundPanel({ filmId, tracks, duration, fileUrl, now, focus }: So
                         }
                       />
                     </div>
+                    {!track.file.startsWith("voice/") && !track.sfx && (
+                      <label className="check-row sound-music">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(track.loop && track.duck)}
+                          onChange={(event) =>
+                            commit(
+                              change(index, {
+                                loop: event.target.checked || undefined,
+                                duck: event.target.checked || undefined,
+                              }),
+                            )
+                          }
+                        />
+                        <span>
+                          Music under the voice: it loops, and gets quieter while voices talk
+                        </span>
+                      </label>
+                    )}
                     <div className="sound-controls">
                       <label htmlFor={volumeId} className="field-label">
                         Volume

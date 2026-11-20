@@ -144,6 +144,10 @@ export interface SoundTrack {
   from?: number;
   /** How long it plays, in seconds (default: to the end of the file). */
   length?: number;
+  /** Plays again and again until the film ends (music). */
+  loop?: boolean;
+  /** Quieter while voices talk: a `volume` expression of the film's time (src/shared/duck.ts). */
+  duck?: string;
 }
 
 /**
@@ -154,8 +158,9 @@ export function mixFilter(tracks: readonly SoundTrack[]): string {
   const parts = tracks.map((track, i) => {
     const delay = Math.round(track.start * 1000);
     // A trimmed track: cut the file first, then start its clock at 0 again.
+    // A looping track loops its whole file.
     const trim =
-      (track.from ?? 0) > 0 || track.length !== undefined
+      !track.loop && ((track.from ?? 0) > 0 || track.length !== undefined)
         ? [
             `atrim=start=${track.from ?? 0}${track.length !== undefined ? `:duration=${track.length}` : ""}`,
             "asetpts=PTS-STARTPTS",
@@ -166,6 +171,8 @@ export function mixFilter(tracks: readonly SoundTrack[]): string {
       "aresample=48000",
       ...(delay > 0 ? [`adelay=delays=${delay}:all=1`] : []),
       `volume=${track.volume}`,
+      // After the delay, the stream's clock is the film's time.
+      ...(track.duck ? [`volume='${track.duck}':eval=frame`] : []),
     ];
     return `[${i + 1}:a]${steps.join(",")}[a${i}]`;
   });
@@ -304,7 +311,10 @@ export function joinArgs(
   const duration = sound?.duration ?? video?.duration;
   return [
     ...head,
-    ...tracks.flatMap((track) => ["-i", track.path]),
+    // A looping track repeats its file until the film ends (the output stops at the film's length).
+    ...tracks.flatMap((track) =>
+      track.loop ? ["-stream_loop", "-1", "-i", track.path] : ["-i", track.path],
+    ),
     ...(video ? clipInputs(clips, video.encoding.fps) : []),
     "-filter_complex",
     filters.join(";"),

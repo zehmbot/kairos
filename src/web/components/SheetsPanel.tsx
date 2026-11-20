@@ -9,6 +9,7 @@ const SHEETS = [
   ["faces", "Faces"],
   ["props", "Props"],
   ["places", "Places"],
+  ["effects", "Effects"],
 ] as const;
 const PLACES = ["home", "bedroom", "school", "town", "park", "forest"];
 

@@ -198,6 +198,8 @@ export interface CreateOptions {
   briefText?: string;
   /** Voices chosen before the film is made (New film's narrator). */
   voices?: FilmVoices;
+  /** "packed": the voice lines go back to back (the template's narration never stops). */
+  narration?: "timed" | "packed";
 }
 
 /**
@@ -266,6 +268,7 @@ export async function createFilm(
       ...(options.voices && Object.keys(options.voices).length > 0
         ? { voices: options.voices }
         : {}),
+      ...(options.narration === "packed" ? { narration: "packed" as const } : {}),
     };
     await writeFile(join(dir, CONFIG_FILE), `${JSON.stringify(config, null, 2)}\n`, "utf8");
     if (options.brief) {
@@ -298,7 +301,7 @@ export async function changeFilm(
     | FilmChange
     | { audio: AudioTrack[] }
     | { voices: FilmVoices }
-    | { audio: AudioTrack[]; video: VideoClip[] },
+    | { audio: AudioTrack[]; video?: VideoClip[]; sfxRemoved?: string[] },
 ): Promise<FilmConfig> {
   const file = join(filmDir, CONFIG_FILE);
   const text = await readFile(file, "utf8");
@@ -318,7 +321,7 @@ export async function changeFilm(
     ...json,
     ...change,
     ...("audio" in change ? { audio: change.audio.map(compactTrack) } : {}),
-    ...("video" in change ? { video: change.video.map(compactClip) } : {}),
+    ...("video" in change && change.video ? { video: change.video.map(compactClip) } : {}),
   };
   const parsed = FilmConfigSchema.safeParse(next);
   if (!parsed.success) {

@@ -1,7 +1,10 @@
 /**
  * A film's script: what the voices say and when (`voice/script.json`), planned before the voices are made.
  * Making it turns each line into a voice line (reused when nothing changed, so never paid twice) and places it
- * at its time on the voice lane, after the line before when they would overlap.
+ * on the voice lane:
+ * - "timed" films (the default): at its time, after the line before when they would overlap;
+ * - "packed" films (kairos.json `narration`): back to back in script order, each clip trimmed to its words, so the
+ *   narration never stops. The starts in the script only give the order.
  */
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
@@ -31,6 +34,27 @@ export const SCRIPT_FILE = `${VOICE_FOLDER}/script.json`;
 export class ScriptFileError extends Error {}
 
 const round = (t: number) => Math.round(t * 100) / 100;
+const round3 = (t: number) => Math.round(t * 1000) / 1000;
+
+/** Packed narration: silence kept before a line's first word and after its last, and the gaps between lines. */
+export const PACKED = { lead: 0.04, tail: 0.08, gap: 0.12, sentenceGap: 0.28, first: 0.1 };
+
+/** Where a packed line's clip starts in its file and how long it plays: its words, and a breath around them. */
+export function trimToWords(
+  words: readonly Word[],
+  duration: number,
+): { from: number; length: number } {
+  const first = words[0];
+  const last = words.at(-1);
+  if (!first || !last) return { from: 0, length: duration };
+  const from = round3(Math.max(0, first.start - PACKED.lead));
+  const end = Math.min(duration, last.end + PACKED.tail);
+  return { from, length: round3(Math.max(0.05, end - from)) };
+}
+
+/** The pause after a line: longer when it ends a sentence. */
+export const gapAfter = (text: string) =>
+  /[.!?…]["')\]]*\s*$/.test(text.trim()) ? PACKED.sentenceGap : PACKED.gap;
 const newId = () => randomBytes(5).toString("hex");
 
 export async function readScript(filmDir: string): Promise<Script | null> {
@@ -330,31 +354,54 @@ export function makeScript(filmDir: string, options: MakeScriptOptions): Promise
       (track) => !scriptFiles.has(track.file),
     );
     const lane = voiceLane(audio);
-    const placed: MadeScript["placed"] = [];
+    const packed = config?.narration === "packed";
+    const placed: (MadeScript["placed"][number] & { from: number })[] = [];
     let end = 0;
+    let previous: ScriptLine | null = null;
     for (const line of order) {
       const result = spoken.get(line.id);
       if (!result) continue;
       let start = round(line.start);
-      if (start < end - 0.01) {
+      let from = 0;
+      let length = result.duration;
+      if (packed) {
+        // Back to back: trimmed to its words, right after the line before.
+        ({ from, length } = trimToWords(result.words, result.duration));
+        start = previous ? round3(end + gapAfter(previous.text)) : PACKED.first;
+      } else if (start < end - 0.01) {
         const later = round(end + 0.1);
         warnings.push(
           `"${firstWords(line.text)}" starts at ${later} s instead of ${start} s, so it doesn't talk over the line before.`,
         );
         start = later;
       }
-      end = start + result.duration;
+      end = start + length;
+      previous = line;
       placed.push({
         id: line.id,
         speaker: line.speaker,
         file: result.file,
         start,
-        duration: result.duration,
-        words: result.words,
+        duration: length,
+        from,
+        // Words in the clip as it plays (seconds from its start on the film).
+        words: result.words
+          .filter((word) => word.start >= from - 0.01 && word.start < from + length)
+          .map((word) => ({
+            ...word,
+            start: round3(word.start - from),
+            end: round3(Math.min(word.end, from + length) - from),
+          })),
       });
     }
     const tracks = placed.map((at) =>
-      AudioTrackSchema.parse({ file: at.file, start: at.start, lane }),
+      AudioTrackSchema.parse({
+        file: at.file,
+        start: at.start,
+        lane,
+        ...(packed && at.from > 0 ? { from: at.from } : {}),
+        ...(packed ? { length: at.duration } : {}),
+      }),
     );
     if (config) await changeFilm(filmDir, { audio: [...audio, ...tracks] });
     if (config && speak && end > config.duration + 0.05) {

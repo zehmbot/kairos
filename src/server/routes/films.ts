@@ -1,12 +1,14 @@
 import { join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import {
+  AudioTrackSchema,
   BriefUpdateSchema,
   FilmChangeSchema,
   type FilmSummary,
   NewFilmSchema,
   SaveTemplateSchema,
 } from "../../shared/types.ts";
+import { assetFile, copyAssetToFilm } from "../assets.ts";
 import {
   changeFilm,
   createFilm,
@@ -30,6 +32,7 @@ import {
   writeBrief,
 } from "../templates.ts";
 import { deleteFilmForGood, moveToTrash, TrashError } from "../trash.ts";
+import { assetsDirOf } from "../workspace.ts";
 import { sendError } from "./errors.ts";
 
 interface IdParams {
@@ -119,6 +122,7 @@ export function filmRoutes(
     const id = await createFilm(dir, template.dir, input, {
       size: template.defaults.size,
       duration: template.defaults.duration,
+      narration: template.defaults.narration,
       brief,
       briefText: brief ? briefMarkdown(brief, input.title) : undefined,
       // The narrator you chose is the film's before anything is made (Claude keeps it).
@@ -127,6 +131,25 @@ export function filmRoutes(
           ? { narrator: { ...input.narrator, type: input.narrator.type ?? "narrator" } }
           : undefined,
     });
+    // Music from your assets, under the voice, for the whole film.
+    if (input.music && studio.workspace) {
+      const assets = assetsDirOf(studio.workspace);
+      if (assetFile(assets, input.music)?.kind === "sound") {
+        const file = await copyAssetToFilm(assets, input.music, join(dir, id));
+        await changeFilm(join(dir, id), {
+          audio: [
+            AudioTrackSchema.parse({
+              file,
+              start: 0,
+              volume: 0.45,
+              loop: true,
+              duck: true,
+              lane: 0,
+            }),
+          ],
+        });
+      }
+    }
     // The language the voices speak: casting and the script use it.
     if (voiced && input.language && input.language !== "en") {
       await saveScript(join(dir, id), { language: input.language, lines: [] }, "you");

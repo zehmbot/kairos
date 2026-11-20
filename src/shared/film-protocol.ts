@@ -12,6 +12,15 @@ export const FilmSceneSchema = z.object({
 });
 export type FilmScene = z.infer<typeof FilmSceneSchema>;
 
+/** One effect sound a film places: Kairos puts it on the timeline's Effects lane. */
+export const FilmSoundSchema = z.object({
+  key: z.string().min(1).max(120),
+  sound: z.string().min(1).max(40),
+  t: z.number().min(0),
+  volume: z.number().min(0).max(2).optional(),
+});
+export type FilmSound = z.infer<typeof FilmSoundSchema>;
+
 /** Film -> player. */
 export const FilmMessageSchema = z.discriminatedUnion("type", [
   /** The page has loaded and `window.READY` has settled. */
@@ -22,6 +31,8 @@ export const FilmMessageSchema = z.discriminatedUnion("type", [
     scenes: z.array(FilmSceneSchema),
     /** How long the film's story lasts (`window.KAIROS_LENGTH`), when the film says. */
     length: z.number().positive().optional(),
+    /** The effect sounds the film places (`window.KAIROS_SOUNDS`), when it says. */
+    sounds: z.array(FilmSoundSchema).max(2000).optional(),
   }),
   /** Answer to a `seek`: the frame is drawn (or `error` says why not). */
   z.object({

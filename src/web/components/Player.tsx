@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { FilmSound } from "../../shared/film-protocol.ts";
 import type { PreviewTrack } from "../player/audioSync.ts";
 import { formatTimecode, frameAt, sceneAt, timeOf } from "../player/time.ts";
 import { useFilmAudio, useSoundSettings } from "../player/useFilmAudio.ts";
@@ -41,6 +42,8 @@ interface PlayerProps {
   video?: readonly PreviewClip[];
   /** How long the film says its story lasts (null when it doesn't say), each time it loads. */
   onStoryLength?: (length: number | null) => void;
+  /** The effect sounds the film places, each time it loads (null when it doesn't say). */
+  onSounds?: (sounds: FilmSound[] | null) => void;
   ref?: Ref<PlayerHandle>;
 }
 
@@ -96,11 +99,13 @@ export function Player({
   audio = NO_AUDIO,
   timeline,
   onStoryLength,
+  onSounds,
   video = NO_CLIPS,
   ref,
 }: PlayerProps) {
   const player = useFilmPlayer({ src, fps, duration });
   useEffect(() => onStoryLength?.(player.length), [onStoryLength, player.length]);
+  useEffect(() => onSounds?.(player.sounds), [onSounds, player.sounds]);
   const { frame, total, toggle, step, seek, pause, currentFrame } = player;
   const stageRef = useRef<HTMLDivElement>(null);
   const stage = useElementSize(stageRef);

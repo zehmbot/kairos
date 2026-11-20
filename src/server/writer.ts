@@ -99,6 +99,8 @@ export interface FilmFacts {
   width: number;
   height: number;
   fps: number;
+  /** The narration never stops: Kairos packs the lines back to back (kairos.json `narration: "packed"`). */
+  packed?: boolean;
 }
 
 const WHO: Record<z.infer<typeof WriteNarrationSchema>["speakers"], string> = {
@@ -143,11 +145,21 @@ export function writerPrompt(
     "1. Read brief.md if there is one, and the film's code (kairos.json, film.js, story.js...) to learn the",
     "   story, its scenes and shots, and when each moment happens. kairos_status gives the film's facts.",
     "2. Look at the film with kairos_frame: a frame from each scene or shot (at most 12 frames).",
-    "3. Write the lines:",
-    "   - Each line belongs to a moment and starts when it starts (seconds from the start of the film).",
-    "   - A line must end before the next one starts and before the film ends: count about 2.5 words per",
-    "     second plus a short pause. Keep lines short, and leave silent moments where the picture speaks.",
-    "   - Lines never overlap and are in time order.",
+    ...(film.packed
+      ? [
+          "3. Write the lines. The narration NEVER stops: Kairos plays the lines back to back, so the voice talks",
+          "   from the first second to the last, with no silent moments. Tell the whole story, with enough words",
+          "   for the whole film (about 2.6 words per second).",
+          "   - One line is one or two short sentences. Their starts only give the order (0, 1, 2...).",
+          "   - Never leave a moment without words: every shot is under the voice.",
+        ]
+      : [
+          "3. Write the lines:",
+          "   - Each line belongs to a moment and starts when it starts (seconds from the start of the film).",
+          "   - A line must end before the next one starts and before the film ends: count about 2.5 words per",
+          "     second plus a short pause. Keep lines short, and leave silent moments where the picture speaks.",
+          "   - Lines never overlap and are in time order.",
+        ]),
     "   - If the film already shows the words that are said (captions, or `say` in a Blocky story.js), keep",
     "     to them.",
     '   - Speakers: "narrator" for the narrator; characters by a short name in small letters (milo, ruby,',

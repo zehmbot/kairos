@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -180,6 +180,38 @@ describe("the script", () => {
     const again = (await json("POST", "/api/films/intro/script/make")).json();
     expect(again).toMatchObject({ made: 0, reused: 2 });
     expect(await clips()).toHaveLength(2);
+  });
+
+  it("packs the narration back to back in a packed film, trimmed to the words", async () => {
+    await setKey();
+    const configFile = join(filmDir(), "kairos.json");
+    const config = JSON.parse(await readFile(configFile, "utf8"));
+    await writeFile(configFile, JSON.stringify({ ...config, narration: "packed" }));
+    await json("POST", "/api/films/intro/cast", {
+      speakers: [{ speaker: "narrator", type: "narrator" }],
+    });
+    await json("PUT", "/api/films/intro/script", {
+      lines: [
+        { speaker: "narrator", text: "Once upon a time.", start: 0 },
+        { speaker: "narrator", text: "the end", start: 1 },
+        { speaker: "narrator", text: "and then more", start: 5 },
+      ],
+    });
+    await json("POST", "/api/films/intro/script/make");
+    const voice = ((await film()).config?.audio ?? []).map((t) => [t.start, t.from, t.length]);
+    // "Once upon a time." (words 0-2.25 s, kept to 2.3 s), then 0.28 s after a sentence, then 0.12 s.
+    expect(voice[0]).toEqual([0.1, 0, 2.3]);
+    expect(voice[1]?.[0]).toBeCloseTo(0.1 + 2.3 + 0.28, 3);
+    const second = (voice[1]?.[0] ?? 0) + (voice[1]?.[2] ?? 0);
+    expect(voice[2]?.[0]).toBeCloseTo(second + 0.12, 3);
+
+    // Deleting the middle line packs the last one up against the first.
+    const { script } = (await app.inject("/api/films/intro/script")).json() as { script: Script };
+    await json("PUT", "/api/films/intro/script", {
+      lines: script.lines.filter((line) => line.text !== "the end"),
+    });
+    const after = ((await film()).config?.audio ?? []).map((t) => t.start);
+    expect(after).toEqual([0.1, expect.closeTo(0.1 + 2.3 + 0.28, 3)]);
   });
 
   it("takes out the clips and files of lines the script no longer has", async () => {

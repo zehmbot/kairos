@@ -308,6 +308,53 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
     ]);
   }, 180_000);
 
+  it("draws Blocky Story's sheets, effects included, and catches a wrong effect", async () => {
+    const template = fileURLToPath(new URL("../../templates/blocky-story/", import.meta.url));
+    const id = await createFilm(
+      filmsDir,
+      template,
+      { title: "Story sheets", shape: "tall" },
+      { size: { width: 360, height: 640 } },
+    );
+    const dir = join(filmsDir, id);
+    const sheet = (name: string) =>
+      camera.captureFrame({
+        url: `http://127.0.0.1:${port}/${id}/sheet.html?sheet=${name}`,
+        width: 1920,
+        height: 1080,
+        t: 0,
+        maxSide: 960,
+      });
+    for (const name of ["cast", "poses", "props", "places", "effects"]) {
+      const { checks } = await sheet(name);
+      expect({ name, checks }).toEqual({ name, checks: [] });
+    }
+    // The film itself: it times its story and places its effect sounds.
+    const frame = await camera.captureFrame({
+      url: `http://127.0.0.1:${port}/${id}/`,
+      width: 360,
+      height: 640,
+      t: 3,
+    });
+    expect(frame.length).toBeGreaterThan(20);
+
+    const storyFile = join(dir, "story.js");
+    const story = await readFile(storyFile, "utf8");
+    await writeFile(
+      storyFile,
+      story.replace(
+        'fx: [{ punch: true, at: "secret" }],',
+        'fx: [{ sparkle: true }, { punch: true, at: "secrets" }],',
+      ),
+    );
+    expect((await sheet("effects")).checks).toEqual([
+      expect.stringContaining('Shot 2: "sparkle" isn\'t an effect.'),
+      expect.stringContaining(
+        'Shot 2: punch is on "secrets", but the shot doesn\'t say that word.',
+      ),
+    ]);
+  }, 180_000);
+
   it("explains when the film can't be drawn", async () => {
     await expect(
       camera.capture({

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { duckGain } from "../../shared/duck.ts";
 import { elementVolume, needsSeek, type PreviewTrack, trackPosition } from "./audioSync.ts";
 
 const SETTINGS_KEY = "kairos.sound";
@@ -80,7 +81,15 @@ export function useFilmAudio(
       for (const { element, track } of audios) {
         const position = track.muted
           ? null
-          : trackPosition(track.start, t, element.duration, track.from, track.length);
+          : trackPosition(track.start, t, element.duration, track.from, track.length, track.loop);
+        // Music under the narration follows the voices.
+        if (track.duck) {
+          element.volume = elementVolume(
+            track.volume * duckGain(track.duck, t),
+            settings.volume,
+            settings.muted,
+          );
+        }
         if (!playing || position === null) {
           if (!element.paused) element.pause();
           continue;
@@ -89,7 +98,7 @@ export function useFilmAudio(
         if (element.paused) void element.play().catch(() => undefined);
       }
     },
-    [playing, time, audios],
+    [playing, time, audios, settings.volume, settings.muted],
   );
 
   // Start or stop with the player, then check every 50 ms: a track starts at most 50 ms late, which is

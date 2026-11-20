@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { talkSpans, voiceSpans } from "../../shared/duck.ts";
+import type { FilmSound } from "../../shared/film-protocol.ts";
 import { mediaKindOf } from "../../shared/media.ts";
 import type { AudioTrack, Note } from "../../shared/types.ts";
 import {
+  syncFilmSounds,
+  useAddEffectSound,
   useAddNote,
   useAskClaude,
   useChangeFilm,
@@ -10,6 +14,7 @@ import {
   useFilmClaude,
   useFilmWords,
   useHealth,
+  useLines,
   useNotes,
   useOpenClaude,
   useOpenFilmFolder,
@@ -152,6 +157,20 @@ export function FilmPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   // How long the film says its story lasts (a Blocky film follows its voices).
   const [storyLength, setStoryLength] = useState<number | null>(null);
+  // The effect sounds the film places (Blocky Story): sent to Kairos when they change, for the Effects lane.
+  const sentSounds = useRef<string | null>(null);
+  const onSounds = useCallback(
+    (sounds: FilmSound[] | null) => {
+      if (!sounds) return;
+      const key = `${id}|${JSON.stringify(sounds)}`;
+      if (sentSounds.current === key) return;
+      sentSounds.current = key;
+      syncFilmSounds(id, sounds).catch(() => {
+        sentSounds.current = null;
+      });
+    },
+    [id],
+  );
   const navigate = useNavigate();
   const references = useReferences(id, Boolean(film.data));
   const voiceSummary = useVoiceSummary(id, film.data?.config?.audio ?? NO_TRACKS);
@@ -159,6 +178,8 @@ export function FilmPage() {
   const [focus, setFocus] = useState<{ file: string; n: number } | null>(null);
   const [selectClip, setSelectClip] = useState<{ file: string; n: number } | null>(null);
   const filmWords = useFilmWords(id);
+  const lines = useLines(id);
+  const addEffect = useAddEffectSound(id);
   const transcribe = useTranscribe(id);
   const saveTracks = useSaveTracks(id);
   const [tab, setTab] = useFilmTab(id);
@@ -292,6 +313,7 @@ export function FilmPage() {
           cover={<ClaudeAtWork filmId={film.data.id} />}
           noteMarks={openNotes}
           onStoryLength={setStoryLength}
+          onSounds={onSounds}
           video={config.video.map((clip) => ({
             ...clip,
             url: filmFileUrl(filmOrigin, film.data.id, clip.file),
@@ -325,6 +347,7 @@ export function FilmPage() {
               }}
               selectFile={selectClip}
               stale={voiceSummary.staleFiles}
+              onAddEffect={(sound, start) => addEffect.mutate({ sound, start })}
             />
           )}
           audio={[
@@ -335,6 +358,8 @@ export function FilmPage() {
               from: track.from,
               length: track.length,
               muted: track.muted,
+              loop: track.loop,
+              duck: track.duck ? talkSpans(voiceSpans(config.audio, lines.data ?? [])) : undefined,
             })),
             // A video clip's own sound plays with the film's sound.
             ...config.video

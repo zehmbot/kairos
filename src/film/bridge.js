@@ -101,6 +101,25 @@
     return Number.isFinite(length) && length > 0 ? { length } : {};
   }
 
+  /** The effect sounds the film places (`window.KAIROS_SOUNDS`), when it says (Blocky Story). */
+  function readSounds() {
+    const raw = window.KAIROS_SOUNDS;
+    if (!Array.isArray(raw)) return {};
+    const sounds = raw
+      .filter(
+        (s) =>
+          s && typeof s.key === "string" && typeof s.sound === "string" && Number.isFinite(s.t),
+      )
+      .slice(0, 2000)
+      .map((s) => ({
+        key: s.key.slice(0, 120),
+        sound: s.sound.slice(0, 40),
+        t: Math.max(0, s.t),
+        ...(Number.isFinite(s.volume) ? { volume: Math.min(2, Math.max(0, s.volume)) } : {}),
+      }));
+    return { sounds };
+  }
+
   /** Draws frame `t` once the film is ready. Throws the film's own errors. */
   async function draw(t) {
     await ready;
@@ -151,6 +170,7 @@
           hasRenderOut: typeof window.renderOut === "function",
           scenes: readScenes(),
           ...readLength(),
+          ...readSounds(),
         });
       });
     } else if (message.type === "seek" && Number.isFinite(message.t)) {

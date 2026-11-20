@@ -8,14 +8,18 @@ import { nextLane } from "../../shared/lanes.ts";
 import { contentTypeOf, mediaKindOf } from "../../shared/media.ts";
 import {
   AudioChangeSchema,
+  type AudioTrack,
   AudioTrackSchema,
   FromAssetSchema,
   TracksChangeSchema,
+  type VideoClip,
   VideoClipSchema,
 } from "../../shared/types.ts";
 import { assetFile, copyAssetToFilm } from "../assets.ts";
 import { changeFilm, type Film, FilmConfigError, readFilm } from "../films.ts";
-import { syncScriptWithTimeline } from "../script.ts";
+import { effectsLane, FilmSoundsSchema, noteEffectEdits, syncEffectSounds } from "../fx.ts";
+import { makeScript, syncScriptWithTimeline } from "../script.ts";
+import { SOUND_NAMES, SOUNDS, soundInFilm, soundWav } from "../sounds.ts";
 import type { Studio } from "../studio.ts";
 import { checkUploadName, saveUpload, UploadError } from "../uploads.ts";
 import { assetsDirOf, resolveInside } from "../workspace.ts";
@@ -65,11 +69,15 @@ export function soundRoutes(app: FastifyInstance, studio: Studio): void {
     start: number,
     lane?: number,
   ) {
-    // A new sound gets its own timeline track, unless it was dropped on one.
+    // A new sound gets its own timeline track, unless it was dropped on one. Dropped on the Effects lane, it is
+    // an effect too.
+    const onEffects =
+      lane !== undefined && film.config.audio.some((track) => track.sfx && track.lane === lane);
     const track = AudioTrackSchema.parse({
       file,
       start: Math.max(0, start),
       lane: lane ?? nextLane(film.config.audio),
+      ...(onEffects ? { sfx: true } : {}),
     });
     const config = await changeFilm(film.path, { audio: [...film.config.audio, track] });
     studio.events.publish({ type: "films-changed", ids: [film.id] });
@@ -169,10 +177,7 @@ export function soundRoutes(app: FastifyInstance, studio: Studio): void {
       }
     }
     return guard(reply, async () => {
-      const config = await changeFilm(film.path, { audio: input.data.audio });
-      // A voice clip moved or taken out on the timeline: its line in the script follows.
-      await syncScriptWithTimeline(film.path, film.config.audio, config.audio);
-      studio.events.publish({ type: "films-changed", ids: [film.id] });
+      const config = await saveTimeline(film, { audio: input.data.audio });
       return { audio: config.audio };
     });
   });
@@ -275,10 +280,83 @@ export function soundRoutes(app: FastifyInstance, studio: Studio): void {
       (await missingFile(film, input.data.video, "video clip"));
     if (problem) return sendError(reply, 400, "bad-file", problem);
     return guard(reply, async () => {
-      const config = await changeFilm(film.path, input.data);
-      await syncScriptWithTimeline(film.path, film.config.audio, config.audio);
-      studio.events.publish({ type: "films-changed", ids: [film.id] });
+      const config = await saveTimeline(film, input.data);
       return { audio: config.audio, video: config.video };
+    });
+  });
+
+  /**
+   * Saves the timeline. Effect sounds you moved keep their place, and ones you deleted stay deleted. A voice clip
+   * moved or taken out takes its script line along; in a film whose narration is packed, the voices are packed
+   * again (in their new order).
+   */
+  async function saveTimeline(
+    film: Film & { config: NonNullable<Film["config"]> },
+    change: { audio: AudioTrack[]; video?: VideoClip[] },
+  ) {
+    const edits = noteEffectEdits(film.config.audio, change.audio);
+    const removed = [...new Set([...(film.config.sfxRemoved ?? []), ...edits.removed])];
+    let config = await changeFilm(film.path, {
+      ...change,
+      audio: edits.tracks,
+      ...(edits.removed.length > 0 ? { sfxRemoved: removed } : {}),
+    });
+    const moved = await syncScriptWithTimeline(film.path, film.config.audio, config.audio);
+    if (moved && config.narration === "packed") {
+      await makeScript(film.path, { voices: config.voices ?? {}, model: "" }).catch(() => null);
+      config = (await readFilm(studio.filmsDir ?? "", film.id))?.config ?? config;
+    }
+    studio.events.publish({ type: "films-changed", ids: [film.id] });
+    return config;
+  }
+
+  // ---------- Sound effects: Kairos' own sounds, and the ones a film places ----------
+
+  app.get("/api/sounds", async () => SOUNDS);
+
+  app.get<{ Params: { name: string } }>("/api/sounds/:name", async (request, reply) => {
+    if (!SOUND_NAMES.includes(request.params.name)) {
+      return sendError(reply, 404, "not-found", "There's no such sound.");
+    }
+    return reply
+      .type("audio/wav")
+      .header("cache-control", "max-age=3600")
+      .send(soundWav(request.params.name));
+  });
+
+  // The film says which effect sounds it places (Blocky Story: window.KAIROS_SOUNDS): the Effects lane follows.
+  app.put<{ Params: IdParams }>("/api/films/:id/fx", async (request, reply) => {
+    const film = await filmOr(reply, request.params.id);
+    if (!film) return reply;
+    const input = FilmSoundsSchema.safeParse((request.body as { sounds?: unknown } | null)?.sounds);
+    if (!input.success) return sendError(reply, 400, "bad-request", "These sounds have a problem.");
+    return guard(reply, async () => {
+      const changed = await syncEffectSounds(film.path, input.data);
+      if (changed) studio.events.publish({ type: "films-changed", ids: [film.id] });
+      return { changed };
+    });
+  });
+
+  // You add one of Kairos' sounds to the Effects lane (at the playhead).
+  app.post<{ Params: IdParams }>("/api/films/:id/fx", async (request, reply) => {
+    const film = await filmOr(reply, request.params.id);
+    if (!film) return reply;
+    const body = (request.body ?? {}) as { sound?: unknown; start?: unknown };
+    const sound = typeof body.sound === "string" ? body.sound : "";
+    if (!SOUND_NAMES.includes(sound)) return sendError(reply, 400, "bad-request", "Pick a sound.");
+    const start = Math.max(0, Number(body.start) || 0);
+    return guard(reply, async () => {
+      const file = await soundInFilm(film.path, sound);
+      const track = AudioTrackSchema.parse({
+        file,
+        start: Math.round(start * 1000) / 1000,
+        volume: 0.6,
+        lane: effectsLane(film.config.audio),
+        sfx: true,
+      });
+      const config = await changeFilm(film.path, { audio: [...film.config.audio, track] });
+      studio.events.publish({ type: "films-changed", ids: [film.id] });
+      return { audio: config.audio };
     });
   });
 }

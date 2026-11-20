@@ -16,6 +16,10 @@ export interface PreviewTrack {
   length?: number;
   /** Muted tracks make no sound. */
   muted?: boolean;
+  /** Plays its file again and again (music). */
+  loop?: boolean;
+  /** Quieter while voices talk: the talking stretches (src/shared/duck.ts). */
+  duck?: readonly (readonly [number, number])[];
 }
 
 /** How far a track may drift from the picture before it is moved back in step, in seconds. */
@@ -33,9 +37,12 @@ export function trackPosition(
   from = 0,
   /** Trimmed end: how long it plays. */
   length?: number,
+  /** Loops its whole file. */
+  loop = false,
 ): number | null {
   const local = t - start;
   if (local < 0) return null;
+  if (loop) return Number.isFinite(fileDuration) && fileDuration > 0 ? local % fileDuration : local;
   if (length !== undefined && local >= length) return null;
   const position = from + local;
   if (Number.isFinite(fileDuration) && position >= fileDuration) return null;

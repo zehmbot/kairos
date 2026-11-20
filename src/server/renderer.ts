@@ -15,6 +15,7 @@ import { cpus } from "node:os";
 import { dirname, join } from "node:path";
 import type { Browser, Page } from "puppeteer-core";
 import { clipBox, clipLength, drawOrder, isPicture } from "../shared/clips.ts";
+import { duckExpression, talkSpans, voiceSpans } from "../shared/duck.ts";
 import { frameCount, timeOf } from "../shared/frames.ts";
 import type { ExportInfo, RenderEncoder, RenderJob, RenderQuality } from "../shared/types.ts";
 import { type BrowserInfo, launchHeadless, type OpenFilm, openFilm } from "./camera.ts";
@@ -30,6 +31,7 @@ import {
 import { type Film, readFilm } from "./films.ts";
 import { addRender, nextVersion, RENDERS_DIR, videoName } from "./renders.ts";
 import type { Studio } from "./studio.ts";
+import { readLines } from "./voices.ts";
 import { resolveInside } from "./workspace.ts";
 
 /** A render can't start. The message is shown to the user as-is. */
@@ -77,6 +79,8 @@ export interface RendererOptions {
   exportInfo: () => Promise<ExportInfo>;
   workers?: number;
   chunkSeconds?: number;
+  /** The film's effect sounds (`window.KAIROS_SOUNDS`), read once its page is open: the Effects lane follows. */
+  syncSounds?: (filmDir: string, sounds: unknown) => Promise<unknown>;
 }
 
 interface Active {
@@ -84,6 +88,24 @@ interface Active {
   cancelled: boolean;
   browsers: Set<Browser>;
   children: Set<ChildProcess>;
+}
+
+/** How long each voice clip's file is: from the film's voice lines, else measured with ffprobe. */
+async function voiceLengths(
+  filmDir: string,
+  tracks: readonly { file: string; length?: number; muted?: boolean }[],
+  ffmpeg: string,
+): Promise<{ file: string; duration: number }[]> {
+  const lines = await readLines(filmDir).catch(() => []);
+  const known = new Map(lines.map((line) => [line.file, line.duration]));
+  for (const track of tracks) {
+    if (track.muted || track.length !== undefined || known.has(track.file)) continue;
+    if (!track.file.startsWith("voice/")) continue;
+    const path = resolveInside(filmDir, track.file);
+    const media = path ? await probeMedia(ffmpeg, path).catch(() => null) : null;
+    if (media?.duration) known.set(track.file, media.duration);
+  }
+  return [...known].map(([file, duration]) => ({ file, duration }));
 }
 
 export class Renderer {
@@ -231,6 +253,8 @@ export class Renderer {
 
       // Workers take chunks from a shared list. The first failure stops the others.
       let next = 0;
+      // The first page open says which effect sounds the film places (before the sound is mixed).
+      let soundsRead: Promise<unknown> | null = null;
       let failure: unknown = null;
       const dir = partsDir;
       const worker = async () => {
@@ -242,6 +266,12 @@ export class Renderer {
           if (active.cancelled) return;
           const page = await browser.newPage();
           const view = await openFilm(page, url, config.width, config.height, 1);
+          soundsRead ??= page
+            .evaluate(() => (window as { KAIROS_SOUNDS?: unknown }).KAIROS_SOUNDS ?? null)
+            .then((sounds) =>
+              Array.isArray(sounds) ? this.#options.syncSounds?.(film.path, sounds) : null,
+            )
+            .catch(() => null);
           for (;;) {
             const chunk = chunks[next++];
             if (!chunk || active.cancelled) break;
@@ -280,7 +310,17 @@ export class Renderer {
       );
       const joined = join(dir, "joined.mp4");
       // The film's sound tracks are mixed in here (readFilm already checked they exist). Muted ones are left out.
-      const tracks: SoundTrack[] = config.audio.flatMap((track) => {
+      // Read again: the effect sounds may have just been brought in step.
+      await soundsRead;
+      const sound =
+        (await readFilm(this.#options.studio.filmsDir ?? "", job.filmId))?.config ?? config;
+      // Music under the narration gets quieter while the voices talk (the same curve as the preview).
+      const duck = sound.audio.some((track) => track.duck && !track.muted)
+        ? duckExpression(
+            talkSpans(voiceSpans(sound.audio, await voiceLengths(film.path, sound.audio, ffmpeg))),
+          )
+        : undefined;
+      const tracks: SoundTrack[] = sound.audio.flatMap((track) => {
         const file = track.muted ? null : resolveInside(film.path, track.file);
         return file
           ? [
@@ -290,6 +330,8 @@ export class Renderer {
                 volume: track.volume,
                 from: track.from,
                 length: track.length,
+                loop: track.loop,
+                duck: track.duck ? duck : undefined,
               },
             ]
           : [];

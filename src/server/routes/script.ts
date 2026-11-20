@@ -208,7 +208,14 @@ export function scriptRoutes(
         {
           id: film.id,
           dir: film.path,
-          facts: { title, duration, width, height, fps },
+          facts: {
+            title,
+            duration,
+            width,
+            height,
+            fps,
+            packed: film.config.narration === "packed",
+          },
           voices: await voicesOf(film),
           kept: yours.map(({ speaker, text, start }) => ({ speaker, text, start })),
         },

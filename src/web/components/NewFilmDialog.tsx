@@ -19,6 +19,7 @@ import {
 } from "../api.ts";
 import { answersOf, firstMissing, initialAnswers } from "../brief.ts";
 import { useSample } from "../useSample.ts";
+import { AssetPicker } from "./AssetPicker.tsx";
 import { BriefFields } from "./BriefFields.tsx";
 import { FrameRatePicker, useFrameRate } from "./FrameRatePicker.tsx";
 import { PixelButton } from "./PixelButton.tsx";
@@ -66,6 +67,9 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
   const voiceStatus = useVoiceStatus();
   // Claude makes the film right after Create, in the background (when Claude Code is installed).
   const [makeNow, setMakeNow] = useState(true);
+  // Music from your assets, under the voice.
+  const [music, setMusic] = useState<{ id: string; name: string } | null>(null);
+  const [pickingMusic, setPickingMusic] = useState(false);
   const claude = useClaude();
   const claudeReady = claude.data ? Boolean(claude.data.cli) : true;
   // The narrator's voice, picked when the window opens (free) and changed here before anything is made.
@@ -112,6 +116,7 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
       setFormError(null);
       setVoices("make");
       setMakeNow(true);
+      setMusic(null);
       setNarrator(null);
       setLanguage("en");
       setPickedFor(null);
@@ -159,6 +164,7 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
         brief: answersOf(answers),
         voices,
         make: makeNow && claudeReady,
+        ...(music ? { music: music.id } : {}),
         ...(voices === "make" && narrator
           ? { narrator: { ...narrator, type: "narrator" as const }, language }
           : voices === "make"
@@ -457,6 +463,32 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
               )}
             </fieldset>
             <fieldset className="voice-choice">
+              <legend className="field-label">Music</legend>
+              <div className="music-pick">
+                <span>{music ? music.name : "No music"}</span>
+                <PixelButton
+                  variant="ghost"
+                  data-size="small"
+                  icon="folder"
+                  onClick={() => setPickingMusic(true)}
+                >
+                  {music ? "Change" : "From your assets"}
+                </PixelButton>
+                {music && (
+                  <PixelButton
+                    variant="ghost"
+                    data-size="small"
+                    icon="trash"
+                    tip="No music"
+                    onClick={() => setMusic(null)}
+                  />
+                )}
+              </div>
+              <p className="hint">
+                It plays under the voice for the whole film, quieter while voices talk.
+              </p>
+            </fieldset>
+            <fieldset className="voice-choice">
               <legend className="field-label">Claude</legend>
               <label className="check-row">
                 <input
@@ -499,6 +531,17 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
           </>
         )}
       </form>
+      <AssetPicker
+        open={pickingMusic}
+        kinds={["sound"]}
+        title="Music for this film"
+        busy={false}
+        onClose={() => setPickingMusic(false)}
+        onPick={(asset) => {
+          setMusic({ id: asset.id, name: asset.name });
+          setPickingMusic(false);
+        }}
+      />
       <VoicePicker
         open={choosing}
         speaker="the narrator"

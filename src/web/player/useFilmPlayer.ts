@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FilmMessageSchema,
   type FilmScene,
+  type FilmSound,
   type PlayerMessage,
 } from "../../shared/film-protocol.ts";
 import { clampFrame, frameCount, timeOf } from "./time.ts";
@@ -31,6 +32,8 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
   const [scenes, setScenes] = useState<FilmScene[]>([]);
   // How long the film's story lasts, when the film says (Blocky times itself to its voices).
   const [length, setLength] = useState<number | null>(null);
+  // The effect sounds the film places, when it says (Blocky Story).
+  const [sounds, setSounds] = useState<FilmSound[] | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [frameError, setFrameError] = useState<string | null>(null);
 
@@ -125,6 +128,7 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
         setLoading(false);
         setScenes(message.scenes);
         setLength(message.length ?? null);
+        setSounds(message.sounds ?? null);
         requestFrame(s.pending ?? s.frame);
       } else if (message.type === "frame") {
         s.inflight = false;
@@ -175,6 +179,7 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
     loading,
     scenes,
     length,
+    sounds,
     error: pageError ?? frameError,
     toggle,
     pause,

@@ -37,8 +37,9 @@ src/server/   Fastify hub: index.ts (entry), security.ts (request guard), studio
               voices say and when), writer.ts (Write the narration: `claude -p` in the background),
               claude-run.ts (runs `claude -p` with the Kairos tools), claude-jobs.ts (make the film, an
               ask), claude-steps.ts (a tool call in plain words), activity.ts (is Claude working on a
-              film), claude-hooks.ts (hooks in film folders), fake-fish.ts / fake-claude.ts (stand-ins
-              for tests), routes/
+              film), claude-hooks.ts (hooks in film folders), sounds.ts (Kairos' own sound effects,
+              made from code), fx.ts (effect sounds on the Effects lane), fake-fish.ts / fake-claude.ts
+              (stand-ins for tests), routes/
 src/mcp/      Kairos tools for Claude Code: server.ts (stdio entry), tools.ts, hub-client.ts (calls the hub)
 src/web/      React UI: components/, pages/, player/, icons/, theme/
 src/film/     bridge.js: plain JS the film server adds to every film page
@@ -111,6 +112,21 @@ characters and world are our own: never a game's or brand's name, logos or
 avatars. Biome checks the template's code too, so placeholders in `.js` are written inside strings
 (`Number("{{width}}")`).
 
+**Blocky Story** (`templates/blocky-story/`, its guide the `kairos-blocky-story` skill) is the new Blocky, built
+next to the old one until it replaces it. Its engine is a copy of Blocky's, reorganized around two ideas:
+
+- **The narration never stops.** `blocky/timing.js` (`planStory`) treats all the shots' `say` as one stream of
+  words (the voice's real words, `wordStream`, or ~2.6 words per second without voices): each shot cuts in just
+  before its first word and lasts until the next one's, so every moment is under the voice. A `beat` is a quick
+  reaction cut in under it. The template's `template.json` sets `defaults.narration: "packed"`, which New film
+  writes into `kairos.json`: the voice lines are then packed back to back (see The script).
+- **Effects** (`blocky/fx.js`): a shot's `fx` lists particles (notes, sparkles, hearts, tears, sweat, anger, zzz,
+  dust, magic, confetti), words in the scene (label, float, big), camera punches (punch, shake, flash) and bouncy
+  motion (bounce, jump, dash), each on a word (`at`). `planEffects` times them; `actorState` and `cameraState`
+  change the figures and the camera; `drawEffects` draws on the 2D layer. Each effect brings a sound:
+  `window.KAIROS_SOUNDS` (`[{ key, sound, t, volume }]`) goes to Kairos with `ready` (see Sound effects). The
+  sheets get an `effects` sheet, which also checks the story's effects.
+
 ## Files: uploads, assets and references
 
 The browser sends a file as the request body (`application/octet-stream`, the name in `?name=`;
@@ -152,6 +168,25 @@ missing files as the film's problem. The preview plays one `<audio>` element per
 file) and are moved back in step when they drift over 80 ms. The render mixes the tracks while joining the chunks
 (`mixFilter` in `src/server/ffmpeg.ts`: `atrim` for trimmed tracks, `adelay`, `volume`, `amix` with
 `normalize=0`, `apad`, cut with `-t` at the film's length, AAC 192k; muted tracks are left out).
+
+**Music under the voice:** a track with `loop` and `duck` plays its file again and again (`-stream_loop -1` in the
+render, `% duration` in the preview) and gets quieter while voices talk: `src/shared/duck.ts` turns the voice clips
+into talking stretches (`voiceSpans`, `talkSpans`: gaps under 0.6 s joined) and a gain curve (down to 30%, 0.25 s
+ramps), used by the preview (`duckGain`, every 50 ms) and the render (`duckExpression`, a `volume` expression with
+`eval=frame`). New film's "Music" (an asset) adds one; the Sound tab's "Music under the voice" turns it on.
+
+**Sound effects** (`src/server/sounds.ts`): Kairos makes its own (whoosh, swish, pop, boing, ding, count, thud,
+boom, sparkle, magic, puff, flash, chime, party, heart) from code: filtered noise and pitched tones, seeded, 44.1 kHz
+WAV, peaks at 0.8. `GET /api/sounds` lists them, `GET /api/sounds/:name` plays one, and a film gets its copy in
+`audio/fx/` when it uses one. Effect tracks have `sfx: true` and sit on the timeline's **Effects** lane:
+
+- **A film that places sounds** (Blocky Story) sends them with `ready`; the film page puts them to
+  `PUT /api/films/:id/fx`, and a render syncs them from its first page before mixing. `src/server/fx.ts`
+  (`withEffectSounds`) adds new keys, moves keys whose time changed, and removes keys that are gone.
+- **Your edits stay:** saving the timeline (`noteEffectEdits`) marks a placed sound you moved (`moved`: it keeps
+  its place) and remembers one you deleted (`sfxRemoved` in `kairos.json`). Sounds you add (the timeline's
+  **+ Effect** menu, `POST /api/films/:id/fx`, or a file dropped on the Effects lane) have no key and are never
+  touched.
 
 **Timeline:** under the player (`src/web/components/Timeline.tsx`, the math in `src/web/timeline.ts`).
 
@@ -219,6 +254,10 @@ yours).
 
 - **Making it** turns each line into a voice line (unchanged ones reused) and places it at its start, after the
   line before when they would overlap; the moved start is saved. `only` + `fresh` make a new take of some lines.
+- **Packed narration** (`narration: "packed"` in `kairos.json`, Blocky Story): the lines go back to back in script
+  order, each clip trimmed to its words (`trimToWords`: `from`/`length`), 0.12 s apart (0.28 s after a sentence),
+  so the voice never stops. Starts only give the order. A timeline change that moves or removes a voice clip packs
+  them again, and "Write the narration" asks Claude for continuous narration.
 - **Free changes:** saving the script also places it without speaking (no credits): a new start moves the clip, a
   deleted line leaves the timeline. Lines that changed keep their old take ("out of date") until the next making.
 - **Replacing clips:** `made` lists the voice lines it made, so clips and files of lines that are gone are
