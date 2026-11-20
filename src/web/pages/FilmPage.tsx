@@ -117,21 +117,6 @@ function StoryLength({
   );
 }
 
-/** Keeps `--review-h` at the columns' height, so the video leaves room for the timeline under it. */
-function useReviewHeight() {
-  const observer = useRef<ResizeObserver | null>(null);
-  return useCallback((element: HTMLDivElement | null) => {
-    observer.current?.disconnect();
-    observer.current = null;
-    if (!element) return;
-    const update = () =>
-      element.style.setProperty("--review-h", `${Math.round(element.clientHeight)}px`);
-    update();
-    observer.current = new ResizeObserver(update);
-    observer.current.observe(element);
-  }, []);
-}
-
 export function FilmPage() {
   const { id = "" } = useParams();
   const film = useFilm(id);
@@ -142,7 +127,6 @@ export function FilmPage() {
   const addNote = useAddNote(id);
   const { draft, ...draftActions } = useNoteDraft();
   const playerRef = useRef<PlayerHandle>(null);
-  const reviewRef = useReviewHeight();
   const [reloadKey, setReloadKey] = useState(0);
   const [showMarks, setShowMarks] = useState(true);
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -481,7 +465,7 @@ export function FilmPage() {
           )}
         </div>
 
-        <div className={canReview ? "review" : "stack"} ref={canReview ? reviewRef : undefined}>
+        <div className={canReview ? "review" : "stack"}>
           <div className="review-main">
             <PixelPanel
               title="Preview"

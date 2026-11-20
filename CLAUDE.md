@@ -114,9 +114,8 @@ Claude sees them with `kairos_references` (6 sheets per page), and the library w
 `kairos_use_asset`.
 
 On the film page, the side column has tabs (Notes, Sound, Voice, References, Brief; the last one shown is
-remembered per film). On wide screens the page fills the window and both columns scroll by themselves, so the
-player and the timeline stay in view: `App.tsx` keeps `--main-h`, `FilmPage` `--review-h` and the timeline
-`--timeline-h`, and the video shrinks to leave room for the timeline. Files dropped anywhere on the page, or added with **Add**, go where they fit: dropped on the Sound or
+remembered per film). On wide screens the page fills the window (`App.tsx` keeps `--main-h`) and both columns
+scroll by themselves, so a long side tab never pushes the timeline away. The video keeps its size. Files dropped anywhere on the page, or added with **Add**, go where they fit: dropped on the Sound or
 References tab they go straight in, elsewhere Kairos asks what they are for (`src/web/filmAdd.ts`: the choices
 for each kind of file and where each is sent; `POST /api/films/:id/files` puts a picture, video or font in the
 film's `assets/`).

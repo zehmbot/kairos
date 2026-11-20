@@ -105,7 +105,6 @@ export function Timeline({
   selectFile,
   stale,
 }: TimelineProps) {
-  const sectionRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const lanesRef = useRef<HTMLDivElement>(null);
@@ -138,22 +137,6 @@ export function Timeline({
     observer.observe(scroll);
     return () => observer.disconnect();
   }, [fit, duration]);
-
-  // The film page fits the video above the timeline: it needs the timeline's height.
-  useLayoutEffect(() => {
-    const section = sectionRef.current;
-    const review = section?.closest<HTMLElement>(".review");
-    if (!section || !review) return;
-    const update = () =>
-      review.style.setProperty("--timeline-h", `${Math.round(section.offsetHeight)}px`);
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(section);
-    return () => {
-      observer.disconnect();
-      review.style.removeProperty("--timeline-h");
-    };
-  }, []);
 
   // A line or sound chosen in a side tab: its clip is selected and comes into view.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only a new ask (n) selects.
@@ -369,7 +352,7 @@ export function Timeline({
   };
 
   return (
-    <section ref={sectionRef} className="timeline" aria-label="Timeline">
+    <section className="timeline" aria-label="Timeline">
       <div className="timeline-bar">
         <span className="timeline-title">Timeline</span>
         <div className="timeline-tools">

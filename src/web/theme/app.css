@@ -1383,9 +1383,9 @@ a.render-title:hover {
 }
 
 /* Wide screens: the film page fills the window (on very short windows it scrolls), and under its header
-   two columns fill the rest, each scrolling by itself. The video column keeps the player and the timeline
-   in view: the video shrinks so the timeline fits under it (FilmPage measures --review-h, the timeline
-   --timeline-h). The padding keeps the stepped outlines of boxes inside the scrolling areas. */
+   two columns fill the rest, each scrolling by itself, so a long side tab never pushes the timeline away.
+   The video keeps its size; when the timeline doesn't fit under it, the video column scrolls a little. The
+   padding keeps the stepped outlines of boxes inside the scrolling areas. */
 @media (min-width: 1200px) {
   .film-page:has(> .review) {
     height: max(600px, calc(var(--main-h, 100dvh) - 64px));
@@ -1423,7 +1423,7 @@ a.render-title:hover {
   }
 
   .review-main .stage {
-    --stage-max: max(200px, calc(var(--review-h, 760px) - var(--timeline-h, 260px) - 250px));
+    --stage-max: max(240px, calc(100dvh - 400px));
   }
 
   /* Narrow column: picture and text side by side, the buttons in one row under both. */
