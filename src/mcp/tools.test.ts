@@ -179,16 +179,22 @@ class FakeHub implements Hub {
   }
   async saveScript(id: string, input: ScriptInput) {
     await this.film(id);
-    this.script_ = {
+    const script: Script = {
       version: 1,
       style: input.style ?? "",
       language: input.language ?? "en",
       writtenBy: input.writtenBy ?? "you",
       note: input.note ?? "",
       made: [],
-      lines: input.lines.map((line, i) => ({ ...line, id: line.id ?? `s${i}` })),
+      lines: input.lines.map((line, i) => ({
+        ...line,
+        id: line.id ?? `s${i}`,
+        by: line.by ?? input.writtenBy ?? "you",
+        speed: line.speed ?? 1,
+      })),
     };
-    return this.script_;
+    this.script_ = script;
+    return script;
   }
   async makeScript(id: string) {
     await this.film(id);
@@ -638,7 +644,7 @@ describe("Kairos tools", () => {
     expect(saved).toContain("Saved the script: 2 lines.");
     expect(hub.script_?.writtenBy).toBe("claude");
     const shown = texts(await call("kairos_script"));
-    expect(shown).toContain('- 4 s ruby: "Wait for me" (no voice yet)');
+    expect(shown).toContain('- 4 s ruby: "Wait for me" (by Claude, no voice yet)');
 
     const made = texts(await call("kairos_script", { make: true }));
     expect(made).toContain("Made 2 voices:");

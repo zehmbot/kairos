@@ -5,6 +5,8 @@ export interface Tab<T extends string> {
   label: string;
   /** A small number on the tab (open notes, sounds...); hidden when 0. */
   count?: number;
+  /** The number says something needs you (lines to update): it shows in another colour. */
+  alert?: boolean;
 }
 
 /** One panel at a time, chosen with tabs (arrow keys move between them). */
@@ -54,7 +56,11 @@ export function SideTabs<T extends string>({
             }}
           >
             {tab.label}
-            {tab.count ? <span className="side-tab-count">{tab.count}</span> : null}
+            {tab.count ? (
+              <span className="side-tab-count" data-alert={tab.alert ? "" : undefined}>
+                {tab.count}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>

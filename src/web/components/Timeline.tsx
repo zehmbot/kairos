@@ -62,6 +62,12 @@ export interface TimelineProps {
   /** The file whose words are being found, and the last problem. */
   wordsBusy?: string | null;
   wordsError?: string | null;
+  /** A clip clicked (not dragged): its file (the page shows its line or sound in the side tab). */
+  onClipClick?: (file: string) => void;
+  /** Selects the clip of this file (from the Voice or Sound tab); `n` changes on every ask. */
+  selectFile?: { file: string; n: number } | null;
+  /** Files whose clips are out of date (a voice made before its words or voice changed). */
+  stale?: ReadonlySet<string>;
 }
 
 type Drag =
@@ -95,7 +101,11 @@ export function Timeline({
   onGetWords,
   wordsBusy,
   wordsError,
+  onClipClick,
+  selectFile,
+  stale,
 }: TimelineProps) {
+  const sectionRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const lanesRef = useRef<HTMLDivElement>(null);
@@ -128,6 +138,39 @@ export function Timeline({
     observer.observe(scroll);
     return () => observer.disconnect();
   }, [fit, duration]);
+
+  // The film page fits the video above the timeline: it needs the timeline's height.
+  useLayoutEffect(() => {
+    const section = sectionRef.current;
+    const review = section?.closest<HTMLElement>(".review");
+    if (!section || !review) return;
+    const update = () =>
+      review.style.setProperty("--timeline-h", `${Math.round(section.offsetHeight)}px`);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(section);
+    return () => {
+      observer.disconnect();
+      review.style.removeProperty("--timeline-h");
+    };
+  }, []);
+
+  // A line or sound chosen in a side tab: its clip is selected and comes into view.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a new ask (n) selects.
+  useEffect(() => {
+    if (!selectFile) return;
+    const index = draft.findIndex((track) => track.file === selectFile.file);
+    if (index < 0) return;
+    setSelected(index);
+    const track = draft[index];
+    const scroll = scrollRef.current;
+    if (track && scroll) {
+      const x = track.start * pps;
+      if (x < scroll.scrollLeft || x > scroll.scrollLeft + scroll.clientWidth - 40) {
+        scroll.scrollLeft = Math.max(0, x - 40);
+      }
+    }
+  }, [selectFile?.n]);
 
   const lengthOf = useCallback(
     (track: AudioTrack) => clipLength(track, durations[track.file]) ?? PLACEHOLDER,
@@ -265,7 +308,13 @@ export function Timeline({
   const onPointerUp = () => {
     const current = drag.current;
     drag.current = null;
-    if (!current || current.mode === "scrub" || !current.moved) return;
+    if (!current || current.mode === "scrub") return;
+    if (!current.moved) {
+      // A click, not a drag: show the clip's line or sound in its tab.
+      const file = draft[current.index]?.file;
+      if (file) onClipClick?.(file);
+      return;
+    }
     // The last position the pointer gave, not the last one drawn: a fast move can end before the screen
     // catches up.
     const { live, orig, index } = current;
@@ -320,7 +369,7 @@ export function Timeline({
   };
 
   return (
-    <section className="timeline" aria-label="Timeline">
+    <section ref={sectionRef} className="timeline" aria-label="Timeline">
       <div className="timeline-bar">
         <span className="timeline-title">Timeline</span>
         <div className="timeline-tools">
@@ -330,7 +379,7 @@ export function Timeline({
             icon="undo"
             disabled={!history.past.length}
             onClick={undo}
-            title="Undo (Ctrl+Z)"
+            tip="Undo (Ctrl+Z)"
           >
             Undo
           </PixelButton>
@@ -339,7 +388,7 @@ export function Timeline({
             data-size="small"
             disabled={!history.future.length}
             onClick={redo}
-            title="Redo (Ctrl+Y)"
+            tip="Redo (Ctrl+Y)"
           >
             Redo
           </PixelButton>
@@ -347,7 +396,7 @@ export function Timeline({
             variant="ghost"
             data-size="small"
             aria-label="Zoom out"
-            title="Zoom out (Ctrl + wheel)"
+            tip="Zoom out"
             onClick={() => zoom(1 / 1.5)}
           >
             −
@@ -356,7 +405,7 @@ export function Timeline({
             variant="ghost"
             data-size="small"
             aria-label="Zoom in"
-            title="Zoom in (Ctrl + wheel)"
+            tip="Zoom in"
             onClick={() => zoom(1.5)}
           >
             +
@@ -366,7 +415,7 @@ export function Timeline({
             data-size="small"
             aria-pressed={fit}
             onClick={() => setFit(true)}
-            title="Show the whole film"
+            tip="Show the whole film"
           >
             Fit
           </PixelButton>
@@ -390,7 +439,8 @@ export function Timeline({
                 type="button"
                 className="timeline-mute"
                 aria-pressed={laneMuted(lane)}
-                title={laneMuted(lane) ? "Sound back on" : "Mute this track"}
+                aria-label={laneMuted(lane) ? "Sound back on" : "Mute this track"}
+                data-tip={laneMuted(lane) ? "Sound back on" : "Mute"}
                 onClick={() => {
                   const mute = !laneMuted(lane);
                   commit(
@@ -493,6 +543,7 @@ export function Timeline({
                         pps={pps}
                         length={lengthOf(track)}
                         selected={selected === index}
+                        stale={stale?.has(track.file) ?? false}
                         words={words?.[track.file]?.words}
                         onDuration={(d) =>
                           setDurations((all) =>
@@ -555,18 +606,19 @@ export function Timeline({
           <PixelButton
             variant="ghost"
             data-size="small"
+            icon="mute"
+            tip={selectedTrack.muted ? "Sound back on" : "Mute"}
+            aria-label="Mute"
             aria-pressed={selectedTrack.muted}
             onClick={() => commit(change(selected, { muted: !selectedTrack.muted }))}
-          >
-            Mute
-          </PixelButton>
+          />
           <PixelButton
             variant="ghost"
             data-size="small"
+            icon="target"
+            tip="Start at the playhead"
             onClick={() => commit(change(selected, { start: round(time) }))}
-          >
-            Start at the playhead
-          </PixelButton>
+          />
           {onGetWords &&
             (words?.[selectedTrack.file] ? (
               <span className="hint">{words[selectedTrack.file]?.words.length} words</span>
@@ -575,7 +627,7 @@ export function Timeline({
                 variant="ghost"
                 data-size="small"
                 disabled={Boolean(wordsBusy)}
-                title="Ask fish.audio when each word is said (speech-to-text, uses credits)"
+                tip="When each word is said (uses credits)"
                 onClick={() => onGetWords(selectedTrack.file)}
               >
                 {wordsBusy === selectedTrack.file ? "Listening…" : "Get words"}
@@ -586,10 +638,9 @@ export function Timeline({
             data-size="small"
             data-tone="danger"
             icon="trash"
+            tip="Remove"
             onClick={() => remove(selected)}
-          >
-            Remove
-          </PixelButton>
+          />
         </div>
       )}
       {wordsError && <p className="field-error timeline-error">{wordsError}</p>}
@@ -604,6 +655,7 @@ function Clip({
   pps,
   length,
   selected,
+  stale,
   words,
   onDuration,
   onPointerDown,
@@ -613,6 +665,7 @@ function Clip({
   pps: number;
   length: number;
   selected: boolean;
+  stale: boolean;
   words?: readonly Word[];
   onDuration: (duration: number) => void;
   onPointerDown: (event: ReactPointerEvent, mode: "move" | "start" | "end") => void;
@@ -637,8 +690,9 @@ function Clip({
       className="timeline-clip"
       data-selected={selected ? "true" : undefined}
       data-muted={track.muted ? "true" : undefined}
+      data-stale={stale ? "true" : undefined}
       style={{ left: track.start * pps, width }}
-      title={`${fileName(track.file)}: drag to move, drag an edge to trim`}
+      title={`${fileName(track.file)}${stale ? " (out of date: update it in the Voice tab)" : ""}: drag to move, drag an edge to trim`}
       onPointerDown={(event) => onPointerDown(event, "move")}
     >
       <canvas ref={canvasRef} className="timeline-wave" width={canvasWidth} height={WAVE_H} />

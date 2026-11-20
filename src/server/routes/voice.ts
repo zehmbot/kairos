@@ -6,6 +6,7 @@ import { mediaKindOf } from "../../shared/media.ts";
 import { AudioTrackSchema, FilmVoicesSchema, NewLinesSchema } from "../../shared/types.ts";
 import { changeFilm, readFilm } from "../films.ts";
 import { checkKey, FISH_KEY_NAME, FISH_MODELS, listVoices, speak, transcribe } from "../fish.ts";
+import { addToScript } from "../script.ts";
 import { writeSecret } from "../secrets.ts";
 import type { Studio } from "../studio.ts";
 import { deleteLine, makeLines, readLines, readWords, voiceLane, writeWords } from "../voices.ts";
@@ -27,7 +28,7 @@ export function voiceRoutes(
   studio: Studio,
   options: VoiceRoutesOptions = {},
 ): void {
-  const { model, status, fish, filmOr, guard } = voiceContext(studio, options);
+  const { model, status, fish, open, filmOr, guard } = voiceContext(studio, options);
 
   // ---------- The key and the model ----------
 
@@ -76,7 +77,8 @@ export function voiceRoutes(
   app.get<{ Querystring: { query?: string; mine?: string } }>(
     "/api/voice/library",
     async (request, reply) => {
-      const connection = await fish(reply);
+      // The library is public (no key needed); your own voices need your key.
+      const connection = request.query.mine === "true" ? await fish(reply) : await open();
       if (!connection) return reply;
       return guard(reply, () =>
         listVoices(connection, {
@@ -128,7 +130,7 @@ export function voiceRoutes(
     const input = NewLinesSchema.safeParse(request.body);
     if (!input.success)
       return sendError(reply, 400, "bad-lines", input.error.issues[0]?.message ?? "Bad lines.");
-    const { speaker, lines: texts, speed, start, gap } = input.data;
+    const { speaker, lines: texts, speed, start, gap, by } = input.data;
     const voice = film.config.voices?.[speaker];
     if (!voice) {
       return sendError(
@@ -163,6 +165,12 @@ export function voiceRoutes(
           AudioTrackSchema.parse({ file: p.file, start: p.start, lane }),
         );
         await changeFilm(film.path, { audio: [...fresh, ...tracks] });
+        // Placed lines are in the film's one list of lines (the script) too.
+        await addToScript(
+          film.path,
+          lines.map((line, i) => ({ line, start: placed[i]?.start ?? 0 })),
+          by,
+        );
       }
       await studio.rememberVoice(voice);
       studio.events.publish({ type: "films-changed", ids: [film.id] });

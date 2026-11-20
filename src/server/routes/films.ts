@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import {
   BriefUpdateSchema,
@@ -15,6 +16,7 @@ import {
   scanFilms,
 } from "../films.ts";
 import { openFolder } from "../open-folder.ts";
+import { saveScript } from "../script.ts";
 import type { Studio } from "../studio.ts";
 import {
   BriefFileError,
@@ -102,16 +104,31 @@ export function filmRoutes(
     if (problem) return badRequest(reply, problem);
 
     // A brief is kept only when something was asked for: an answer, or voices made with the film.
+    const voiced = input.voices === "make";
     const brief =
-      Object.keys(checked.answers).length > 0 || input.voices === "make"
-        ? { ...makeBrief(template, kind, checked.answers), voices: input.voices }
+      Object.keys(checked.answers).length > 0 || voiced
+        ? {
+            ...makeBrief(template, kind, checked.answers),
+            voices: input.voices,
+            ...(voiced && input.narrator ? { narrator: input.narrator.name } : {}),
+            ...(voiced && input.language ? { language: input.language } : {}),
+          }
         : undefined;
     const id = await createFilm(dir, template.dir, input, {
       size: template.defaults.size,
       duration: template.defaults.duration,
       brief,
       briefText: brief ? briefMarkdown(brief, input.title) : undefined,
+      // The narrator you chose is the film's before anything is made (Claude keeps it).
+      voices:
+        voiced && input.narrator
+          ? { narrator: { ...input.narrator, type: input.narrator.type ?? "narrator" } }
+          : undefined,
     });
+    // The language the voices speak: casting and the script use it.
+    if (voiced && input.language && input.language !== "en") {
+      await saveScript(join(dir, id), { language: input.language, lines: [] }, "you");
+    }
     const film = await readFilm(dir, id);
     if (!film)
       return sendError(reply, 500, "create-failed", "The film was made but can't be read.");

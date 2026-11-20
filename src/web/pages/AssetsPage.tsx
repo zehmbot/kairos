@@ -220,6 +220,7 @@ function AssetCard({ asset, onUsed }: { asset: Asset; onUsed: (message: string) 
               data-tone="danger"
               icon="trash"
               aria-label={`Delete ${asset.name}`}
+              tip="Delete"
               onClick={() => setConfirm(true)}
             />
           </div>

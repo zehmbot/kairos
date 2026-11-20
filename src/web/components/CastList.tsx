@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import {
   type FilmVoice,
   type FilmVoices,
@@ -6,6 +6,7 @@ import {
   type VoiceType,
 } from "../../shared/types.ts";
 import { useAnotherVoice, useCast, useSetFilmVoices } from "../api.ts";
+import { useSample } from "../useSample.ts";
 import { PixelButton } from "./PixelButton.tsx";
 import { VoicePicker } from "./VoicePicker.tsx";
 
@@ -22,28 +23,15 @@ export const TYPE_WORDS: Record<VoiceType, string> = {
 export const speakerName = (speaker: string) =>
   speaker.charAt(0).toUpperCase() + speaker.slice(1).replaceAll("-", " ");
 
-/** Plays one sample at a time. */
-function useSample() {
-  const audio = useRef<HTMLAudioElement | null>(null);
-  const [playing, setPlaying] = useState<string | null>(null);
-  useEffect(() => () => audio.current?.pause(), []);
-  const toggle = (key: string, url: string) => {
-    audio.current?.pause();
-    if (playing === key) {
-      setPlaying(null);
-      return;
-    }
-    const next = new Audio(url);
-    next.onended = () => setPlaying(null);
-    void next.play().catch(() => setPlaying(null));
-    audio.current = next;
-    setPlaying(key);
-  };
-  return { playing, toggle };
+interface CastListProps {
+  filmId: string;
+  voices: FilmVoices;
+  /** A speaker's voice was changed (another one, or one you chose): what it was before. */
+  onChanged: (speaker: string, before: FilmVoice) => void;
 }
 
 /** Who speaks in the film: each speaker's type and voice, another random voice, or one you choose. */
-export function CastList({ filmId, voices }: { filmId: string; voices: FilmVoices }) {
+export function CastList({ filmId, voices, onChanged }: CastListProps) {
   const cast = useCast(filmId);
   const another = useAnotherVoice(filmId);
   const setVoices = useSetFilmVoices(filmId);
@@ -70,10 +58,9 @@ export function CastList({ filmId, voices }: { filmId: string; voices: FilmVoice
 
   return (
     <div className="stack">
-      <span className="field-label">Who speaks</span>
       {speakers.length === 0 && (
         <p className="hint">
-          No one yet. Write the narration below and Kairos casts the voices, or add a speaker.
+          No one yet. Write the narration with Claude and Kairos casts the voices, or add a speaker.
         </p>
       )}
       <ul className="voice-cast">
@@ -81,16 +68,21 @@ export function CastList({ filmId, voices }: { filmId: string; voices: FilmVoice
           const voice = voices[speaker] as FilmVoice;
           return (
             <li key={speaker} className="voice-cast-row">
-              <span className="voice-speaker">{speakerName(speaker)}</span>
-              {voice.type && !(speaker === "narrator" && voice.type === "narrator") && (
-                <span className="voice-type">{TYPE_WORDS[voice.type]}</span>
-              )}
-              <span className="voice-cast-name">{voice.name}</span>
-              <div className="note-actions">
+              <div className="voice-cast-who">
+                <span className="voice-cast-label">
+                  <span className="voice-speaker">{speakerName(speaker)}</span>
+                  {voice.type && !(speaker === "narrator" && voice.type === "narrator") && (
+                    <span className="voice-type">{TYPE_WORDS[voice.type]}</span>
+                  )}
+                </span>
+                <span className="voice-cast-name">{voice.name}</span>
+              </div>
+              <div className="icon-row">
                 <PixelButton
                   variant="ghost"
                   data-size="small"
                   icon={sample.playing === speaker ? "pause" : "play"}
+                  tip={sample.playing === speaker ? "Stop" : "Listen"}
                   aria-label={`Listen to ${voice.name}`}
                   disabled={!voice.sample}
                   onClick={() => voice.sample && sample.toggle(speaker, voice.sample)}
@@ -99,18 +91,27 @@ export function CastList({ filmId, voices }: { filmId: string; voices: FilmVoice
                   <PixelButton
                     variant="ghost"
                     data-size="small"
+                    icon="dice"
+                    tip={
+                      another.isPending && another.variables === speaker
+                        ? "Picking…"
+                        : "Another voice"
+                    }
+                    aria-label={`Another ${TYPE_WORDS[voice.type].toLowerCase()} voice for ${speakerName(speaker)}`}
                     disabled={another.isPending}
-                    title={`Another ${TYPE_WORDS[voice.type].toLowerCase()} voice, picked at random`}
-                    onClick={() => another.mutate(speaker)}
-                  >
-                    {another.isPending && another.variables === speaker
-                      ? "Picking…"
-                      : "Another one"}
-                  </PixelButton>
+                    onClick={() =>
+                      another.mutate(speaker, { onSuccess: () => onChanged(speaker, voice) })
+                    }
+                  />
                 )}
-                <PixelButton variant="ghost" data-size="small" onClick={() => setPicking(speaker)}>
-                  Change
-                </PixelButton>
+                <PixelButton
+                  variant="ghost"
+                  data-size="small"
+                  icon="search"
+                  tip="Choose a voice"
+                  aria-label={`Choose a voice for ${speakerName(speaker)}`}
+                  onClick={() => setPicking(speaker)}
+                />
               </div>
             </li>
           );
@@ -151,10 +152,9 @@ export function CastList({ filmId, voices }: { filmId: string; voices: FilmVoice
           variant="ghost"
           data-size="small"
           icon="plus"
+          tip={cast.isPending ? "Casting…" : "Add speaker"}
           disabled={!name.trim() || cast.isPending}
-        >
-          {cast.isPending ? "Casting…" : "Add"}
-        </PixelButton>
+        />
       </form>
       {problem && <p className="field-error">{problem}</p>}
       <VoicePicker
@@ -162,9 +162,14 @@ export function CastList({ filmId, voices }: { filmId: string; voices: FilmVoice
         speaker={speakerName(picking ?? "narrator")}
         onClose={() => setPicking(null)}
         onPick={(voice) => {
-          if (!picking) return;
+          const before = picking ? voices[picking] : undefined;
+          if (!picking || !before) return;
+          const speaker = picking;
           // Your choice: it keeps the speaker's type, and isn't marked as picked by Kairos.
-          setVoices.mutate({ ...voices, [picking]: { ...voices[picking], ...voice, auto: false } });
+          setVoices.mutate(
+            { ...voices, [speaker]: { ...before, ...voice, auto: false } },
+            { onSuccess: () => before.id !== voice.id && onChanged(speaker, before) },
+          );
           setPicking(null);
         }}
       />

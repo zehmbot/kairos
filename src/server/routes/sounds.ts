@@ -8,6 +8,7 @@ import { contentTypeOf, mediaKindOf } from "../../shared/media.ts";
 import { AudioChangeSchema, AudioTrackSchema, FromAssetSchema } from "../../shared/types.ts";
 import { assetFile, copyAssetToFilm } from "../assets.ts";
 import { changeFilm, type Film, FilmConfigError, readFilm } from "../films.ts";
+import { syncScriptWithTimeline } from "../script.ts";
 import type { Studio } from "../studio.ts";
 import { checkUploadName, saveUpload, UploadError } from "../uploads.ts";
 import { assetsDirOf, resolveInside } from "../workspace.ts";
@@ -159,6 +160,8 @@ export function soundRoutes(app: FastifyInstance, studio: Studio): void {
     }
     return guard(reply, async () => {
       const config = await changeFilm(film.path, { audio: input.data.audio });
+      // A voice clip moved or taken out on the timeline: its line in the script follows.
+      await syncScriptWithTimeline(film.path, film.config.audio, config.audio);
       studio.events.publish({ type: "films-changed", ids: [film.id] });
       return { audio: config.audio };
     });

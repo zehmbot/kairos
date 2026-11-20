@@ -169,6 +169,8 @@ export interface CreateOptions {
   brief?: BriefFile;
   /** The brief as Markdown: saved as `brief.md` and put in `{{brief}}`. */
   briefText?: string;
+  /** Voices chosen before the film is made (New film's narrator). */
+  voices?: FilmVoices;
 }
 
 /**
@@ -234,6 +236,9 @@ export async function createFilm(
       duration: options.duration ?? 5,
       status: "draft",
       page: "index.html",
+      ...(options.voices && Object.keys(options.voices).length > 0
+        ? { voices: options.voices }
+        : {}),
     };
     await writeFile(join(dir, CONFIG_FILE), `${JSON.stringify(config, null, 2)}\n`, "utf8");
     if (options.brief) {

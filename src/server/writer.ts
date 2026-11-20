@@ -86,6 +86,13 @@ export const WRITTEN_JSON_SCHEMA = {
   required: ["cast", "lines"],
 };
 
+/** A line the user wrote: Claude writes around it. */
+export interface KeptLine {
+  speaker: string;
+  text: string;
+  start: number;
+}
+
 export interface FilmFacts {
   title: string;
   duration: number;
@@ -105,6 +112,7 @@ export function writerPrompt(
   film: FilmFacts,
   request: z.infer<typeof WriteNarrationSchema>,
   voices: FilmVoices,
+  kept: readonly KeptLine[] = [],
 ): string {
   const language =
     NARRATION_LANGUAGES.find(([code]) => code === request.language)?.[1] ?? request.language;
@@ -123,6 +131,13 @@ export function writerPrompt(
     `- Language: ${language}. Write every line in it.`,
     `- Note: ${request.note || "(none)"}`,
     cast ? `- Speakers who already have a voice (use these names): ${cast}` : "",
+    ...(kept.length > 0
+      ? [
+          "- The user wrote these lines themselves. Kairos keeps them as they are: don't write them again, and",
+          "  write your lines around them (never over them):",
+          ...kept.map((line) => `  - ${line.start} s, ${line.speaker}: "${line.text}"`),
+        ]
+      : []),
     "",
     "How to work:",
     "1. Read brief.md if there is one, and the film's code (kairos.json, film.js, story.js...) to learn the",
@@ -285,7 +300,7 @@ export class Writers {
 
   /** Starts writing (returns at once; the state says how it goes). Throws when it can't start. */
   start(
-    film: { id: string; dir: string; facts: FilmFacts; voices: FilmVoices },
+    film: { id: string; dir: string; facts: FilmFacts; voices: FilmVoices; kept?: KeptLine[] },
     request: z.infer<typeof WriteNarrationSchema>,
     finish: FinishWriting,
   ): WriterState {
@@ -332,7 +347,7 @@ export class Writers {
   }
 
   async #run(
-    film: { id: string; dir: string; facts: FilmFacts; voices: FilmVoices },
+    film: { id: string; dir: string; facts: FilmFacts; voices: FilmVoices; kept?: KeptLine[] },
     request: z.infer<typeof WriteNarrationSchema>,
     finish: FinishWriting,
     claude: string,
@@ -369,7 +384,7 @@ export class Writers {
         : spawn(claude, args, { cwd: film.dir, windowsHide: true });
       job.child = child;
       job.closed = new Promise((resolve) => child.on("close", () => resolve()));
-      child.stdin?.end(writerPrompt(film.facts, request, film.voices));
+      child.stdin?.end(writerPrompt(film.facts, request, film.voices, film.kept));
 
       let errors = "";
       child.stderr?.on("data", (chunk: Buffer) => {

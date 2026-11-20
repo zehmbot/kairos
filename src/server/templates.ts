@@ -14,6 +14,7 @@ import {
   FILM_SHAPES,
   type FilmConfig,
   type FilmShape,
+  NARRATION_LANGUAGES,
   type SaveTemplate,
   type TemplateField,
   type TemplateFile,
@@ -207,12 +208,19 @@ export function briefMarkdown(brief: BriefFile, title: string): string {
     );
   }
   if (brief.voices === "make") {
+    const language = NARRATION_LANGUAGES.find(([code]) => code === brief.language)?.[1];
     lines.push(
       "",
       "## Voices",
       "",
       "Make them with the film: give every speaker a type (kairos_voices with cast), write what they say in",
       "the script (kairos_script), make the voices and fit the film to them. See Voices in CLAUDE.md.",
+      ...(brief.narrator
+        ? ["", `The user chose the narrator's voice (${brief.narrator}): keep it.`]
+        : []),
+      ...(language && brief.language !== "en"
+        ? ["", `Language: ${language}. Write every line in it.`]
+        : []),
     );
   } else if (brief.voices === "none") {
     lines.push("", "## Voices", "", "No voices for this film.");

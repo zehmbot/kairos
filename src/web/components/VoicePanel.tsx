@@ -1,10 +1,17 @@
-import { useId, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router";
-import type { AudioTrack, VoiceLine } from "../../shared/types.ts";
-import { useDeleteLine, useFilmVoices, useLines, useMakeLines, useVoiceStatus } from "../api.ts";
-import { formatLength } from "../player/time.ts";
+import type { AudioTrack, FilmVoice } from "../../shared/types.ts";
+import {
+  useFilmVoices,
+  useLines,
+  useMakeScript,
+  useSetFilmVoices,
+  useVoiceStatus,
+} from "../api.ts";
+import { useVoiceSummary } from "../voiceSummary.ts";
 import { CastList, speakerName } from "./CastList.tsx";
-import { NarrationWriter } from "./NarrationWriter.tsx";
+import { LinesList } from "./LinesList.tsx";
+import { NarrationWriter, ResultBox } from "./NarrationWriter.tsx";
 import { PixelButton } from "./PixelButton.tsx";
 import { PixelPanel } from "./PixelPanel.tsx";
 
@@ -12,215 +19,168 @@ interface VoicePanelProps {
   filmId: string;
   /** The film's sound tracks (to find where a line is on the timeline). */
   tracks: readonly AudioTrack[];
-  /** The film's length (a line that goes past it is cut). */
-  duration: number;
   /** The player's time now: new lines start there. */
   now: () => number;
   onSeek: (t: number) => void;
+  /** Selects a clip on the timeline. */
+  onShowClip: (file: string) => void;
   /** Address of a film file on the film server (to play a line). */
   fileUrl: (file: string) => string;
+  /** A voice clip clicked on the timeline: its line lights up. */
+  focus: { file: string; n: number } | null;
 }
 
-/** The film's voices: who speaks, the narration Claude writes, and every line made so far. */
-export function VoicePanel({ filmId, tracks, duration, now, onSeek, fileUrl }: VoicePanelProps) {
+const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+
+/**
+ * The film's voices: what needs updating (on top), who speaks, the one list of lines, and Claude writing them.
+ */
+export function VoicePanel({
+  filmId,
+  tracks,
+  now,
+  onSeek,
+  onShowClip,
+  fileUrl,
+  focus,
+}: VoicePanelProps) {
   const status = useVoiceStatus();
   const voices = useFilmVoices(filmId);
   const lines = useLines(filmId);
-  const make = useMakeLines(filmId);
-  const remove = useDeleteLine(filmId);
-  const [speaker, setSpeaker] = useState("narrator");
-  const [words, setWords] = useState("");
-  const [speed, setSpeed] = useState(1);
-  const [playing, setPlaying] = useState<HTMLAudioElement | null>(null);
-  const textId = useId();
-  const speedId = useId();
+  const make = useMakeScript(filmId);
+  const setVoices = useSetFilmVoices(filmId);
+  const summary = useVoiceSummary(filmId, tracks);
+  const [changed, setChanged] = useState<{ speaker: string; before: FilmVoice } | null>(null);
 
   const cast = voices.data ?? {};
-  const speakers = Object.keys(cast);
   const hasKey = Boolean(status.data?.key);
-  const chosen = cast[speaker] ? speaker : (speakers[0] ?? "narrator");
+  const count = summary.toVoice + summary.off;
+  const ofChanged = changed
+    ? summary.lines.filter(
+        ({ line, status: where }) => line.speaker === changed.speaker && where === "changed",
+      ).length
+    : 0;
 
-  const generate = () =>
-    make.mutate(
-      { speaker: chosen, lines: [words.trim()], speed, start: Math.round(now() * 100) / 100 },
-      { onSuccess: () => setWords("") },
+  // Once the lines of a changed voice are made again (or there were none), the bar forgets the change.
+  useEffect(() => {
+    if (changed && ofChanged === 0 && !setVoices.isPending) setChanged(null);
+  }, [changed, ofChanged, setVoices.isPending]);
+
+  const update = () => make.mutate({}, { onSuccess: () => setChanged(null) });
+
+  const updateButton = (label: string) => (
+    <PixelButton
+      icon="sound"
+      disabled={(summary.toVoice > 0 && !hasKey) || make.isPending}
+      onClick={update}
+    >
+      {make.isPending ? "Making the voices…" : label}
+    </PixelButton>
+  );
+
+  let bar: ReactNode = null;
+  if (changed && ofChanged > 0) {
+    bar = (
+      <div className="voice-update" role="status">
+        <p>
+          {speakerName(changed.speaker)}'s voice changed: {ofChanged}{" "}
+          {plural(ofChanged, "line still uses", "lines still use")} the old one.
+        </p>
+        <div className="voice-update-actions">
+          {updateButton(`Update (${count})`)}
+          <PixelButton
+            variant="ghost"
+            icon="undo"
+            disabled={setVoices.isPending}
+            onClick={() =>
+              setVoices.mutate(
+                { ...cast, [changed.speaker]: changed.before },
+                { onSuccess: () => setChanged(null) },
+              )
+            }
+          >
+            Undo
+          </PixelButton>
+        </div>
+      </div>
     );
-
-  const play = (line: VoiceLine) => {
-    playing?.pause();
-    const audio = new Audio(fileUrl(line.file));
-    void audio.play().catch(() => {});
-    setPlaying(audio);
-  };
-
-  const regenerate = (line: VoiceLine) => {
-    const track = tracks.find((t) => t.file === line.file);
-    remove.mutate(line.id, {
-      onSuccess: () =>
-        make.mutate({
-          speaker: line.speaker,
-          lines: [line.text],
-          speed: line.speed,
-          ...(track ? { start: track.start } : {}),
-        }),
-    });
-  };
+  } else if (count > 0) {
+    bar = (
+      <div className="voice-update" role="status">
+        <p>
+          {summary.toVoice > 0
+            ? `${summary.toVoice} ${plural(summary.toVoice, "line needs", "lines need")} a new voice.`
+            : `${summary.off} ${plural(summary.off, "line isn't", "lines aren't")} on the timeline.`}
+        </p>
+        <div className="voice-update-actions">
+          {updateButton(
+            summary.toVoice > 0 ? `Update the voices (${count})` : `Put them back (${count})`,
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <PixelPanel title="Voice">
-      <div className="stack voice-panel">
-        {!hasKey && status.isSuccess && (
-          <p className="hint">
-            To make voices, add your fish.audio key in <Link to="/settings">Settings → Voice</Link>.
-          </p>
-        )}
+    <>
+      {!hasKey && status.isSuccess && (
+        <p className="hint">
+          To make voices, add your fish.audio key in <Link to="/settings">Settings → Voice</Link>.
+        </p>
+      )}
+      {summary.noVoice > 0 && (
+        <p className="hint">
+          {summary.noVoice} {plural(summary.noVoice, "line has", "lines have")} a speaker without a
+          voice: add them in Who speaks.
+        </p>
+      )}
 
-        <CastList filmId={filmId} voices={cast} />
-
-        <NarrationWriter
+      <PixelPanel title={`Who speaks (${Object.keys(cast).length})`}>
+        <CastList
           filmId={filmId}
           voices={cast}
-          lines={lines.data ?? []}
-          hasKey={hasKey}
-          now={now}
-          onSeek={onSeek}
+          onChanged={(speaker, before) => setChanged({ speaker, before })}
         />
+      </PixelPanel>
 
-        {speakers.length > 0 && (
-          <form
-            className="stack"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (words.trim() && cast[chosen]) generate();
-            }}
-          >
-            <span className="field-label">Say a line yourself</span>
-            {speakers.length > 1 && (
-              <select
-                className="px-input"
-                aria-label="Who says it"
-                value={chosen}
-                onChange={(event) => setSpeaker(event.target.value)}
-              >
-                {speakers.map((name) => (
-                  <option key={name} value={name}>
-                    {speakerName(name)} ({cast[name]?.name})
-                  </option>
-                ))}
-              </select>
-            )}
-            <label htmlFor={textId} className="visually-hidden">
-              The words
-            </label>
-            <textarea
-              id={textId}
-              className="px-input px-textarea"
-              rows={2}
-              maxLength={2000}
-              value={words}
-              placeholder="What should they say?"
-              onChange={(event) => setWords(event.target.value)}
-            />
-            <div className="voice-speed">
-              <label htmlFor={speedId} className="field-label">
-                Speed
-              </label>
-              <input
-                id={speedId}
-                type="range"
-                min={0.5}
-                max={2}
-                step={0.05}
-                value={speed}
-                onChange={(event) => setSpeed(Number(event.target.value))}
+      <LinesList
+        filmId={filmId}
+        voices={cast}
+        lines={lines.data ?? []}
+        tracks={tracks}
+        hasKey={hasKey}
+        now={now}
+        onSeek={onSeek}
+        onShowClip={onShowClip}
+        fileUrl={fileUrl}
+        focus={focus}
+      />
+      {lines.error && <p className="field-error">{lines.error.message}</p>}
+
+      <NarrationWriter filmId={filmId} hasKey={hasKey} />
+
+      {/* Pinned to the bottom of the tab: what needs updating stays in view while the lists scroll. */}
+      {(bar || make.data || make.error) && (
+        <div className="voice-dock">
+          {make.data && !make.isPending && (
+            <div className="voice-dock-result">
+              <ResultBox
+                message={`Made ${make.data.made} ${plural(make.data.made, "voice", "voices")}${make.data.reused ? `, reused ${make.data.reused}` : ""}.`}
+                warnings={make.data.warnings}
               />
-              <span className="sound-volume-value">{speed.toFixed(2)}×</span>
-            </div>
-            <div className="note-actions">
               <PixelButton
-                type="submit"
                 variant="ghost"
-                icon="sound"
-                disabled={!hasKey || !cast[chosen] || !words.trim() || make.isPending}
-              >
-                {make.isPending ? "Making the voice…" : "Generate"}
-              </PixelButton>
-              <span className="hint">
-                {words.trim().length} characters · lands on the timeline at the playhead
-              </span>
+                data-size="small"
+                icon="check"
+                tip="Got it"
+                onClick={() => make.reset()}
+              />
             </div>
-            {make.error && <p className="field-error">{make.error.message}</p>}
-          </form>
-        )}
-
-        {lines.data && lines.data.length > 0 && (
-          <div className="stack">
-            <span className="field-label">Voice lines ({lines.data.length})</span>
-            <ul className="voice-lines">
-              {lines.data.map((line) => {
-                const track = tracks.find((t) => t.file === line.file);
-                return (
-                  <li key={line.id} className="voice-line px-box">
-                    <div className="voice-line-head">
-                      <span className="voice-speaker">{speakerName(line.speaker)}</span>
-                      <PixelButton
-                        variant="ghost"
-                        data-size="small"
-                        data-tone="danger"
-                        icon="trash"
-                        aria-label="Delete this line"
-                        disabled={remove.isPending}
-                        onClick={() => remove.mutate(line.id)}
-                      />
-                    </div>
-                    <span className="voice-line-text">{line.text}</span>
-                    <span className="hint">
-                      {formatLength(line.duration)} · {line.voiceName}
-                      {track ? ` · at ${track.start.toFixed(1)} s` : " · not on the timeline"}
-                      {track && track.start + line.duration > duration + 0.01 && (
-                        <span className="voice-past-end">
-                          {" "}
-                          · goes past the end of the film ({formatLength(duration)}): make the film
-                          longer
-                        </span>
-                      )}
-                    </span>
-                    <div className="note-actions">
-                      <PixelButton
-                        variant="ghost"
-                        data-size="small"
-                        icon="play"
-                        aria-label="Play this line"
-                        onClick={() => play(line)}
-                      />
-                      {track && (
-                        <PixelButton
-                          variant="ghost"
-                          data-size="small"
-                          onClick={() => onSeek(track.start)}
-                        >
-                          Go to it
-                        </PixelButton>
-                      )}
-                      <PixelButton
-                        variant="ghost"
-                        data-size="small"
-                        disabled={!hasKey || make.isPending || remove.isPending}
-                        onClick={() => regenerate(line)}
-                      >
-                        Regenerate
-                      </PixelButton>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-        {(lines.error ?? remove.error) && (
-          <p className="field-error">{(lines.error ?? remove.error)?.message}</p>
-        )}
-      </div>
-    </PixelPanel>
+          )}
+          {make.error && <p className="field-error">{make.error.message}</p>}
+          {bar}
+        </div>
+      )}
+    </>
   );
 }

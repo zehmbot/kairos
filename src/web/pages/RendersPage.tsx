@@ -180,7 +180,7 @@ function VideoRow({ video, onPlay }: { video: Video; onPlay: (video: Video) => v
             data-size="small"
             icon="trash"
             aria-label="Delete"
-            title="Delete this video"
+            tip="Delete"
             onClick={() => setConfirmDelete(true)}
           />
         )}

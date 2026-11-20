@@ -107,8 +107,10 @@ the middle of each (at most 36) and tiles them into sheets in `.kairos/reference
 Claude sees them with `kairos_references` (6 sheets per page), and the library with `kairos_assets` and
 `kairos_use_asset`.
 
-On the film page, the side column has tabs (Notes, Sound, References, Brief; the last one shown is remembered
-per film). Files dropped anywhere on the page, or added with **Add**, go where they fit: dropped on the Sound or
+On the film page, the side column has tabs (Notes, Sound, Voice, References, Brief; the last one shown is
+remembered per film). On wide screens the page fills the window and both columns scroll by themselves, so the
+player and the timeline stay in view: `App.tsx` keeps `--main-h`, `FilmPage` `--review-h` and the timeline
+`--timeline-h`, and the video shrinks to leave room for the timeline. Files dropped anywhere on the page, or added with **Add**, go where they fit: dropped on the Sound or
 References tab they go straight in, elsewhere Kairos asks what they are for (`src/web/filmAdd.ts`: the choices
 for each kind of file and where each is sent; `POST /api/films/:id/files` puts a picture, video or font in the
 film's `assets/`).
@@ -176,13 +178,24 @@ to any sound. Save as template leaves `voice/` out.
 - **No repeats:** no two speakers in a film share a voice.
 - **Characters keep their voice** from film to film (`voice.remembered` in `config.json`); the narrator doesn't.
 
-**The script** (`voice/script.json`, `src/server/script.ts`) holds the lines with speaker, words and `start`.
+**The script** (`voice/script.json`, `src/server/script.ts`) is the film's one list of spoken lines: speaker,
+words, `start`, `speed` and who wrote it (`by`: `claude` or `you`; editing a line's words or speaker makes it
+yours).
 
 - **Making it** turns each line into a voice line (unchanged ones reused) and places it at its start, after the
-  line before when they would overlap; the moved start is saved.
+  line before when they would overlap; the moved start is saved. `only` + `fresh` make a new take of some lines.
+- **Free changes:** saving the script also places it without speaking (no credits): a new start moves the clip, a
+  deleted line leaves the timeline. Lines that changed keep their old take ("out of date") until the next making.
 - **Replacing clips:** `made` lists the voice lines it made, so clips and files of lines that are gone are
-  replaced.
+  replaced. Files of deleted lines stay until the next real making, so Undo costs nothing.
+- **The timeline follows:** after `PUT /audio`, `syncScriptWithTimeline` moves a line to its clip's new start,
+  takes it out when its clip is removed, and brings it back when the timeline's Undo restores the clip.
+- **One list:** lines made one at a time (`kairos_say`) join the script, and voice lines on the timeline from
+  before (`adoptLooseLines`) join it when it is read.
 - **Stopping halfway:** when fish.audio stops (no credit...), what was made is still placed.
+
+`scriptLineStatus` (`src/shared/script.ts`) says where a line stands: made, out of date (words, speaker, voice or
+speed changed), not made, no voice, or not on the timeline.
 
 **Write the narration** (`src/server/writer.ts`) runs `claude -p` in the film's folder, without a terminal:
 
@@ -194,9 +207,20 @@ to any sound. Save as template leaves `voice/` out.
 - **Progress:** the `stream-json` tool calls become `writer-progress` events.
 - **Then Kairos** saves the script, casts, and makes the voices.
 - **Limits:** one run per film, a 6-minute limit, and Stop ends the process tree.
+- **Writing again** replaces Claude's lines only: your lines stay, and the prompt asks Claude to write around them.
 
 New film's **Voices** choice goes in the brief (`voices: "make"`), and the film guides tell Claude to cast, write
-the script, make it and fit the film.
+the script, make it and fit the film. The narrator's voice is picked there already (`POST /api/voice/pick`,
+free), with the language: the new film's `kairos.json` gets `voices.narrator`, the brief names it, and a language
+other than English starts `voice/script.json`. The voice library is public, so choosing needs no key; only your
+own voices and speaking do.
+
+**The Voice tab** (`src/web/components/VoicePanel.tsx`) has three boxes: Who speaks (`CastList`), Lines
+(`LinesList`: edits save by themselves a moment after typing, Delete has Undo) and Write with Claude
+(`NarrationWriter`). At its bottom, pinned, the update bar says what needs a new voice and makes only that; right
+after a voice change it also offers Undo. `useVoiceSummary` (`src/web/voiceSummary.ts`) gives the tab's amber
+count and the out-of-date marks on timeline clips. A clip clicked on the timeline opens its line (Voice) or sound
+(Sound) and lights it up; Go to on a line selects its clip.
 
 ## Claude Code
 
@@ -229,6 +253,9 @@ without a GPU.
 
 ## Pixel UI rules
 
+- Secondary buttons are icons; main actions keep their words. Every icon button has a short name (`tip` on
+  `PixelButton`, or `data-tip`): `Tooltips.tsx` shows it in a pixel box, drawn outside scrolling boxes and inside
+  an open dialog.
 - Colors: use the role variables in `src/web/theme/tokens.css` (`--surface`, `--accent`, ...), not raw hex values.
   The palette is Sweetie-16.
 - No rounded corners, gradients or blur. Borders are stepped `box-shadow` outlines (`.px-box`, `.px-btn`) sized in

@@ -42,7 +42,7 @@ export function MarkTools({ tool, onTool, marks, onUndo }: MarkToolsProps) {
           variant="ghost"
           icon={entry.icon}
           aria-label={entry.label}
-          title={`${entry.label}: ${entry.hint}`}
+          tip={entry.label}
           aria-pressed={tool === entry.tool}
           onMouseDown={keepFocus}
           onClick={() => onTool(entry.tool)}
@@ -52,7 +52,7 @@ export function MarkTools({ tool, onTool, marks, onUndo }: MarkToolsProps) {
         variant="ghost"
         icon="undo"
         aria-label="Undo last mark"
-        title="Undo last mark (Ctrl+Z)"
+        tip="Undo mark (Ctrl+Z)"
         disabled={marks === 0}
         onMouseDown={keepFocus}
         onClick={onUndo}

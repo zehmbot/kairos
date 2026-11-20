@@ -4,7 +4,9 @@ import {
   CastInputSchema,
   type FilmVoice,
   type FilmVoices,
+  MakeScriptInputSchema,
   ScriptInputSchema,
+  VoicePickSchema,
   type VoiceType,
   VoiceTypeSchema,
   WriteNarrationSchema,
@@ -12,7 +14,7 @@ import {
 import { type CastResult, castVoices, pickVoice } from "../casting.ts";
 import { changeFilm, readFilmConfig } from "../films.ts";
 import { FishError, type FishOptions, speak } from "../fish.ts";
-import { makeScript, readScript, saveScript } from "../script.ts";
+import { adoptLooseLines, makeScript, readScript, saveScript } from "../script.ts";
 import type { Studio } from "../studio.ts";
 import { WriterError, type Writers } from "../writer.ts";
 import { sendError } from "./errors.ts";
@@ -32,8 +34,8 @@ export function scriptRoutes(
   const { model, keyed, open, fish, filmOr, guard } = voiceContext(studio, options);
   const changed = (id: string) => studio.events.publish({ type: "films-changed", ids: [id] });
 
-  const speakWith = (connection: FishOptions) => (text: string, voice: FilmVoice) =>
-    speak(connection, { text, voiceId: voice.id, speed: 1, model: model() });
+  const speakWith = (connection: FishOptions) => (text: string, voice: FilmVoice, speed: number) =>
+    speak(connection, { text, voiceId: voice.id, speed, model: model() });
 
   /** The film's voices as they are now (kairos.json may have changed since the film was read). */
   const voicesOf = async (film: ReadyFilm): Promise<FilmVoices> =>
@@ -101,12 +103,33 @@ export function scriptRoutes(
     },
   );
 
+  /** A random fitting voice before there is a film (New film's narrator). Free: no key needed. */
+  app.post("/api/voice/pick", async (request, reply) => {
+    const input = VoicePickSchema.safeParse(request.body ?? {});
+    if (!input.success) {
+      return sendError(reply, 400, "bad-request", input.error.issues[0]?.message ?? "Bad request.");
+    }
+    const { type, language, avoid } = input.data;
+    return guard(reply, async () => {
+      const picked = await pickVoice(await open(), type, { language, avoid: new Set(avoid) });
+      if (!picked) {
+        return sendError(
+          reply,
+          404,
+          "no-voice",
+          "No fitting voice was found: choose one yourself.",
+        );
+      }
+      return picked;
+    });
+  });
+
   // ---------- The script ----------
 
   app.get<{ Params: IdParams }>("/api/films/:id/script", async (request, reply) => {
     const film = await filmOr(reply, request.params.id);
     if (!film) return reply;
-    return guard(reply, async () => ({ script: await readScript(film.path) }));
+    return guard(reply, async () => ({ script: await adoptLooseLines(film.path) }));
   });
 
   app.put<{ Params: IdParams }>("/api/films/:id/script", async (request, reply) => {
@@ -117,15 +140,27 @@ export function scriptRoutes(
       return sendError(reply, 400, "bad-script", input.error.issues[0]?.message ?? "Bad script.");
     }
     return guard(reply, async () => {
-      const script = await saveScript(film.path, input.data, input.data.writtenBy ?? "you");
-      changed(film.id);
-      return { script };
+      await saveScript(film.path, input.data, input.data.writtenBy ?? "you");
+      // Free changes apply at once: lines move to their new times, deleted lines leave the timeline.
+      try {
+        const placed = await makeScript(film.path, {
+          voices: await voicesOf(film),
+          model: model(),
+        });
+        return { script: placed.script, warnings: placed.warnings };
+      } finally {
+        changed(film.id);
+      }
     });
   });
 
   app.post<{ Params: IdParams }>("/api/films/:id/script/make", async (request, reply) => {
     const film = await filmOr(reply, request.params.id);
     if (!film) return reply;
+    const input = MakeScriptInputSchema.safeParse(request.body ?? {});
+    if (!input.success) {
+      return sendError(reply, 400, "bad-request", input.error.issues[0]?.message ?? "Bad request.");
+    }
     const connection = await fish(reply);
     if (!connection) return reply;
     return guard(reply, async () => {
@@ -134,6 +169,8 @@ export function scriptRoutes(
           voices: await voicesOf(film),
           model: model(),
           speak: speakWith(connection),
+          only: input.data.lines,
+          fresh: input.data.fresh,
         });
         for (const voice of Object.values(await voicesOf(film))) await studio.rememberVoice(voice);
         return made;
@@ -162,6 +199,10 @@ export function scriptRoutes(
     }
     const ask = input.data;
     const { title, duration, width, height, fps } = film.config;
+    // Your own lines stay: Claude writes around them, and only its own lines are replaced.
+    const yours = ((await readScript(film.path).catch(() => null))?.lines ?? []).filter(
+      (line) => line.by === "you",
+    );
     try {
       return writers.start(
         {
@@ -169,18 +210,25 @@ export function scriptRoutes(
           dir: film.path,
           facts: { title, duration, width, height, fps },
           voices: await voicesOf(film),
+          kept: yours.map(({ speaker, text, start }) => ({ speaker, text, start })),
         },
         ask,
         async (written, step) => {
           const warnings: string[] = [];
           step("writing", "Saving the script");
+          const kept = ((await readScript(film.path).catch(() => null))?.lines ?? []).filter(
+            (line) => line.by === "you",
+          );
           await saveScript(
             film.path,
             {
               style: ask.style,
               language: ask.language,
               note: written.note ?? "",
-              lines: written.lines,
+              lines: [
+                ...kept,
+                ...written.lines.map((line) => ({ ...line, by: "claude" as const })),
+              ],
             },
             "claude",
           );

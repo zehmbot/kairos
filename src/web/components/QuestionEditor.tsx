@@ -35,6 +35,7 @@ export function QuestionEditor({
             data-size="small"
             disabled={isFirst}
             aria-label={`Move question ${number} up`}
+            tip="Move up"
             onClick={() => onMove(-1)}
           >
             Up
@@ -44,6 +45,7 @@ export function QuestionEditor({
             data-size="small"
             disabled={isLast}
             aria-label={`Move question ${number} down`}
+            tip="Move down"
             onClick={() => onMove(1)}
           >
             Down
@@ -54,6 +56,7 @@ export function QuestionEditor({
             data-tone="danger"
             icon="trash"
             aria-label={`Remove question ${number}`}
+            tip="Remove"
             onClick={onRemove}
           />
         </div>

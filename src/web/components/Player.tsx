@@ -236,7 +236,7 @@ export function Player({
             variant="ghost"
             icon="toStart"
             aria-label="Go to start"
-            title="Go to start (Home)"
+            tip="Go to start (Home)"
             onMouseDown={keepFocus}
             onClick={() => seek(0)}
           />
@@ -244,14 +244,14 @@ export function Player({
             variant="ghost"
             icon="stepBack"
             aria-label="Previous frame"
-            title="Previous frame (Left arrow)"
+            tip="Previous frame (←)"
             onMouseDown={keepFocus}
             onClick={() => step(-1)}
           />
           <PixelButton
             icon={player.playing ? "pause" : "play"}
             aria-label={player.playing ? "Pause" : "Play"}
-            title="Play / pause (Space)"
+            tip={player.playing ? "Pause (Space)" : "Play (Space)"}
             onMouseDown={keepFocus}
             onClick={toggle}
           />
@@ -259,7 +259,7 @@ export function Player({
             variant="ghost"
             icon="stepForward"
             aria-label="Next frame"
-            title="Next frame (Right arrow)"
+            tip="Next frame (→)"
             onMouseDown={keepFocus}
             onClick={() => step(1)}
           />
@@ -267,7 +267,7 @@ export function Player({
             variant="ghost"
             icon="toEnd"
             aria-label="Go to end"
-            title="Go to end (End)"
+            tip="Go to end (End)"
             onMouseDown={keepFocus}
             onClick={() => seek(total - 1)}
           />
@@ -278,7 +278,7 @@ export function Player({
               variant="ghost"
               icon={muted ? "mute" : "sound"}
               aria-label={muted ? "Sound on" : "Sound off"}
-              title={muted ? "Sound on (M)" : "Sound off (M)"}
+              tip={muted ? "Sound on (M)" : "Sound off (M)"}
               onMouseDown={keepFocus}
               onClick={() => updateSound({ muted: !muted })}
             />

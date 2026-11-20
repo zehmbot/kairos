@@ -11,9 +11,11 @@ import {
   ExportInfoSchema,
   type FilmChange,
   FilmSummarySchema,
+  FilmVoiceSchema,
   type FilmVoices,
   FilmVoicesSchema,
   HealthSchema,
+  type MakeScriptInput,
   type NewFilm,
   type NewLines,
   type NewNote,
@@ -833,7 +835,11 @@ export function useSaveScript(filmId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: ScriptInput) =>
-      call(z.object({ script: ScriptSchema }), `${filmUrl(filmId)}/script`, sendJson("PUT", input)),
+      call(
+        z.object({ script: ScriptSchema, warnings: z.array(z.string()).default([]) }),
+        `${filmUrl(filmId)}/script`,
+        sendJson("PUT", input),
+      ),
     onSuccess: ({ script }) => queryClient.setQueryData(queryKeys.script(filmId), script),
   });
 }
@@ -844,13 +850,21 @@ const MadeScriptSchema = z.object({
   warnings: z.array(z.string()),
 });
 
-/** Makes the script's voices and places them. */
+/** Makes the script's voices (all that changed, or some lines: a new take) and places them. */
 export function useMakeScript(filmId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () =>
-      call(MadeScriptSchema, `${filmUrl(filmId)}/script/make`, sendJson("POST", {})),
+    mutationFn: (input: MakeScriptInput = {}) =>
+      call(MadeScriptSchema, `${filmUrl(filmId)}/script/make`, sendJson("POST", input)),
     onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.film(filmId) }),
+  });
+}
+
+/** A random fitting voice before there is a film (New film's narrator). Free: no key needed. */
+export function usePickVoice() {
+  return useMutation({
+    mutationFn: (input: { type?: VoiceType; language?: string; avoid?: string[] }) =>
+      call(FilmVoiceSchema, "/api/voice/pick", sendJson("POST", input)),
   });
 }
 

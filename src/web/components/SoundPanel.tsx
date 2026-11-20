@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { acceptFor } from "../../shared/media.ts";
 import type { AudioTrack } from "../../shared/types.ts";
 import { queryKeys, useAddSoundFromAsset, useSaveAudio } from "../api.ts";
@@ -44,10 +44,12 @@ interface SoundPanelProps {
   fileUrl: (file: string) => string;
   /** The player's current time: new sounds start there. */
   now: () => number;
+  /** A clip clicked on the timeline: its sound comes into view and lights up. */
+  focus?: { file: string; n: number } | null;
 }
 
 /** The film's sound: tracks with their start and volume, add from the computer or the asset library. */
-export function SoundPanel({ filmId, tracks, duration, fileUrl, now }: SoundPanelProps) {
+export function SoundPanel({ filmId, tracks, duration, fileUrl, now, focus }: SoundPanelProps) {
   const queryClient = useQueryClient();
   const save = useSaveAudio(filmId);
   const fromAsset = useAddSoundFromAsset(filmId);
@@ -57,6 +59,19 @@ export function SoundPanel({ filmId, tracks, duration, fileUrl, now }: SoundPane
   const [picking, setPicking] = useState(false);
   const [draft, setDraft] = useState<AudioTrack[]>([...tracks]);
   const baseId = useId();
+  const [flash, setFlash] = useState<string | null>(null);
+  const rows = useRef(new Map<string, HTMLLIElement>());
+
+  // A clip clicked on the timeline: its sound comes into view and lights up.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a new click (n) moves the list.
+  useEffect(() => {
+    if (!focus) return;
+    const key = `${focus.file}#1`;
+    rows.current.get(key)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    setFlash(key);
+    const id = window.setTimeout(() => setFlash(null), 2000);
+    return () => window.clearTimeout(id);
+  }, [focus?.n]);
 
   // Follow the film when it changes elsewhere (Claude, another window).
   const saved = JSON.stringify(tracks);
@@ -105,7 +120,15 @@ export function SoundPanel({ filmId, tracks, duration, fileUrl, now }: SoundPane
                 const startId = `${baseId}-start-${index}`;
                 const volumeId = `${baseId}-volume-${index}`;
                 return (
-                  <li key={key} className="sound-row px-box">
+                  <li
+                    key={key}
+                    ref={(element) => {
+                      if (element) rows.current.set(key, element);
+                      else rows.current.delete(key);
+                    }}
+                    className="sound-row px-box"
+                    data-flash={flash === key ? "" : undefined}
+                  >
                     <div className="sound-head">
                       <span className="sound-name">{fileName(track.file)}</span>
                       <span className="hint">{length ? formatLength(length) : ""}</span>
@@ -140,13 +163,12 @@ export function SoundPanel({ filmId, tracks, duration, fileUrl, now }: SoundPane
                       <PixelButton
                         variant="ghost"
                         data-size="small"
-                        title="Start at the player's current time"
+                        icon="target"
+                        tip="Start at the playhead"
                         onClick={() =>
                           commit(change(index, { start: Math.round(now() * 100) / 100 }))
                         }
-                      >
-                        Now
-                      </PixelButton>
+                      />
                     </div>
                     <div className="sound-controls">
                       <label htmlFor={volumeId} className="field-label">
@@ -173,7 +195,7 @@ export function SoundPanel({ filmId, tracks, duration, fileUrl, now }: SoundPane
                         data-tone="danger"
                         icon="trash"
                         aria-label={`Remove ${fileName(track.file)}`}
-                        title="Take this sound out of the film (the file stays in its folder)"
+                        tip="Remove"
                         onClick={() => commit(draft.filter((_, i) => i !== index))}
                       />
                     </div>

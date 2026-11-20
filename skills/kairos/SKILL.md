@@ -106,9 +106,11 @@ Kairos makes spoken lines with fish.audio. **They cost the user's credits:** mak
 1. **Cast** with `kairos_voices` and `cast`: every speaker and its type (`narrator`, `woman`, `man`, `girl`,
    `boy`, `old-woman`, `old-man`). Kairos picks a fitting voice for each one without a voice, and a character
    keeps its voice from film to film. Use short names in small letters (`narrator`, `ruby`, `grandpa-bo`).
-   `choose` sets a voice yourself: only when the user names one.
+   `choose` sets a voice yourself: only when the user names one. A narrator the user chose in New film is
+   already there: keep it.
 2. **Write the script** with `kairos_script` and `lines`: every line with its speaker, words and `start` (seconds
-   on the film), in time order.
+   on the film), in time order. `lines` replaces the whole script: read it first, and keep the lines marked
+   "by the user" unless they ask you to change them.
    - One line per sentence or beat, so shots and captions can follow them.
    - About 2.5 words per second: a line must end before the next one starts.
 3. **Make the voices** with `kairos_script` and `make: true`.
@@ -120,12 +122,14 @@ Kairos makes spoken lines with fish.audio. **They cost the user's credits:** mak
    `duration` to cover the last line (`kairos_film_settings`). For captions, read `voice/*.words.json` (see the
    `kairos-captions` skill).
 
-`kairos_say` makes a single line outside the script, placed after the voice lines already there. `kairos_words`
+`kairos_say` makes a single line and places it after the voice lines already there; it joins the script.
+`kairos_words`
 gives the word timings of any sound in the film; for the user's own recording it can ask fish.audio's
 speech-to-text (`transcribe: true`, uses credits).
 
-The user sees all of this in the film page's Voice tab: the cast (with **Another one** and **Change**), the
-script, and **Write the narration**, which runs Claude in the background to write the script.
+The user sees all of this in the film page's Voice tab: who speaks, one list of every line (each tagged Claude or
+You, and whether its voice is made or out of date), and **Write with Claude**, which runs Claude in the background
+to write the lines.
 
 ## References and assets
 

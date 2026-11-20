@@ -187,7 +187,7 @@ function SkillRow({ skill }: { skill: Skill }) {
                 data-size="small"
                 icon="trash"
                 aria-label="Delete"
-                title="Delete this skill"
+                tip="Delete"
                 onClick={() => setConfirmDelete(true)}
               />
             </>

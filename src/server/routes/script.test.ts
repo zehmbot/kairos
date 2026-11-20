@@ -12,6 +12,7 @@ import { Studio } from "../studio.ts";
 import { Writers } from "../writer.ts";
 import { filmRoutes } from "./films.ts";
 import { scriptRoutes } from "./script.ts";
+import { soundRoutes } from "./sounds.ts";
 import { voiceRoutes } from "./voice.ts";
 
 const templatesDir = fileURLToPath(new URL("../../../templates/", import.meta.url));
@@ -47,6 +48,7 @@ beforeEach(async () => {
   studio.events.subscribe((event) => events.push(event));
   app = Fastify();
   filmRoutes(app, studio);
+  soundRoutes(app, studio);
   voiceRoutes(app, studio, { fishUrl: fake.url });
   const writers = new Writers({
     claudePath: () => fakeClaude,
@@ -68,6 +70,8 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+const getScript = async () =>
+  ((await app.inject("/api/films/intro/script")).json() as { script: Script }).script;
 const json = (method: "POST" | "PUT" | "DELETE", url: string, payload?: object) =>
   app.inject({ method, url, payload });
 const filmDir = () => join(root, "ws", "films", "intro");
@@ -97,6 +101,31 @@ describe("New film", () => {
     expect(brief).toContain("Make them with the film");
     // Without voices and answers, no brief at all (as before).
     await expect(stat(join(filmDir(), "brief.md"))).rejects.toThrow();
+  });
+
+  it("picks a narrator before there is a film, and the new film keeps it and its language", async () => {
+    const picked = await json("POST", "/api/voice/pick", { type: "narrator" });
+    expect(picked.statusCode).toBe(200);
+    const narrator = picked.json();
+    expect(narrator).toMatchObject({ type: "narrator", auto: true });
+    const another = (await json("POST", "/api/voice/pick", { avoid: [narrator.id] })).json();
+    expect(another.id).not.toBe(narrator.id);
+
+    await json("POST", "/api/films", {
+      title: "Told",
+      shape: "wide",
+      voices: "make",
+      narrator: { ...another, auto: false },
+      language: "fr",
+    });
+    const dir = join(root, "ws", "films", "told");
+    const config = JSON.parse(await readFile(join(dir, "kairos.json"), "utf8"));
+    expect(config.voices.narrator).toMatchObject({ id: another.id, type: "narrator", auto: false });
+    const brief = await readFile(join(dir, "brief.md"), "utf8");
+    expect(brief).toContain(`The user chose the narrator's voice (${another.name}): keep it.`);
+    expect(brief).toContain("Language: French.");
+    const script = JSON.parse(await readFile(join(dir, "voice", "script.json"), "utf8"));
+    expect(script).toMatchObject({ language: "fr", lines: [] });
   });
 });
 
@@ -187,6 +216,109 @@ describe("the script", () => {
   });
 });
 
+describe("one list of lines", () => {
+  /** Two lines made by the narrator: the second at 3 s, a bit faster. */
+  async function twoMade() {
+    await setKey();
+    await json("POST", "/api/films/intro/cast", {
+      speakers: [{ speaker: "narrator", type: "narrator" }],
+    });
+    await json("PUT", "/api/films/intro/script", {
+      lines: [
+        { speaker: "narrator", text: "Once upon a time", start: 0 },
+        { speaker: "narrator", text: "the end", start: 3, speed: 1.2 },
+      ],
+    });
+    await json("POST", "/api/films/intro/script/make");
+    return getScript();
+  }
+
+  it("keeps who wrote each line and its speed, and moves a line for free", async () => {
+    const script = await twoMade();
+    expect(script.lines.map((line) => [line.by, line.speed])).toEqual([
+      ["you", 1],
+      ["you", 1.2],
+    ]);
+    const calls = fake.speechCalls();
+    const [first, second] = script.lines;
+    const moved = await json("PUT", "/api/films/intro/script", {
+      lines: [first, { ...second, start: 4 }],
+    });
+    expect(moved.json().script.lines[1].start).toBe(4);
+    expect(await clips()).toEqual([
+      ["voice/narrator-1.mp3", 0],
+      ["voice/narrator-2.mp3", 4],
+    ]);
+    expect(fake.speechCalls()).toBe(calls);
+  });
+
+  it("takes a deleted line off the timeline at once, and Undo brings it back for free", async () => {
+    const [first, second] = (await twoMade()).lines;
+    await json("PUT", "/api/films/intro/script", { lines: [first] });
+    expect(await clips()).toEqual([["voice/narrator-1.mp3", 0]]);
+    // Its files stay until the next making, so Undo costs nothing.
+    await stat(join(filmDir(), "voice", "narrator-2.mp3"));
+    await json("PUT", "/api/films/intro/script", { lines: [first, second] });
+    expect(await clips()).toHaveLength(2);
+    const calls = fake.speechCalls();
+    expect((await json("POST", "/api/films/intro/script/make")).json()).toMatchObject({
+      made: 0,
+      reused: 2,
+    });
+    expect(fake.speechCalls()).toBe(calls);
+  });
+
+  it("follows the timeline: a moved clip moves its line, a removed one takes it out, Undo brings it back", async () => {
+    await twoMade();
+    const audio = (await film()).config?.audio ?? [];
+    const [one, two] = audio;
+    if (!one || !two) throw new Error("no clips");
+    await json("PUT", "/api/films/intro/audio", { audio: [one, { ...two, start: 3.5 }] });
+    expect((await getScript()).lines.map((line) => line.start)).toEqual([0, 3.5]);
+
+    await json("PUT", "/api/films/intro/audio", { audio: [one] });
+    expect((await getScript()).lines.map((line) => line.text)).toEqual(["Once upon a time"]);
+    await json("PUT", "/api/films/intro/audio", { audio: [one, { ...two, start: 3.5 }] });
+    expect((await getScript()).lines.map((line) => [line.text, line.start])).toEqual([
+      ["Once upon a time", 0],
+      ["the end", 3.5],
+    ]);
+  });
+
+  it("puts lines made one at a time in the list, and adopts older ones", async () => {
+    await setKey();
+    await json("PUT", "/api/films/intro/voices", { narrator: { id: "sarah", name: "Sarah" } });
+    await json("POST", "/api/films/intro/lines", {
+      speaker: "narrator",
+      lines: ["Hello there"],
+      start: 1,
+      by: "claude",
+    });
+    expect((await getScript()).lines).toMatchObject([
+      { text: "Hello there", start: 1, by: "claude" },
+    ]);
+    // A film from before there was one list: lines on the timeline, no script.
+    await rm(join(filmDir(), "voice", "script.json"));
+    expect((await getScript()).lines).toMatchObject([{ text: "Hello there", start: 1, by: "you" }]);
+  });
+
+  it("makes a new take of one line only", async () => {
+    const [first] = (await twoMade()).lines;
+    if (!first) throw new Error("no line");
+    const calls = fake.speechCalls();
+    const made = (
+      await json("POST", "/api/films/intro/script/make", { lines: [first.id], fresh: true })
+    ).json();
+    expect(made).toMatchObject({ made: 1, reused: 0 });
+    expect(fake.speechCalls()).toBe(calls + 1);
+    expect(await clips()).toEqual([
+      ["voice/narrator-3.mp3", 0],
+      ["voice/narrator-2.mp3", 3],
+    ]);
+    await expect(stat(join(filmDir(), "voice", "narrator-1.mp3"))).rejects.toThrow();
+  });
+});
+
 describe("writing the narration in the background", () => {
   it("runs Claude, saves its script, casts and makes the voices", async () => {
     await setKey();
@@ -213,6 +345,22 @@ describe("writing the narration in the background", () => {
     );
     expect(run.prompt).toContain("Style: funny");
     expect(run.cwd).toBe(filmDir());
+  });
+
+  it("keeps your own lines when Claude writes again, and tells Claude about them", async () => {
+    await json("PUT", "/api/films/intro/script", {
+      lines: [{ speaker: "narrator", text: "My own words", start: 4 }],
+    });
+    await json("POST", "/api/films/intro/script/writer", {});
+    expect((await finished()).state).toBe("done");
+    const lines = (await getScript()).lines.map((line) => [line.text, line.by]);
+    expect(lines).toEqual([
+      ["My own words", "you"],
+      ["Once upon a time", "claude"],
+      ["Wait for me", "claude"],
+    ]);
+    const log = (await readFile(join(claudeDir, "log.jsonl"), "utf8")).trim().split("\n");
+    expect(JSON.parse(log.at(-1) ?? "{}").prompt).toContain('4 s, narrator: "My own words"');
   });
 
   it("saves the script and the cast without a key, and says the voices wait for it", async () => {

@@ -781,6 +781,7 @@ export function createKairosServer(context: ToolContext): McpServer {
           lines: args.lines,
           speed: args.speed ?? 1,
           gap,
+          by: "claude",
           ...(args.place === false ? {} : { start }),
         });
         const report = made.lines.map((line, i) => {
@@ -886,12 +887,20 @@ export function createKairosServer(context: ToolContext): McpServer {
         const id = await filmId(args.film);
         const out: string[] = [];
         if (args.lines) {
+          // A line the user wrote (same speaker and words) stays theirs, with its voice.
+          const before = (await hub.script(id))?.lines ?? [];
+          const lines = args.lines.map((line) => {
+            const same = before.find(
+              (entry) => entry.speaker === line.speaker && entry.text === line.text.trim(),
+            );
+            return same ? { ...same, start: line.start } : line;
+          });
           const saved = await hub.saveScript(id, {
             writtenBy: "claude",
             style: args.style,
             language: args.language,
             note: args.note,
-            lines: args.lines,
+            lines,
           });
           out.push(
             `Saved the script: ${saved.lines.length} line${saved.lines.length === 1 ? "" : "s"}.`,
@@ -917,19 +926,26 @@ export function createKairosServer(context: ToolContext): McpServer {
           out.push("This film has no script yet. Write one with `lines`.");
           return { content: [text(out.join("\n"))] };
         }
-        const [made, voices] = await Promise.all([hub.lines(id), hub.filmVoices(id)]);
+        const [made, voices, film] = await Promise.all([
+          hub.lines(id),
+          hub.filmVoices(id),
+          hub.film(id),
+        ]);
         const words = {
           made: "voice made",
           changed: "changed since its voice was made",
           new: "no voice yet",
           "no-voice": "the speaker has no voice",
+          off: "voice made, not on the timeline",
         };
         out.push(
-          `Script (${script.language}${script.style ? `, ${script.style}` : ""}, written by ${script.writtenBy === "claude" ? "Claude" : "the user"}):`,
+          `Script (${script.language}${script.style ? `, ${script.style}` : ""}). Lines marked "by the user" are theirs: keep them unless they ask.`,
         );
         for (const line of [...script.lines].sort((a, b) => a.start - b.start)) {
+          const status = scriptLineStatus(line, made, voices, film.config?.audio);
+          const speed = line.speed !== 1 ? `, speed ${line.speed}` : "";
           out.push(
-            `- ${seconds(line.start)} ${line.speaker}: "${line.text}" (${words[scriptLineStatus(line, made, voices)]})`,
+            `- ${seconds(line.start)} ${line.speaker}: "${line.text}" (${line.by === "you" ? "by the user" : "by Claude"}, ${words[status]}${speed})`,
           );
         }
         if (script.note) out.push(`Note: ${script.note}`);

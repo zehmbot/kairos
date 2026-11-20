@@ -153,6 +153,8 @@ export const NewLinesSchema = z.object({
   start: z.number().min(0).optional(),
   /** Silence between lines placed back-to-back, in seconds. */
   gap: z.number().min(0).max(10).default(0.3),
+  /** Who wrote them (placed lines join the script with it). */
+  by: z.enum(["claude", "you"]).default("you"),
 });
 export type NewLines = z.input<typeof NewLinesSchema>;
 
@@ -195,6 +197,10 @@ export const ScriptLineSchema = z.object({
   start: z.number().min(0),
   /** The voice line made from it (an id in `voice/lines.json`), once made. */
   line: z.string().optional(),
+  /** Who wrote the words: Claude, or you (a line of Claude's you edit becomes yours). */
+  by: z.enum(["claude", "you"]).default("you"),
+  /** How fast it is said (1 = normal). */
+  speed: z.number().min(0.5).max(2).default(1),
 });
 export type ScriptLine = z.infer<typeof ScriptLineSchema>;
 
@@ -222,7 +228,15 @@ export const ScriptInputSchema = z.object({
   style: z.string().max(200).optional(),
   language: z.string().max(10).optional(),
   note: z.string().max(1000).optional(),
-  lines: z.array(ScriptLineSchema.extend({ id: z.string().min(1).max(40).optional() })).max(200),
+  lines: z
+    .array(
+      ScriptLineSchema.extend({
+        id: z.string().min(1).max(40).optional(),
+        /** Left out: whoever is saving the script (writtenBy). */
+        by: z.enum(["claude", "you"]).optional(),
+      }),
+    )
+    .max(200),
 });
 export type ScriptInput = z.input<typeof ScriptInputSchema>;
 
@@ -240,6 +254,23 @@ export const CastInputSchema = z.object({
     .min(1)
     .max(20),
   language: z.string().max(10).optional(),
+});
+
+/** POST /api/films/:id/script/make: everything that changed, or only some lines (a new take). */
+export const MakeScriptInputSchema = z.object({
+  /** Script line ids to make; left out: every line. */
+  lines: z.array(z.string().min(1).max(40)).max(200).optional(),
+  /** A new take even when nothing changed. */
+  fresh: z.boolean().default(false),
+});
+export type MakeScriptInput = z.input<typeof MakeScriptInputSchema>;
+
+/** POST /api/voice/pick: a random fitting voice, before there is a film (New film's narrator). */
+export const VoicePickSchema = z.object({
+  type: VoiceTypeSchema.default("narrator"),
+  language: z.string().max(10).default("en"),
+  /** Voices not to pick again (the one shown now). */
+  avoid: z.array(z.string().max(100)).max(50).default([]),
 });
 
 /** "Write the narration": what you ask Claude for. */
@@ -422,6 +453,9 @@ export const BriefFileSchema = z.object({
   answers: BriefAnswersSchema,
   /** Make the voices with the film (New film's Voices choice). */
   voices: z.enum(["make", "none"]).optional(),
+  /** The narrator's voice chosen in New film (its name), and the language the voices speak. */
+  narrator: z.string().optional(),
+  language: z.string().optional(),
   updatedAt: z.string(),
 });
 export type BriefFile = z.infer<typeof BriefFileSchema>;
@@ -457,6 +491,10 @@ export const NewFilmSchema = z.object({
   brief: BriefAnswersSchema.default({}),
   /** Make the voices (narration and characters) while the film is built. */
   voices: z.enum(["make", "none"]).default("none"),
+  /** The narrator's voice, chosen before anything is made (with voices: "make"). */
+  narrator: FilmVoiceSchema.optional(),
+  /** The language the voices speak (fish.audio code). */
+  language: z.string().max(10).optional(),
 });
 /** What the client sends (`fps`, `template` and `brief` may be left out). */
 export type NewFilm = z.input<typeof NewFilmSchema>;

@@ -64,7 +64,7 @@ export function FilmCard({ film, onDelete }: { film: FilmSummary; onDelete?: () 
           data-size="small"
           icon="trash"
           aria-label={`Delete ${film.config?.title ?? film.id}`}
-          title="Delete this film"
+          tip="Delete"
           onClick={onDelete}
         />
       )}

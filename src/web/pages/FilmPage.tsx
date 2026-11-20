@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import type { Note } from "../../shared/types.ts";
+import type { AudioTrack, Note } from "../../shared/types.ts";
 import {
   useAddNote,
   useFilm,
   useFilmWords,
   useHealth,
-  useLines,
   useNotes,
   useOpenClaude,
   useOpenFilmFolder,
@@ -52,8 +51,10 @@ import { formatLength, frameCount, timeOf } from "../player/time.ts";
 import { useNoteDraft } from "../player/useNoteDraft.ts";
 import { filmRender, jobStatus } from "../renderText.ts";
 import { useNow } from "../useNow.ts";
+import { useVoiceSummary } from "../voiceSummary.ts";
 
 const SIDE_TABS: readonly SideTab[] = ["notes", "sound", "voice", "references", "brief"];
+const NO_TRACKS: readonly AudioTrack[] = [];
 
 /** The side tab shown for a film, remembered per film in this browser. */
 function useFilmTab(id: string): [SideTab, (tab: SideTab) => void] {
@@ -79,6 +80,21 @@ function useFilmTab(id: string): [SideTab, (tab: SideTab) => void] {
   return [tab, set];
 }
 
+/** Keeps `--review-h` at the columns' height, so the video leaves room for the timeline under it. */
+function useReviewHeight() {
+  const observer = useRef<ResizeObserver | null>(null);
+  return useCallback((element: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (!element) return;
+    const update = () =>
+      element.style.setProperty("--review-h", `${Math.round(element.clientHeight)}px`);
+    update();
+    observer.current = new ResizeObserver(update);
+    observer.current.observe(element);
+  }, []);
+}
+
 export function FilmPage() {
   const { id = "" } = useParams();
   const film = useFilm(id);
@@ -89,6 +105,7 @@ export function FilmPage() {
   const addNote = useAddNote(id);
   const { draft, ...draftActions } = useNoteDraft();
   const playerRef = useRef<PlayerHandle>(null);
+  const reviewRef = useReviewHeight();
   const [reloadKey, setReloadKey] = useState(0);
   const [showMarks, setShowMarks] = useState(true);
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -98,7 +115,10 @@ export function FilmPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const navigate = useNavigate();
   const references = useReferences(id, Boolean(film.data));
-  const lines = useLines(id);
+  const voiceSummary = useVoiceSummary(id, film.data?.config?.audio ?? NO_TRACKS);
+  // A clip clicked on the timeline lights up its line (Voice) or sound (Sound); Go to in a tab selects a clip.
+  const [focus, setFocus] = useState<{ file: string; n: number } | null>(null);
+  const [selectClip, setSelectClip] = useState<{ file: string; n: number } | null>(null);
   const filmWords = useFilmWords(id);
   const transcribe = useTranscribe(id);
   const saveAudio = useSaveAudio(id);
@@ -248,6 +268,12 @@ export function FilmPage() {
               onGetWords={(file) => transcribe.mutate(file)}
               wordsBusy={transcribe.isPending ? transcribe.variables : null}
               wordsError={transcribe.error?.message ?? null}
+              onClipClick={(file) => {
+                setTab(file.startsWith("voice/") ? "voice" : "sound");
+                setFocus({ file, n: Date.now() });
+              }}
+              selectFile={selectClip}
+              stale={voiceSummary.staleFiles}
             />
           )}
           audio={config.audio.map((track) => ({
@@ -291,7 +317,10 @@ export function FilmPage() {
   const tabs = [
     { id: "notes" as const, label: "Notes", count: openNotes.length },
     { id: "sound" as const, label: "Sound", count: config?.audio.length ?? 0 },
-    { id: "voice" as const, label: "Voice", count: lines.data?.length ?? 0 },
+    // Lines that need a new voice show in amber; otherwise, how many lines there are.
+    voiceSummary.toVoice > 0
+      ? { id: "voice" as const, label: "Voice", count: voiceSummary.toVoice, alert: true }
+      : { id: "voice" as const, label: "Voice", count: voiceSummary.lines.length },
     { id: "references" as const, label: "References", count: references.data?.length ?? 0 },
     ...(film.data.hasBrief ? [{ id: "brief" as const, label: "Brief" }] : []),
   ];
@@ -409,7 +438,7 @@ export function FilmPage() {
           )}
         </div>
 
-        <div className={canReview ? "review" : "stack"}>
+        <div className={canReview ? "review" : "stack"} ref={canReview ? reviewRef : undefined}>
           <div className="review-main">
             <PixelPanel
               title="Preview"
@@ -469,16 +498,18 @@ export function FilmPage() {
                     duration={config.duration}
                     fileUrl={(file) => filmFileUrl(filmOrigin, film.data.id, file)}
                     now={now}
+                    focus={focus}
                   />
                 )}
                 {shownTab === "voice" && config && filmOrigin && (
                   <VoicePanel
                     filmId={film.data.id}
                     tracks={config.audio}
-                    duration={config.duration}
                     now={now}
                     onSeek={showTime}
+                    onShowClip={(file) => setSelectClip({ file, n: Date.now() })}
                     fileUrl={(file) => filmFileUrl(filmOrigin, film.data.id, file)}
+                    focus={focus}
                   />
                 )}
                 {shownTab === "references" && <ReferencesPanel filmId={film.data.id} />}

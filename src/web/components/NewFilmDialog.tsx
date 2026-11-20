@@ -5,15 +5,25 @@ import {
   DEFAULT_FPS,
   FILM_SHAPES,
   type FilmShape,
+  type FilmVoice,
+  NARRATION_LANGUAGES,
   type TemplateSummary,
 } from "../../shared/types.ts";
-import { templatePreviewUrl, useCreateFilm, useTemplates, useVoiceStatus } from "../api.ts";
+import {
+  templatePreviewUrl,
+  useCreateFilm,
+  usePickVoice,
+  useTemplates,
+  useVoiceStatus,
+} from "../api.ts";
 import { answersOf, firstMissing, initialAnswers } from "../brief.ts";
+import { useSample } from "../useSample.ts";
 import { BriefFields } from "./BriefFields.tsx";
 import { FrameRatePicker, useFrameRate } from "./FrameRatePicker.tsx";
 import { PixelButton } from "./PixelButton.tsx";
 import { PixelIcon } from "./PixelIcon.tsx";
 import { TextField } from "./TextField.tsx";
+import { VoicePicker } from "./VoicePicker.tsx";
 
 const SHAPES = Object.entries(FILM_SHAPES) as [FilmShape, (typeof FILM_SHAPES)[FilmShape]][];
 /** Size of the little shape pictures, in CSS pixels. */
@@ -53,6 +63,21 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
   const [formError, setFormError] = useState<string | null>(null);
   const [voices, setVoices] = useState<"make" | "none">("make");
   const voiceStatus = useVoiceStatus();
+  // The narrator's voice, picked when the window opens (free) and changed here before anything is made.
+  const [narrator, setNarrator] = useState<FilmVoice | null>(null);
+  const [language, setLanguage] = useState("en");
+  const [pickedFor, setPickedFor] = useState<string | null>(null);
+  const [choosing, setChoosing] = useState(false);
+  const pick = usePickVoice();
+  const { mutate: pickVoice } = pick;
+  const sample = useSample();
+  const languageId = useId();
+
+  useEffect(() => {
+    if (!open || voices !== "make" || pickedFor === language) return;
+    setPickedFor(language);
+    pickVoice({ type: "narrator", language }, { onSuccess: (voice) => setNarrator(voice) });
+  }, [open, voices, language, pickedFor, pickVoice]);
 
   const list = templates.data ?? [];
   const choices = list.filter((entry) => entry.id !== BLANK_TEMPLATE_ID);
@@ -81,6 +106,9 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
       setTitle("");
       setFormError(null);
       setVoices("make");
+      setNarrator(null);
+      setLanguage("en");
+      setPickedFor(null);
       reset();
       dialog.showModal();
     } else if (!open && dialog.open) {
@@ -124,6 +152,11 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
         kind: kind.id,
         brief: answersOf(answers),
         voices,
+        ...(voices === "make" && narrator
+          ? { narrator: { ...narrator, type: "narrator" as const }, language }
+          : voices === "make"
+            ? { language }
+            : {}),
       },
       {
         onSuccess: (film) => {
@@ -342,6 +375,73 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
                 />
                 <span>No voices</span>
               </label>
+              {voices === "make" && (
+                <>
+                  <div className="narrator-pick px-box">
+                    <span className="voice-speaker">Narrator</span>
+                    <span className="voice-cast-name">
+                      {pick.isPending
+                        ? "Picking…"
+                        : (narrator?.name ?? "Picked when the film is made")}
+                    </span>
+                    <div className="icon-row">
+                      <PixelButton
+                        variant="ghost"
+                        data-size="small"
+                        icon={sample.playing === "narrator" ? "pause" : "play"}
+                        tip={sample.playing === "narrator" ? "Stop" : "Listen"}
+                        disabled={!narrator?.sample}
+                        onClick={() =>
+                          narrator?.sample && sample.toggle("narrator", narrator.sample)
+                        }
+                      />
+                      <PixelButton
+                        variant="ghost"
+                        data-size="small"
+                        icon="dice"
+                        tip="Another voice"
+                        disabled={pick.isPending}
+                        onClick={() =>
+                          pickVoice(
+                            { type: "narrator", language, avoid: narrator ? [narrator.id] : [] },
+                            { onSuccess: (voice) => setNarrator(voice) },
+                          )
+                        }
+                      />
+                      <PixelButton
+                        variant="ghost"
+                        data-size="small"
+                        icon="search"
+                        tip="Choose a voice"
+                        onClick={() => setChoosing(true)}
+                      />
+                    </div>
+                  </div>
+                  <div className="writer-grid">
+                    <label htmlFor={languageId} className="field-label">
+                      Language
+                    </label>
+                    <select
+                      id={languageId}
+                      className="px-input"
+                      value={language}
+                      onChange={(event) => setLanguage(event.target.value)}
+                    >
+                      {NARRATION_LANGUAGES.map(([code, words]) => (
+                        <option key={code} value={code}>
+                          {words}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {pick.isError && (
+                    <p className="hint">
+                      Kairos couldn't reach fish.audio to pick one now: it picks the narrator when
+                      the film is made.
+                    </p>
+                  )}
+                </>
+              )}
               {voices === "make" && voiceStatus.isSuccess && !voiceStatus.data.key && (
                 <p className="hint">
                   Add your fish.audio key in Settings → Voice. Until then, the script and the
@@ -371,6 +471,15 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
           </>
         )}
       </form>
+      <VoicePicker
+        open={choosing}
+        speaker="the narrator"
+        onClose={() => setChoosing(false)}
+        onPick={(voice) => {
+          setNarrator({ ...voice, type: "narrator", auto: false });
+          setChoosing(false);
+        }}
+      />
     </dialog>
   );
 }

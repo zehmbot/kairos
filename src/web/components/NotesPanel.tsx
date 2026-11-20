@@ -212,7 +212,7 @@ function NoteRow({ filmId, note, focused, onOpen }: NoteRowProps) {
                   data-size="small"
                   icon="pen"
                   aria-label="Edit"
-                  title="Edit the text"
+                  tip="Edit"
                   onClick={() => {
                     setText(note.text);
                     setEditing(true);
@@ -223,7 +223,7 @@ function NoteRow({ filmId, note, focused, onOpen }: NoteRowProps) {
                   data-size="small"
                   icon="trash"
                   aria-label="Delete"
-                  title="Delete this note"
+                  tip="Delete"
                   onClick={() => setConfirmDelete(true)}
                 />
               </>
