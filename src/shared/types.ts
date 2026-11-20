@@ -182,6 +182,9 @@ export const NARRATION_LANGUAGES = [
   ["ko", "Korean"],
 ] as const;
 
+/** A script line's id: a short key (a Blocky shot names its line with it). */
+export const LINE_ID_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
+
 /** One planned line of the film's narration or dialogue (`voice/script.json`). */
 export const ScriptLineSchema = z.object({
   id: z.string().min(1).max(40),

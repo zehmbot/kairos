@@ -12,6 +12,7 @@ import { createInterface } from "node:readline";
 import { z } from "zod";
 import {
   type FilmVoices,
+  LINE_ID_PATTERN,
   NARRATION_LANGUAGES,
   SPEAKER_PATTERN,
   VOICE_TYPES,
@@ -42,6 +43,8 @@ export const WrittenSchema = z.object({
   lines: z
     .array(
       z.object({
+        /** The shot's `line` key in a Blocky story.js, when it has one. */
+        id: z.string().regex(LINE_ID_PATTERN).optional(),
         speaker: z.string().regex(SPEAKER_PATTERN),
         text: z.string().trim().min(1).max(2000),
         start: z.number().min(0),
@@ -74,6 +77,7 @@ export const WRITTEN_JSON_SCHEMA = {
       items: {
         type: "object",
         properties: {
+          id: { type: "string", pattern: LINE_ID_PATTERN.source },
           speaker: { type: "string", pattern: SPEAKER_PATTERN.source },
           text: { type: "string" },
           start: { type: "number", minimum: 0 },
@@ -151,7 +155,9 @@ export function writerPrompt(
     "   - If the film already shows the words that are said (captions, or `say` in a Blocky story.js), keep",
     "     to them.",
     '   - Speakers: "narrator" for the narrator; characters by a short name in small letters (milo, ruby,',
-    "     grandpa-bo).",
+    "     grandpa-bo). In a Blocky film, a character's id from the cast (bo, not grandpa-bo).",
+    '   - id: when a shot in story.js names its line (`line: "joke"`), give that line the same id. Otherwise',
+    "     leave id out.",
     "4. cast: every speaker with its type: narrator, woman, man, girl, boy, old-woman or old-man.",
     "5. note: one or two plain sentences for the user when something matters (for example: the story needs",
     "   more time than the film has). Leave it empty otherwise.",

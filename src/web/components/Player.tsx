@@ -34,6 +34,8 @@ interface PlayerProps {
   audio?: readonly PreviewTrack[];
   /** Drawn under the controls, in step with the player (the timeline). */
   timeline?: (state: TimelineState) => ReactNode;
+  /** How long the film says its story lasts (null when it doesn't say), each time it loads. */
+  onStoryLength?: (length: number | null) => void;
   ref?: Ref<PlayerHandle>;
 }
 
@@ -86,9 +88,11 @@ export function Player({
   noteMarks = [],
   audio = NO_AUDIO,
   timeline,
+  onStoryLength,
   ref,
 }: PlayerProps) {
   const player = useFilmPlayer({ src, fps, duration });
+  useEffect(() => onStoryLength?.(player.length), [onStoryLength, player.length]);
   const { frame, total, toggle, step, seek, pause, currentFrame } = player;
   const stageRef = useRef<HTMLDivElement>(null);
   const stage = useElementSize(stageRef);

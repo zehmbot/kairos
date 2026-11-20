@@ -12,6 +12,7 @@ import {
   AudioTrackSchema,
   type FilmVoice,
   type FilmVoices,
+  LINE_ID_PATTERN,
   type Script,
   type ScriptInput,
   type ScriptLine,
@@ -69,6 +70,13 @@ export function saveScript(
 ): Promise<Script> {
   return oneAtATime(lock(filmDir), async () => {
     const before = await readScript(filmDir);
+    // Ids are keys (a Blocky shot names its line by id): a missing or repeated one gets a new id.
+    const ids = new Set<string>();
+    const idOf = (id: string | undefined) => {
+      const free = id && LINE_ID_PATTERN.test(id) && !ids.has(id) ? id : newId();
+      ids.add(free);
+      return free;
+    };
     const script = ScriptSchema.parse({
       version: 1,
       style: input.style ?? before?.style ?? "",
@@ -78,7 +86,7 @@ export function saveScript(
       made: before?.made ?? [],
       lines: input.lines.map((line) => ({
         ...line,
-        id: line.id ?? newId(),
+        id: idOf(line.id),
         by: line.by ?? writtenBy,
         start: round(line.start),
       })),

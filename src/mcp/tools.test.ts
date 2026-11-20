@@ -109,10 +109,11 @@ class FakeHub implements Hub {
     found.status = status;
     return found;
   }
+  storyLength: number | null = null;
   async frame() {
     this.#check();
     if (this.frameError) throw new HubError(this.frameError, 422);
-    return PNG;
+    return { png: PNG, length: this.storyLength };
   }
   async changeFilm(id: string, change: FilmChange) {
     this.changes.push(change);
@@ -441,7 +442,16 @@ describe("Kairos tools", () => {
     await connect(hub);
     const result = await call("kairos_frame", { t: 2 });
     expect(texts(result)).toContain('"intro" at t = 2 s (frame 61 of 150)');
+    expect(texts(result)).not.toContain("the story lasts");
     expect(images(result)).toHaveLength(1);
+
+    // A film that times itself to its voices says when its story and the film's length differ.
+    hub.storyLength = 6.42;
+    const longer = await call("kairos_frame", { t: 2 });
+    expect(texts(longer)).toContain(
+      "Note: the story lasts 6.4 s, but the film is 5 s long. Set duration to 6.4 with kairos_film_settings.",
+    );
+    hub.storyLength = null;
 
     hub.frameError = "The film could not draw this frame: boom is not defined";
     const broken = await call("kairos_frame", { t: 2 });
@@ -636,7 +646,7 @@ describe("Kairos tools", () => {
       await call("kairos_script", {
         lines: [
           { speaker: "narrator", text: "Once upon a time", start: 0 },
-          { speaker: "ruby", text: "Wait for me", start: 4 },
+          { id: "wait", speaker: "ruby", text: "Wait for me", start: 4 },
         ],
         style: "funny",
       }),
@@ -644,7 +654,8 @@ describe("Kairos tools", () => {
     expect(saved).toContain("Saved the script: 2 lines.");
     expect(hub.script_?.writtenBy).toBe("claude");
     const shown = texts(await call("kairos_script"));
-    expect(shown).toContain('- 4 s ruby: "Wait for me" (by Claude, no voice yet)');
+    // A line's id (a Blocky shot's `line` key) goes through.
+    expect(shown).toContain('- [wait] 4 s ruby: "Wait for me" (by Claude, no voice yet)');
 
     const made = texts(await call("kairos_script", { make: true }));
     expect(made).toContain("Made 2 voices:");

@@ -44,6 +44,8 @@ The `kairos` skill has the details (Voices).
 - If the film needs to load something first, set `window.READY` to a Promise; Kairos waits for it.
 - Optional: `window.KAIROS_SCENES = [{ name, start, end }]` (in seconds) puts scene markers on the
   Kairos timeline.
+- Optional: `window.KAIROS_LENGTH` (seconds), for a film that works out its own length. Kairos tells the user, and
+  `kairos_frame` tells you, when it differs from `duration`.
 - If you change the length, update both `duration` in `kairos.json` and any constant in `film.js`.
 
 ## Working with Kairos

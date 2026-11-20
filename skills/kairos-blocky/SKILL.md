@@ -63,7 +63,7 @@ few words at a time. The film's `CLAUDE.md` has the `story.js` reference. This s
    | singing | | `talk`, + `music` |
    | fainting | | `faint` |
 
-   Whoever speaks in the story gets `talk` in that shot.
+   Whoever speaks in the story gets `talk` in that shot (with voices, the speaker's mouth moves by itself).
 6. **Pace by mood:**
    - **Funny:** quicker (1.5-2.2 s), more `zoom`, reactions right after the line.
    - **Heartwarming:** slower (2.5-3.5 s), warm evening light, `push` and `rise`, hearts and sparkles.
@@ -126,32 +126,35 @@ few words at a time. The film's `CLAUDE.md` has the `story.js` reference. This s
   - **icons:** by the right person;
   - **inserts:** the object fills the frame;
   - **captions:** never more than three words on screen.
-- **Set the length:** the film's `duration` must equal the sum of `seconds`; set it with `kairos_film_settings`.
+- **Set the length:** the film's `duration` must equal the story's length (the sum of `seconds` without voices);
+  set it with `kairos_film_settings`. `kairos_frame` says when they differ.
 - **Render:** a 30-second film renders in about a minute.
 
 ## Voices
 
-When the brief says **"Voices: make them with the film"** (or the user asks for narration), the voice leads and
-the shots follow it:
+When the brief says **"Voices: make them with the film"** (or the user asks for narration), the voice leads: the
+engine reads the film's voices and each spoken shot follows its line by itself (start, length, captions, mouths).
 
-1. **Write the shots first,** with `say` on every spoken shot, as usual.
+1. **Write the shots first,** with `say` on every spoken shot, and a `line` key on each one (`line: "joke"`, short
+   and unique).
 2. **Cast** with `kairos_voices` and `cast`:
-   - the narrator: `narrator` (type `narrator`), or the character who tells the story, like `milo` (type `boy`);
-   - every character who talks (`talk`), with the type from the cast: Milo boy, Ruby girl, Grandpa Bo `old-man`,
-     Mom woman, Dad man, Zee boy;
+   - the narrator: `narrator` (type `narrator`) for a voice-over, or the character who tells the story, like
+     `milo` (type `boy`), when they speak to the camera;
+   - every character who talks, by their id in the cast (`bo`, not `grandpa-bo`), with the type from the cast:
+     Milo boy, Ruby girl, Grandpa Bo `old-man`, Mom woman, Dad man, Zee boy;
    - new characters: their type from who they are.
 3. **Write the script** with `kairos_script`: one line per spoken shot.
+   - The `id` is the shot's `line` key, so the shot follows that line even after the user changes it.
    - The words are its `say` without the `*stars*`.
-   - The speaker is the narrator, or the character for spoken dialogue.
+   - The speaker is the narrator, or the character for spoken dialogue: their mouth moves when they are in the
+     shot.
    - The start is the shot's start (the sum of the `seconds` before it).
    - Then make it (`make: true`).
-4. **Fit the shots to the voice:**
-   - Every spoken shot lasts its line's length plus about 0.3 s (the answer gives each length). Silent shots keep
-     their own length.
-   - Then write the script again with the new starts and make it again: unchanged lines are reused, so it costs
-     nothing.
-   - Set the film's `duration` to the new sum of `seconds`.
-5. **Check** a few frames: each caption should show while its words are spoken.
+4. **The shots follow by themselves:** a spoken shot starts just before its line and lasts until the next one;
+   its `seconds` is the least it lasts. Don't rewrite the `seconds` to fit the voices.
+5. **Set the length:** look at a frame (`kairos_frame`): when the story's length differs from the film's, it says
+   so. Set `duration` to it.
+6. **Check** a few frames: each caption should show while its words are spoken.
 
 ## Sound
 

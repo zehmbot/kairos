@@ -51,11 +51,16 @@ class FakeClaude implements ClaudeTools {
   }
 }
 
-const camera: Pick<Camera, "browser" | "capture"> = {
+let storyLength: number | null = null;
+const camera: Pick<Camera, "browser" | "capture" | "captureFrame"> = {
   browser: { name: "Test browser", path: "/test" },
   capture: async () => {
     if (captureError) throw new Error(captureError);
     return PNG;
+  },
+  captureFrame: async () => {
+    if (captureError) throw new Error(captureError);
+    return { png: PNG, length: storyLength };
   },
 };
 
@@ -131,6 +136,13 @@ describe("frame route", () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers["content-type"]).toBe("image/png");
     expect(response.rawPayload.equals(PNG)).toBe(true);
+    expect(response.headers["x-kairos-story-length"]).toBeUndefined();
+
+    // A film that times itself says how long its story lasts.
+    storyLength = 6.4251;
+    const timed = await app.inject("/api/films/intro/frame?t=2.5");
+    expect(timed.headers["x-kairos-story-length"]).toBe("6.425");
+    storyLength = null;
   });
 
   it("checks the time", async () => {

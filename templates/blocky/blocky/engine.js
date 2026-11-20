@@ -10,7 +10,9 @@ import { getPlace, LIGHTS } from "./places.js";
 import { poseAt, TRAVEL } from "./poses.js";
 import { PROPS } from "./props.js";
 import { frameShot } from "./shots.js";
+import { lineAt, planShots } from "./timing.js";
 import { clamp, hash } from "./util.js";
+import { loadVoices } from "./voice.js";
 
 const SKY = {
   day: { top: "#5d9fe6", horizon: "#d6ecff" },
@@ -105,6 +107,12 @@ const APERTURE = {
   insert: 0.0016,
 };
 
+/** A word as compared for key marks: no stars, case or punctuation. */
+const keyOf = (text) =>
+  String(text)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}']/gu, "");
+
 export function createEngine({ width: W, height: H, story }) {
   const shots = story.SHOTS ?? [];
   const cast = { ...BLOCKY_CAST, ...(story.CAST ?? {}) };
@@ -141,37 +149,54 @@ export function createEngine({ width: W, height: H, story }) {
   const fill = new THREE.DirectionalLight("#fff4e6", 0.45);
   scene.add(fill, fill.target);
 
-  // The timeline: when each shot starts, and its words.
-  let clock = 0;
-  const timeline = shots.map((shot, index) => {
-    const seconds = Math.max(0.2, Number(shot.seconds) || 2.5);
-    const entry = {
-      shot,
-      index,
-      start: clock,
-      seconds,
-      words: timeWords(shot.say, clock, seconds),
-    };
-    clock += seconds;
-    return entry;
-  });
-  const duration = clock;
+  // The timeline: when each shot starts, and its words. The voice leads (see timing.js): it is built again once
+  // the film's voices are read, and until then every shot plays its own `seconds`.
+  let timeline = [];
+  let duration = 0;
+  let scenes = [];
+  let voices = [];
+  /** Caption words of each voice line: its real words, key words marked as in its shot's `say`. */
+  const lineWords = new Map();
 
-  // Scene markers for the Kairos timeline: one per run of shots in the same place.
-  const scenes = [];
-  let placeSoFar;
-  for (const entry of timeline) {
-    placeSoFar = entry.shot.place ?? placeSoFar ?? "home";
-    const last = scenes.at(-1);
-    if (last && last.place === placeSoFar) last.end = entry.start + entry.seconds;
-    else
-      scenes.push({
-        place: placeSoFar,
-        name: placeSoFar[0].toUpperCase() + placeSoFar.slice(1),
-        start: entry.start,
-        end: entry.start + entry.seconds,
-      });
+  function build(lines) {
+    voices = lines;
+    const plan = planShots(shots, lines);
+    duration = plan.duration;
+    lineWords.clear();
+    for (const line of lines) {
+      const shot = plan.entries.find((entry) => entry.line === line)?.shot;
+      const keys = new Set(
+        timeWords(shot?.say, 0, 1)
+          .filter((w) => w.key)
+          .map((w) => keyOf(w.text)),
+      );
+      const words = line.words.length
+        ? line.words.map((w) => ({ ...w, key: keys.has(keyOf(w.text)) }))
+        : timeWords(line.said ?? line.text, line.start, line.end - line.start);
+      lineWords.set(line, words);
+    }
+    timeline = plan.entries.map((entry) => ({
+      ...entry,
+      // A shot with a voice shows the voice's words; a silent one with `say` guesses them.
+      words: entry.line ? [] : timeWords(entry.shot.say, entry.start, entry.seconds),
+    }));
+    // Scene markers for the Kairos timeline: one per run of shots in the same place.
+    scenes = [];
+    let placeSoFar;
+    for (const entry of timeline) {
+      placeSoFar = entry.shot.place ?? placeSoFar ?? "home";
+      const last = scenes.at(-1);
+      if (last && last.place === placeSoFar) last.end = entry.start + entry.seconds;
+      else
+        scenes.push({
+          place: placeSoFar,
+          name: placeSoFar[0].toUpperCase() + placeSoFar.slice(1),
+          start: entry.start,
+          end: entry.start + entry.seconds,
+        });
+    }
   }
+  build([]);
 
   // Characters are built when first needed and kept.
   const actors = new Map();
@@ -212,8 +237,13 @@ export function createEngine({ width: W, height: H, story }) {
       renderer.clear();
       return;
     }
-    const { shot, index, start, seconds, words } = entry;
+    const { shot, index, start, seconds, line } = entry;
     const u = t - start;
+    // The voice being said now (if any): captions show its words, the speaker's mouth moves with them.
+    const shown = lineAt(voices, t, 0.35);
+    const words = shown ? (lineWords.get(shown) ?? []) : entry.words;
+    const talksIn = (id) =>
+      line ? line.speaker === id : shot.talk === id || Boolean(shot.talk?.includes?.(id));
 
     // The place and its light. A shot without a place stays where the previous one was.
     let placeName = shot.place;
@@ -238,8 +268,7 @@ export function createEngine({ width: W, height: H, story }) {
       p.removeFromParent();
     }
     const who = (shot.who ?? []).filter((id) => actor(id));
-    const poseOf = (id) =>
-      shot.pose?.[id] ?? (shot.talk === id || shot.talk?.includes?.(id) ? "talk" : "idle");
+    const poseOf = (id) => shot.pose?.[id] ?? (talksIn(id) ? "talk" : "idle");
     // Standing characters without a spot: one in the center, two face each other, more stand in an arc.
     const free = who.filter(
       (id) => !shot.at?.[id] && !isSitting(poseOf(id)) && !isLying(poseOf(id)),
@@ -289,11 +318,18 @@ export function createEngine({ width: W, height: H, story }) {
       const expression = shot.face?.[id] ?? "neutral";
       const period = 3.1 + a.phase * 1.8;
       const blink = (t + a.phase * 5) % period < 0.12;
-      const talking = shot.talk === id || shot.talk?.includes?.(id);
-      const word = talking ? words.find((w) => t >= w.start && t < w.end) : null;
+      // With voices, the one speaking now; without, the shot's `talk` on the guessed words.
+      // (Two voices dragged over each other on the timeline: each speaker follows their own.)
+      const spoken = voices.find((v) => v.speaker === id && v.start <= t && t < v.end) ?? null;
+      const mouthWords = spoken
+        ? (lineWords.get(spoken) ?? [])
+        : !voices.length && talksIn(id)
+          ? entry.words
+          : [];
+      const word = mouthWords.find((w) => t >= w.start && t < w.end) ?? null;
       const talk = word
         ? Math.sin((t - word.start) * 26) > -0.2
-          ? (words.indexOf(word) % 2) + 1
+          ? (mouthWords.indexOf(word) % 2) + 1
           : 0
         : 0;
       a.face(expression, { blink, talk });
@@ -396,15 +432,23 @@ export function createEngine({ width: W, height: H, story }) {
     weight: "800",
     style: "normal",
   });
-  const ready = font.load().then((loaded) => {
-    document.fonts.add(loaded);
-  });
+  const ready = Promise.all([
+    font.load().then((loaded) => {
+      document.fonts.add(loaded);
+    }),
+    loadVoices().then(build),
+  ]);
 
   return {
     ready,
     render,
-    duration,
-    scenes: scenes.map(({ name, start, end }) => ({ name, start, end })),
+    /** The story's length in seconds (after `ready`: with the voices). */
+    get duration() {
+      return duration;
+    },
+    get scenes() {
+      return scenes.map(({ name, start, end }) => ({ name, start, end }));
+    },
     lights: LIGHTS,
   };
 }

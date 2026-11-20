@@ -89,7 +89,13 @@ shot types, the cast, faces, poses, captions) and `blocky/*.js` turns it into fr
 drawn faces, six places with day/evening/night light, framing computed for any film size, word-by-word captions
 and icons on a 2D layer, and bloom, focus blur, vignette and grain. Lights stay dim and the exposure high, so only
 lamps, windows and fire glow. Everything is a pure function of `t` (seeded randomness only). The `kairos-blocky`
-skill is its style guide. Its characters and world are our own: never a game's or brand's name, logos or
+skill is its style guide. **The voice leads:** `blocky/voice.js` reads the film's voices while it loads
+(`kairos.json` clips, `voice/script.json`, `voice/lines.json`), and `blocky/timing.js` (`planShots`) starts each
+spoken shot just before its line (a shot names it with `line`, the script line's `id`, or has the same words).
+Captions show the voice's real words, and the speaker's mouth moves on them. The story's length goes to
+`window.KAIROS_LENGTH`: the bridge sends it with `ready`, the film page offers **Make it N s** when it differs from
+`duration`, and the frame route answers it in `x-kairos-story-length` (so `kairos_frame` tells Claude). Its
+characters and world are our own: never a game's or brand's name, logos or
 avatars. Biome checks the template's code too, so placeholders in `.js` are written inside strings
 (`Number("{{width}}")`).
 

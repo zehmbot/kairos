@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { STORY_LENGTH_HEADER } from "../../shared/film-protocol.ts";
 import type { Camera } from "../camera.ts";
 import { type Film, readFilm } from "../films.ts";
 import type { Studio } from "../studio.ts";
@@ -8,7 +9,7 @@ import { sendError } from "./errors.ts";
 
 export interface FrameRoutesOptions {
   studio: Studio;
-  camera: Pick<Camera, "browser" | "capture">;
+  camera: Pick<Camera, "browser" | "capture" | "captureFrame">;
   /** Address of the film server, like `http://127.0.0.1:7342`, for the camera. */
   filmServerUrl: string;
 }
@@ -91,12 +92,15 @@ export function frameRoutes(app: FastifyInstance, options: FrameRoutesOptions): 
       );
     }
     try {
-      const png = await camera.capture({
+      const { png, length } = await camera.captureFrame({
         url: `${options.filmServerUrl}${path}`,
         width: film.config.width,
         height: film.config.height,
         t: Math.min(t, film.config.duration),
       });
+      // How long the film says its story lasts (Blocky follows its voices), for Claude to fit the length.
+      if (length !== null)
+        reply.header(STORY_LENGTH_HEADER, String(Math.round(length * 1000) / 1000));
       return reply.type("image/png").header("cache-control", "no-store").send(png);
     } catch (error) {
       // "The film could not draw this frame: ..." is the film's own error: Claude needs to read it.

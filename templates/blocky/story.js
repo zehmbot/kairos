@@ -1,6 +1,7 @@
 // The story: a list of shots, played one after the other. This is the file to change.
-// The film's length (kairos.json "duration") must be the sum of all `seconds`.
-// Reference: CLAUDE.md in this folder.
+// Without voices, each shot plays its `seconds`, and the film's length (kairos.json "duration") is their sum.
+// With voices, a spoken shot follows its line (`line` = the script line's id): it starts with the voice and
+// lasts as long as it. Kairos shows the story's length. Reference: CLAUDE.md in this folder.
 
 /** New characters for this film only (the Blocky cast is always there: milo, ruby, bo, nadia, theo, zee). */
 export const CAST = {};
@@ -23,6 +24,7 @@ export const SHOTS = [
     pose: { bo: "wave" },
     face: { bo: "grin" },
     say: "Every Sunday, Grandpa Bo",
+    line: "sunday",
     seconds: 2.4,
   },
   {
@@ -33,6 +35,7 @@ export const SHOTS = [
     face: { bo: "grin" },
     talk: "bo",
     say: "told the same old joke.",
+    line: "joke",
     seconds: 2.2,
   },
   {
@@ -41,6 +44,7 @@ export const SHOTS = [
     pose: { milo: "sit", ruby: "sit" },
     face: { milo: "neutral", ruby: "sleepy" },
     say: "And every Sunday,",
+    line: "every",
     seconds: 1.8,
   },
   {
@@ -50,6 +54,7 @@ export const SHOTS = [
     face: { ruby: "sleepy" },
     icons: ["zzz"],
     say: "nobody laughed.",
+    line: "nobody",
     seconds: 1.8,
   },
   {
@@ -59,6 +64,7 @@ export const SHOTS = [
     prop: "letter",
     whip: true,
     say: "Then one night, he left a letter.",
+    line: "letter",
     seconds: 2.4,
   },
   {
@@ -68,6 +74,7 @@ export const SHOTS = [
     icons: ["!"],
     move: "zoom",
     say: "It said...",
+    line: "said",
     seconds: 1.6,
   },
   {
@@ -78,6 +85,7 @@ export const SHOTS = [
     pose: { bo: "wave" },
     face: { bo: "happy" },
     say: "Meet me outside.",
+    line: "outside",
     seconds: 2.2,
   },
   {
@@ -87,6 +95,7 @@ export const SHOTS = [
     talk: "bo",
     icons: ["sparkle"],
     say: "*Made* *you* *look!*",
+    line: "look",
     seconds: 1.8,
   },
   {
@@ -99,6 +108,7 @@ export const SHOTS = [
       { icon: "music", on: "bo" },
     ],
     say: "We still laugh about it.",
+    line: "laugh",
     seconds: 1.8,
   },
 ];

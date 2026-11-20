@@ -19,11 +19,15 @@ let studio: Studio;
 let app: FastifyInstance;
 let captures: number;
 
-const camera: Pick<Camera, "browser" | "capture"> = {
+const camera: Pick<Camera, "browser" | "capture" | "captureFrame"> = {
   browser: { name: "Test browser", path: "/test" },
   capture: async () => {
     captures++;
     return PNG;
+  },
+  captureFrame: async () => {
+    captures++;
+    return { png: PNG, length: null };
   },
 };
 

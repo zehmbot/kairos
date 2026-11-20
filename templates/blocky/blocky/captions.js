@@ -1,7 +1,7 @@
 // Captions drawn on the 2D layer over the picture.
 // "words" style: 2-3 words at a time, the word being said in yellow (the default, like narrated shorts).
 // "lines" style: up to two lines of the sentence, with *key words* in color.
-// Word times are estimated from each shot's length; real voice timings (later) can replace them.
+// Word times come from the film's voices (voice.js); a shot without a voice guesses them from its length.
 import { clamp, easeOut } from "./util.js";
 
 export const CAPTION_FONT = '"Blocky Caption", "Arial Black", sans-serif';

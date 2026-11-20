@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { STORY_LENGTH_HEADER } from "../shared/film-protocol.ts";
 import {
   ApiErrorSchema,
   type Asset,
@@ -90,7 +91,8 @@ export interface Hub {
   noteImage(id: string, note: Note): Promise<Buffer>;
   updateNote(id: string, noteId: string, status: NoteStatus): Promise<Note>;
   /** A fresh PNG of the frame at `t` seconds. */
-  frame(id: string, t: number): Promise<Buffer>;
+  /** A frame, and how long the film says its story lasts (null when it doesn't say). */
+  frame(id: string, t: number): Promise<{ png: Buffer; length: number | null }>;
   changeFilm(id: string, change: FilmChange): Promise<FilmSummary>;
   startRender(id: string, quality: RenderQuality): Promise<RenderJob>;
   renders(): Promise<RendersOverview>;
@@ -189,8 +191,13 @@ export class HubClient implements Hub {
     );
   }
 
-  frame(id: string, t: number) {
-    return this.#bytes(`/api/films/${encodeURIComponent(id)}/frame?t=${t}`);
+  async frame(id: string, t: number) {
+    const response = await this.#fetch(`/api/films/${encodeURIComponent(id)}/frame?t=${t}`);
+    const length = Number(response.headers.get(STORY_LENGTH_HEADER));
+    return {
+      png: Buffer.from(await response.arrayBuffer()),
+      length: Number.isFinite(length) && length > 0 ? length : null,
+    };
   }
 
   changeFilm(id: string, change: FilmChange) {

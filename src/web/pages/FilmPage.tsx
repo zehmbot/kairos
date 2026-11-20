@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import type { AudioTrack, Note } from "../../shared/types.ts";
 import {
   useAddNote,
+  useChangeFilm,
   useFilm,
   useFilmWords,
   useHealth,
@@ -80,6 +81,42 @@ function useFilmTab(id: string): [SideTab, (tab: SideTab) => void] {
   return [tab, set];
 }
 
+/**
+ * The story lasts longer or shorter than the film (a Blocky film follows its voices): one click fits the film, so
+ * the end is never cut off in the video.
+ */
+function StoryLength({
+  filmId,
+  story,
+  duration,
+}: {
+  filmId: string;
+  story: number | null;
+  duration: number;
+}) {
+  const change = useChangeFilm(filmId);
+  if (story === null) return null;
+  const fit = Math.round(story * 10) / 10;
+  if (Math.abs(fit - duration) < 0.05) return null;
+  return (
+    <div className="story-length" role="status">
+      <p>
+        The story lasts {formatLength(fit)}, the film {formatLength(duration)}
+        {fit > duration ? ": its end is cut off." : "."}
+      </p>
+      <PixelButton
+        variant="ghost"
+        data-size="small"
+        disabled={change.isPending}
+        onClick={() => change.mutate({ duration: fit })}
+      >
+        Make it {formatLength(fit)}
+      </PixelButton>
+      {change.error && <span className="field-error">{change.error.message}</span>}
+    </div>
+  );
+}
+
 /** Keeps `--review-h` at the columns' height, so the video leaves room for the timeline under it. */
 function useReviewHeight() {
   const observer = useRef<ResizeObserver | null>(null);
@@ -113,6 +150,8 @@ export function FilmPage() {
   const [renderOpen, setRenderOpen] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // How long the film says its story lasts (a Blocky film follows its voices).
+  const [storyLength, setStoryLength] = useState<number | null>(null);
   const navigate = useNavigate();
   const references = useReferences(id, Boolean(film.data));
   const voiceSummary = useVoiceSummary(id, film.data?.config?.audio ?? NO_TRACKS);
@@ -251,6 +290,7 @@ export function FilmPage() {
           reloadKey={reloadKey}
           overlay={overlay}
           noteMarks={openNotes}
+          onStoryLength={setStoryLength}
           timeline={({ t, scenes, seekTime }) => (
             <Timeline
               duration={config.duration}
@@ -427,6 +467,9 @@ export function FilmPage() {
           )}
           {openFolder.isError && <p className="field-error">{openFolder.error.message}</p>}
           {openClaude.isError && <p className="field-error">{openClaude.error.message}</p>}
+          {config && (
+            <StoryLength filmId={film.data.id} story={storyLength} duration={config.duration} />
+          )}
           {renderJob && (
             <p className="render-line" data-state={renderJob.state}>
               {jobStatus(renderJob, clock)}

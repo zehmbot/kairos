@@ -20,6 +20,8 @@ export const FilmMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("ready"),
     hasRenderOut: z.boolean(),
     scenes: z.array(FilmSceneSchema),
+    /** How long the film's story lasts (`window.KAIROS_LENGTH`), when the film says. */
+    length: z.number().positive().optional(),
   }),
   /** Answer to a `seek`: the frame is drawn (or `error` says why not). */
   z.object({
@@ -45,3 +47,6 @@ export type FilmMessage = z.infer<typeof FilmMessageSchema>;
 export type PlayerMessage =
   | { kairos: 1; type: "hello" }
   | { kairos: 1; type: "seek"; id: number; t: number };
+
+/** The frame route's answer header: how long the film says its story lasts (`window.KAIROS_LENGTH`). */
+export const STORY_LENGTH_HEADER = "x-kairos-story-length";

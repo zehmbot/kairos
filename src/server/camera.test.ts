@@ -1,9 +1,11 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { planShots } from "../../templates/blocky/blocky/timing.js";
+import { voiceLinesFrom } from "../../templates/blocky/blocky/voice.js";
 import { Camera, findBrowser } from "./camera.ts";
 import { buildFilmServer } from "./film-server.ts";
 import { createFilm } from "./films.ts";
@@ -122,6 +124,65 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
     expect(first.length).toBeGreaterThan(1_500);
     expect(first.equals(second)).toBe(false);
   }, 60_000);
+
+  it("plays a Blocky film to its voices, and says how long its story lasts", async () => {
+    const blocky = fileURLToPath(new URL("../../templates/blocky/", import.meta.url));
+    const id = await createFilm(
+      filmsDir,
+      blocky,
+      { title: "Blocky Voices", shape: "wide" },
+      { size: { width: 640, height: 360 }, duration: 18 },
+    );
+    const dir = join(filmsDir, id);
+    // Grandpa Bo's "Made you look!" (the demo's `look` shot) is said from 20 s to 24 s.
+    const made = [
+      {
+        id: "v1",
+        speaker: "bo",
+        voiceId: "voice-bo",
+        voiceName: "Bo",
+        text: "Made you look",
+        speed: 1,
+        model: "s1",
+        file: "voice/bo-1.mp3",
+        duration: 4,
+        words: [
+          { text: "Made", start: 0.1, end: 0.6 },
+          { text: "you", start: 0.7, end: 1.1 },
+          { text: "look!", start: 1.2, end: 3.6 },
+        ],
+        createdAt: "2026-11-20T00:00:00.000Z",
+      },
+    ];
+    const script = {
+      version: 1,
+      lines: [{ id: "look", speaker: "bo", text: "Made you look!", start: 20, line: "v1" }],
+    };
+    const audio = [{ file: "voice/bo-1.mp3", start: 20 }];
+    await mkdir(join(dir, "voice"));
+    await writeFile(join(dir, "voice", "bo-1.mp3"), "");
+    await writeFile(
+      join(dir, "voice", "lines.json"),
+      JSON.stringify({ version: 1, lines: made, next: {} }),
+    );
+    await writeFile(join(dir, "voice", "script.json"), JSON.stringify(script));
+    const config = JSON.parse(await readFile(join(dir, "kairos.json"), "utf8"));
+    await writeFile(join(dir, "kairos.json"), JSON.stringify({ ...config, audio }));
+
+    const { SHOTS } = await import(pathToFileURL(join(dir, "story.js")).href);
+    const plain = planShots(SHOTS).duration;
+    const expected = planShots(SHOTS, voiceLinesFrom({ audio }, script, made)).duration;
+    // The voice comes later than the shot would: the story gets longer.
+    expect(expected).toBeGreaterThan(plain + 3);
+
+    const { length } = await camera.captureFrame({
+      url: `http://127.0.0.1:${port}/${id}/index.html`,
+      width: 640,
+      height: 360,
+      t: 21,
+    });
+    expect(length).toBeCloseTo(expected, 3);
+  }, 120_000);
 
   it("explains when the film can't be drawn", async () => {
     await expect(

@@ -158,7 +158,12 @@ export class Camera {
   }
 
   /** Takes a PNG picture of frame `t`, with the marks drawn on top. Pictures are taken one at a time. */
-  capture(request: CaptureRequest): Promise<Buffer> {
+  async capture(request: CaptureRequest): Promise<Buffer> {
+    return (await this.captureFrame(request)).png;
+  }
+
+  /** A picture, and how long the film says its story lasts (`window.KAIROS_LENGTH`, null when it doesn't say). */
+  captureFrame(request: CaptureRequest): Promise<{ png: Buffer; length: number | null }> {
     const result = this.#queue.then(() => this.#capture(request));
     this.#queue = result.catch(() => undefined);
     return result;
@@ -192,7 +197,7 @@ export class Camera {
     return this.#running;
   }
 
-  async #capture(request: CaptureRequest): Promise<Buffer> {
+  async #capture(request: CaptureRequest): Promise<{ png: Buffer; length: number | null }> {
     clearTimeout(this.#idleTimer);
     const browser = await this.#launch();
     const page = await browser.newPage();
@@ -203,6 +208,10 @@ export class Camera {
       );
       const film = await openFilm(page, request.url, request.width, request.height, scale);
       await film.draw(request.t);
+      const length = await page.evaluate(() => {
+        const value = Number((window as { KAIROS_LENGTH?: unknown }).KAIROS_LENGTH);
+        return Number.isFinite(value) && value > 0 ? value : null;
+      });
       if (request.shapes && request.shapes.length > 0) {
         const svg = marksSvg(request.shapes, request.width, request.height);
         await page.evaluate((markup) => {
@@ -212,7 +221,7 @@ export class Camera {
           if (layer) document.documentElement.appendChild(layer);
         }, svg);
       }
-      return Buffer.from(await page.screenshot({ type: "png" }));
+      return { png: Buffer.from(await page.screenshot({ type: "png" })), length };
     } finally {
       await page.close().catch(() => undefined);
       this.#idleTimer = setTimeout(() => void this.close(), this.#idleMs);

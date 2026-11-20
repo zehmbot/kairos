@@ -233,6 +233,22 @@ describe("one list of lines", () => {
     return getScript();
   }
 
+  it("keeps line ids as keys, and gives repeated or odd ones a new id", async () => {
+    const saved = (
+      await json("PUT", "/api/films/intro/script", {
+        lines: [
+          { id: "joke", speaker: "narrator", text: "one", start: 0 },
+          { id: "joke", speaker: "narrator", text: "two", start: 1 },
+          { id: "not a key!", speaker: "narrator", text: "three", start: 2 },
+        ],
+      })
+    ).json().script as Script;
+    const ids = saved.lines.map((line) => line.id);
+    expect(ids[0]).toBe("joke");
+    expect(new Set(ids).size).toBe(3);
+    expect(ids.every((id) => /^[A-Za-z0-9_-]+$/.test(id))).toBe(true);
+  });
+
   it("keeps who wrote each line and its speed, and moves a line for free", async () => {
     const script = await twoMade();
     expect(script.lines.map((line) => [line.by, line.speed])).toEqual([
@@ -375,6 +391,24 @@ describe("writing the narration in the background", () => {
     );
     expect(Object.keys((await film()).config?.voices ?? {}).sort()).toEqual(["narrator", "ruby"]);
     expect(await clips()).toEqual([]);
+  });
+
+  it("keeps the line ids Claude gives (a Blocky shot's line key)", async () => {
+    process.env.FAKE_CLAUDE_ANSWER = JSON.stringify({
+      cast: [{ speaker: "bo", type: "old-man" }],
+      lines: [
+        { id: "joke", speaker: "bo", text: "Made you look", start: 0 },
+        { id: "joke", speaker: "bo", text: "Again", start: 2 },
+      ],
+    });
+    await json("POST", "/api/films/intro/script/writer", {});
+    expect((await finished()).state).toBe("done");
+    const ids = (await getScript()).lines.map((line) => line.id);
+    expect(ids[0]).toBe("joke");
+    // A repeated id gets a new one.
+    expect(ids[1]).not.toBe("joke");
+    const log = (await readFile(join(claudeDir, "log.jsonl"), "utf8")).trim().split("\n");
+    expect(JSON.parse(log.at(-1) ?? "{}").prompt).toContain("give that line the same id");
   });
 
   it("explains problems in plain words, and can be stopped", async () => {

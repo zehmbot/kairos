@@ -12,11 +12,12 @@ preview reloads by itself every time a file here is saved.
 3. Look at frames with `kairos_frame` (a few per place, every new face or pose) and fix what looks wrong.
 4. Set the length with `kairos_film_settings` (`duration` = the sum of all `seconds`, rounded to 0.1 s).
 5. **Voices:** when the brief says "Voices: make them with the film", make the narration and the characters'
-   lines and fit the shots to them. The steps are under "Voices" in the `kairos-blocky` skill:
-   1. cast the speakers by type (`kairos_voices` with `cast`);
-   2. one script line per spoken shot (`kairos_script`), then make the voices;
-   3. each spoken shot lasts as long as its line, and the script is made again with the new starts;
-   4. the length follows.
+   lines. The voice leads: each spoken shot follows its line by itself. The steps are under "Voices" in the
+   `kairos-blocky` skill:
+   1. give every spoken shot a `line` key (`line: "joke"`);
+   2. cast the speakers by type (`kairos_voices` with `cast`);
+   3. one script line per spoken shot (`kairos_script`), with the shot's key as its `id`, then make the voices;
+   4. set `duration` to the story's length (`kairos_frame` says it when it differs).
 
 **Characters:**
 
@@ -52,14 +53,15 @@ export const SHOTS = [
   turn: { milo: 0.4 },      // optional: turn someone (radians)
   pose: { milo: "sit" },    // see poses
   face: { milo: "shocked" },// see faces
-  talk: "milo",             // whose mouth moves with the words (a name or a list)
+  talk: "milo",             // whose mouth moves with the words (without voices; with voices, the speaker's)
   hold: { milo: "phone" },  // something in the right hand (see props)
   prop: "letter",           // an object on the place's table or surface (use with shot: "insert")
   icons: ["!", { icon: "heart", on: "ruby" }],
   labels: { ruby: "625 days" }, // green text over a head
   big: "x40 / WEEK",        // big see-through words in the upper part
   say: "and then *nobody* laughed.", // the narration for this shot (*key words* stay yellow)
-  seconds: 2.2,
+  line: "nobody",           // its line in the script (the line's id): the shot follows that voice
+  seconds: 2.2,             // its length without a voice (and the least it lasts with one)
   move: "push",             // hold, push, pull, drift, orbit, rise, zoom, shake
   angle: "left",            // front, left, right, side, sideR, back
   whip: true,               // start with a fast blurred swing (between moments)
@@ -115,8 +117,17 @@ export const SHOTS = [
 
 ### Timing
 
-Captions follow `say`: the words are spread over the shot, longer words and pauses after commas take longer. About
-2.5 words per second sounds natural. A shot without `say` is a silent picture (wide shots, reactions).
+- **Without voices,** captions follow `say`: the words are spread over the shot, longer words and pauses after
+  commas take longer. About 2.5 words per second sounds natural.
+- **With voices,** the voice leads (`blocky/timing.js`, `blocky/voice.js`):
+  - **Shots:** a spoken shot starts just before its line and lasts until the next spoken shot; silent shots between
+    them share that time.
+  - **Captions** show the voice's real words as they are said.
+  - **Mouths:** the speaker's mouth moves on its words, when the speaker is in the shot (the narrator moves no
+    mouth).
+  - **Following:** when the user edits, remakes or moves a line, the film follows it without any change here.
+  - **Links:** a shot finds its line by `line` (the script line's `id`), otherwise by the same words.
+- **Silent pictures:** a shot without `say` is a silent picture (wide shots, reactions).
 
 ## The engine
 
@@ -129,7 +140,7 @@ Captions follow `say`: the words are spread over the shot, longer words and paus
 - **the camera:** `shots.js`;
 - **captions and extras:** `captions.js`, `overlays.js`;
 - **the look:** `effects.js`;
-- **the timeline:** `engine.js`.
+- **the timeline:** `engine.js`, with `timing.js` (shots follow the voices) and `voice.js` (reads them).
 
 Change it only when the story needs something it doesn't have (a new place, a pose, a prop). Keep
 `renderOut(t)` a pure function of `t`: no timers, clocks or unseeded random numbers. Our characters and world
@@ -137,7 +148,7 @@ are our own: never use a game's or brand's name, logos, avatars or another creat
 
 ## Files
 
-- `kairos.json`: title, size, `fps`, `duration` (must match the shot list), `status`, and `audio` (sound
+- `kairos.json`: title, size, `fps`, `duration` (the story's length), `status`, and `audio` (sound
   tracks: `[{ "file": "audio/voice.mp3", "start": 0, "volume": 1 }]`).
 - `index.html` and `film.js` hold the film; `story.js` is the story; `assets/fonts/` has the caption font
   (Poppins, SIL Open Font License).

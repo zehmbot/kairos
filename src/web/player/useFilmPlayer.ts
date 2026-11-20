@@ -29,6 +29,8 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
   const [scenes, setScenes] = useState<FilmScene[]>([]);
+  // How long the film's story lasts, when the film says (Blocky times itself to its voices).
+  const [length, setLength] = useState<number | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [frameError, setFrameError] = useState<string | null>(null);
 
@@ -122,6 +124,7 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
         s.inflight = false;
         setLoading(false);
         setScenes(message.scenes);
+        setLength(message.length ?? null);
         requestFrame(s.pending ?? s.frame);
       } else if (message.type === "frame") {
         s.inflight = false;
@@ -171,6 +174,7 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
     playing,
     loading,
     scenes,
+    length,
     error: pageError ?? frameError,
     toggle,
     pause,

@@ -35,6 +35,8 @@ assets/       images, fonts, sounds
 - Anything that must load first goes in `window.READY = (async () => { ... })()`. Kairos waits for it, and for
   fonts, before the first frame. Set `window.READY` right away, before any `await`.
 - Optional scene markers for the Kairos timeline: `window.KAIROS_SCENES = [{ name, start, end }]` (seconds).
+- Optional `window.KAIROS_LENGTH` (seconds), for a film that works out its own length (set both before
+  `window.READY` settles). Kairos shows when it differs from `duration`, and `kairos_frame` says so too.
 
 Helpers that keep motion deterministic:
 

@@ -2674,3 +2674,19 @@ video.asset-media {
     box-shadow: inset 0 0 0 var(--px) var(--highlight);
   }
 }
+
+/* The story lasts longer (or shorter) than the film: one click fits it. */
+.story-length {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--highlight) 14%, var(--bg));
+  box-shadow: inset 4px 0 0 var(--highlight);
+}
+
+.story-length p {
+  flex: 1 1 200px;
+  margin: 0;
+}

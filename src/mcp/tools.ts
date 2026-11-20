@@ -14,6 +14,7 @@ import {
   FilmStatusSchema,
   type FilmSummary,
   FpsSchema,
+  LINE_ID_PATTERN,
   type Note,
   type NoteShape,
   NoteStatusSchema,
@@ -298,12 +299,18 @@ export function createKairosServer(context: ToolContext): McpServer {
     safely(async ({ film, t }: { film?: string; t: number }) => {
       const id = await filmId(film);
       const summary = await hub.film(id);
-      const png = await hub.frame(id, t);
+      const { png, length } = await hub.frame(id, t);
       const config = summary.config;
       const where = config
         ? ` (frame ${frameNumber(t, config.fps)} of ${Math.max(1, Math.round(config.duration * config.fps))})`
         : "";
-      return { content: [text(`"${id}" at t = ${seconds(t)}${where}:`), image(png)] };
+      // A film that times itself (Blocky follows its voices) says how long its story lasts.
+      const story = length !== null ? Math.round(length * 10) / 10 : null;
+      const fit =
+        story !== null && config && Math.abs(story - config.duration) >= 0.05
+          ? `\nNote: the story lasts ${seconds(story)}, but the film is ${seconds(config.duration)} long. Set duration to ${story} with kairos_film_settings.`
+          : "";
+      return { content: [text(`"${id}" at t = ${seconds(t)}${where}:${fit}`), image(png)] };
     }),
   );
 
@@ -856,6 +863,13 @@ export function createKairosServer(context: ToolContext): McpServer {
         lines: z
           .array(
             z.object({
+              id: z
+                .string()
+                .regex(LINE_ID_PATTERN)
+                .optional()
+                .describe(
+                  'A short key for the line, like "joke". In a Blocky film, the same as the shot\'s `line` in story.js, so the shot follows its voice. It stays when the line changes.',
+                ),
               speaker: z.string().describe('"narrator", or a character in small letters.'),
               text: z.string().describe("The words."),
               start: z.number().min(0).describe("When it starts on the film, in seconds."),
@@ -878,7 +892,7 @@ export function createKairosServer(context: ToolContext): McpServer {
     safely(
       async (args: {
         film?: string;
-        lines?: { speaker: string; text: string; start: number }[];
+        lines?: { id?: string; speaker: string; text: string; start: number }[];
         style?: string;
         language?: string;
         note?: string;
@@ -893,7 +907,7 @@ export function createKairosServer(context: ToolContext): McpServer {
             const same = before.find(
               (entry) => entry.speaker === line.speaker && entry.text === line.text.trim(),
             );
-            return same ? { ...same, start: line.start } : line;
+            return same ? { ...same, id: line.id ?? same.id, start: line.start } : line;
           });
           const saved = await hub.saveScript(id, {
             writtenBy: "claude",
@@ -945,7 +959,7 @@ export function createKairosServer(context: ToolContext): McpServer {
           const status = scriptLineStatus(line, made, voices, film.config?.audio);
           const speed = line.speed !== 1 ? `, speed ${line.speed}` : "";
           out.push(
-            `- ${seconds(line.start)} ${line.speaker}: "${line.text}" (${line.by === "you" ? "by the user" : "by Claude"}, ${words[status]}${speed})`,
+            `- [${line.id}] ${seconds(line.start)} ${line.speaker}: "${line.text}" (${line.by === "you" ? "by the user" : "by Claude"}, ${words[status]}${speed})`,
           );
         }
         if (script.note) out.push(`Note: ${script.note}`);

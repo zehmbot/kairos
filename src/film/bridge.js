@@ -95,6 +95,12 @@
       }));
   }
 
+  /** The film's own length (`window.KAIROS_LENGTH`), when it says (a template that times itself). */
+  function readLength() {
+    const length = Number(window.KAIROS_LENGTH);
+    return Number.isFinite(length) && length > 0 ? { length } : {};
+  }
+
   /** Draws frame `t` once the film is ready. Throws the film's own errors. */
   async function draw(t) {
     await ready;
@@ -144,6 +150,7 @@
           type: "ready",
           hasRenderOut: typeof window.renderOut === "function",
           scenes: readScenes(),
+          ...readLength(),
         });
       });
     } else if (message.type === "seek" && Number.isFinite(message.t)) {
