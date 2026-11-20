@@ -153,7 +153,13 @@ export function VoicePicker({
                     )}
                     <PixelButton
                       data-size="small"
-                      onClick={() => onPick({ id: voice.id, name: voice.name })}
+                      onClick={() =>
+                        onPick({
+                          id: voice.id,
+                          name: voice.name,
+                          ...(voice.sample ? { sample: voice.sample } : {}),
+                        })
+                      }
                     >
                       Use
                     </PixelButton>

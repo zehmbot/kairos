@@ -7,7 +7,9 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import { nextLane } from "../shared/lanes.ts";
 import {
+  type AudioTrack,
   type FilmVoice,
   type VoiceLine,
   VoiceLineSchema,
@@ -187,4 +189,18 @@ export function deleteLine(filmDir: string, id: string): Promise<VoiceLine | nul
     }
     return line;
   });
+}
+
+/** The lane voice clips go on: the first lane holding only voice files, else a new one. */
+export function voiceLane(tracks: readonly AudioTrack[]): number {
+  const lanes = new Map<number, AudioTrack[]>();
+  tracks.forEach((track, i) => {
+    const lane = track.lane ?? i;
+    lanes.set(lane, [...(lanes.get(lane) ?? []), track]);
+  });
+  const voiceOnly = [...lanes]
+    .filter(([, list]) => list.every((track) => track.file.startsWith(`${VOICE_FOLDER}/`)))
+    .map(([lane]) => lane)
+    .sort((a, b) => a - b);
+  return voiceOnly[0] ?? nextLane(tracks);
 }

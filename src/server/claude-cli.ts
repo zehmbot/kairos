@@ -146,7 +146,7 @@ interface RunResult {
 }
 
 /** Quotes one argument for a `cmd.exe` command line. */
-const cmdQuote = (arg: string) =>
+export const cmdQuote = (arg: string) =>
   /[\s"&|<>^()]/.test(arg) ? `"${arg.replaceAll('"', '""')}"` : arg;
 
 /** Runs `file` and collects its output. Never throws for a non-zero exit; only when it can't start. */

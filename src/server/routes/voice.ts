@@ -1,64 +1,23 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { nextLane } from "../../shared/lanes.ts";
 import { mediaKindOf } from "../../shared/media.ts";
-import {
-  type AudioTrack,
-  AudioTrackSchema,
-  FilmVoicesSchema,
-  NewLinesSchema,
-  type VoiceStatus,
-} from "../../shared/types.ts";
-import { changeFilm, type Film, FilmConfigError, readFilm } from "../films.ts";
-import {
-  checkKey,
-  DEFAULT_FISH_MODEL,
-  FISH_KEY_NAME,
-  FISH_MODELS,
-  FishError,
-  type FishOptions,
-  listVoices,
-  speak,
-  transcribe,
-} from "../fish.ts";
-import { keyHint, readSecret, secretSource, writeSecret } from "../secrets.ts";
+import { AudioTrackSchema, FilmVoicesSchema, NewLinesSchema } from "../../shared/types.ts";
+import { changeFilm, readFilm } from "../films.ts";
+import { checkKey, FISH_KEY_NAME, FISH_MODELS, listVoices, speak, transcribe } from "../fish.ts";
+import { writeSecret } from "../secrets.ts";
 import type { Studio } from "../studio.ts";
-import {
-  deleteLine,
-  LinesFileError,
-  makeLines,
-  readLines,
-  readWords,
-  VOICE_FOLDER,
-  writeWords,
-} from "../voices.ts";
+import { deleteLine, makeLines, readLines, readWords, voiceLane, writeWords } from "../voices.ts";
 import { resolveInside } from "../workspace.ts";
 import { sendError } from "./errors.ts";
+import { type VoiceRoutesOptions, voiceContext } from "./voice-context.ts";
 
 interface IdParams {
   id: string;
 }
 
-export interface VoiceRoutesOptions {
-  /** fish.audio's address (tests use a fake server). */
-  fishUrl?: string;
-}
-
-/** The lane voice clips go on: the first lane holding only voice files, else a new one. */
-export function voiceLane(tracks: readonly AudioTrack[]): number {
-  const lanes = new Map<number, AudioTrack[]>();
-  tracks.forEach((track, i) => {
-    const lane = track.lane ?? i;
-    lanes.set(lane, [...(lanes.get(lane) ?? []), track]);
-  });
-  const voiceOnly = [...lanes]
-    .filter(([, list]) => list.every((track) => track.file.startsWith(`${VOICE_FOLDER}/`)))
-    .map(([lane]) => lane)
-    .sort((a, b) => a - b);
-  return voiceOnly[0] ?? nextLane(tracks);
-}
+export type { VoiceRoutesOptions } from "./voice-context.ts";
 
 const round = (t: number) => Math.round(t * 100) / 100;
 
@@ -68,62 +27,7 @@ export function voiceRoutes(
   studio: Studio,
   options: VoiceRoutesOptions = {},
 ): void {
-  const model = () => studio.voiceSettings.model ?? DEFAULT_FISH_MODEL;
-
-  async function status(): Promise<VoiceStatus> {
-    const key = await readSecret(studio.home, FISH_KEY_NAME);
-    return {
-      key: await secretSource(studio.home, FISH_KEY_NAME),
-      hint: key ? keyHint(key) : null,
-      model: model(),
-      models: [...FISH_MODELS],
-      recent: studio.voiceSettings.recent,
-    };
-  }
-
-  /** The fish.audio connection, or a plain-words answer when there is no key. */
-  async function fish(reply: FastifyReply): Promise<FishOptions | null> {
-    const key = await readSecret(studio.home, FISH_KEY_NAME);
-    if (!key) {
-      sendError(reply, 409, "no-key", "Add your fish.audio key first, in Settings → Voice.");
-      return null;
-    }
-    return { key, baseUrl: options.fishUrl };
-  }
-
-  async function filmOr(
-    reply: FastifyReply,
-    id: string,
-  ): Promise<(Film & { config: NonNullable<Film["config"]> }) | null> {
-    const films = studio.filmsDir;
-    const film = films ? await readFilm(films, id) : null;
-    if (!film) {
-      sendError(reply, 404, "not-found", "This film doesn't exist (any more).");
-      return null;
-    }
-    if (!film.config || film.problem) {
-      sendError(
-        reply,
-        409,
-        "film-problem",
-        film.problem ?? "This film's kairos.json can't be read.",
-      );
-      return null;
-    }
-    return film as Film & { config: NonNullable<Film["config"]> };
-  }
-
-  async function guard(reply: FastifyReply, action: () => Promise<unknown>) {
-    try {
-      return await action();
-    } catch (error) {
-      if (error instanceof FishError) return sendError(reply, 502, "fish-audio", error.message);
-      if (error instanceof LinesFileError || error instanceof FilmConfigError) {
-        return sendError(reply, 409, "film-problem", error.message);
-      }
-      throw error;
-    }
-  }
+  const { model, status, fish, filmOr, guard } = voiceContext(studio, options);
 
   // ---------- The key and the model ----------
 
@@ -198,7 +102,13 @@ export function voiceRoutes(
       return sendError(reply, 400, "bad-voices", input.error.issues[0]?.message ?? "Bad voices.");
     return guard(reply, async () => {
       const config = await changeFilm(film.path, { voices: input.data });
-      for (const voice of Object.values(input.data)) await studio.rememberVoice(voice);
+      const before = film.config.voices ?? {};
+      for (const [speaker, voice] of Object.entries(input.data)) {
+        if (before[speaker]?.id === voice.id) continue;
+        await studio.rememberVoice(voice);
+        // A voice you chose for a character: new films use it too.
+        if (!voice.auto) await studio.rememberCharacter(speaker, voice);
+      }
       studio.events.publish({ type: "films-changed", ids: [film.id] });
       return config.voices ?? {};
     });

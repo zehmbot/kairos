@@ -100,24 +100,32 @@ Kairos plays the tracks in step with the preview and mixes them into the rendere
 
 ## Voices
 
-Kairos makes spoken lines with fish.audio. **They cost the user's credits:** make lines only when the user asks
-for a voice or narration, and write the words first.
+Kairos makes spoken lines with fish.audio. **They cost the user's credits:** make them when the brief says
+"Voices: make them with the film" or when the user asks for a voice. Choosing voices is free.
 
-1. `kairos_voices`: who speaks in this film (`narrator`, `ruby`...) and with which voice. If a speaker you need
-   has no voice, search (`query`, or `mine` for the user's own voices) and ask the user which one to use, then
-   set it with `choose`.
-2. `kairos_say`: give a speaker one or more lines. Each becomes `voice/<speaker>-<n>.mp3` with its word timings
-   in `voice/<speaker>-<n>.words.json`, placed on the timeline after the voice lines already there (or at
-   `start`). The answer lists each line's start, length and every word as `word@seconds` on the film.
+1. **Cast** with `kairos_voices` and `cast`: every speaker and its type (`narrator`, `woman`, `man`, `girl`,
+   `boy`, `old-woman`, `old-man`). Kairos picks a fitting voice for each one without a voice, and a character
+   keeps its voice from film to film. Use short names in small letters (`narrator`, `ruby`, `grandpa-bo`).
+   `choose` sets a voice yourself: only when the user names one.
+2. **Write the script** with `kairos_script` and `lines`: every line with its speaker, words and `start` (seconds
+   on the film), in time order.
    - One line per sentence or beat, so shots and captions can follow them.
-   - The same words, voice and speed again reuse the earlier file (not paid twice).
-   - The film doesn't grow on its own: set `duration` to cover the last line (`kairos_film_settings`).
-3. Time the picture to the words: use the starts from the answer, or read `voice/*.words.json` from the page
-   (word times there are from the start of that file, so add the clip's `start` from `kairos.json`).
+   - About 2.5 words per second: a line must end before the next one starts.
+3. **Make the voices** with `kairos_script` and `make: true`.
+   - Each line becomes `voice/<speaker>-<n>.mp3`, with its word timings in `voice/<speaker>-<n>.words.json`, and
+     is placed at its start (after the line before when they would overlap).
+   - The answer gives each line's real start, length and every word as `word@seconds` on the film.
+   - Unchanged lines are reused: writing the script again with new starts and making it again costs nothing.
+4. **Fit the film to the voices:** give each line its moment (move scenes or shots to the real starts), and set
+   `duration` to cover the last line (`kairos_film_settings`). For captions, read `voice/*.words.json` (see the
+   `kairos-captions` skill).
 
-`kairos_words` gives the word timings of any sound in the film. For the user's own recording it can ask
-fish.audio's speech-to-text (`transcribe: true`, uses credits). The user can also make lines in the Voice tab on
-the film page, and press **Get words** on a clip in the timeline.
+`kairos_say` makes a single line outside the script, placed after the voice lines already there. `kairos_words`
+gives the word timings of any sound in the film; for the user's own recording it can ask fish.audio's
+speech-to-text (`transcribe: true`, uses credits).
+
+The user sees all of this in the film page's Voice tab: the cast (with **Another one** and **Change**), the
+script, and **Write the narration**, which runs Claude in the background to write the script.
 
 ## References and assets
 

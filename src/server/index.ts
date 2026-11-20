@@ -7,7 +7,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import pkg from "../../package.json" with { type: "json" };
 import { DEFAULT_FILM_PORT, DEFAULT_HUB_PORT, DEV_WEB_PORT, HOST } from "../shared/ports.ts";
 import { Camera, findBrowser } from "./camera.ts";
-import { claudeTools } from "./claude-cli.ts";
+import { claudeTools, findClaude } from "./claude-cli.ts";
 import { kairosHome } from "./config.ts";
 import { probeExport } from "./ffmpeg.ts";
 import { buildFilmServer } from "./film-server.ts";
@@ -21,6 +21,7 @@ import { healthRoutes } from "./routes/health.ts";
 import { noteRoutes } from "./routes/notes.ts";
 import { referenceRoutes } from "./routes/references.ts";
 import { renderRoutes } from "./routes/renders.ts";
+import { scriptRoutes } from "./routes/script.ts";
 import { skillRoutes } from "./routes/skills.ts";
 import { soundRoutes } from "./routes/sounds.ts";
 import { templateRoutes } from "./routes/templates.ts";
@@ -31,6 +32,7 @@ import { allowedHostsFor, requestGuard } from "./security.ts";
 import { claudeSkillsDir, Skills } from "./skills.ts";
 import { Studio } from "./studio.ts";
 import { acceptUploads } from "./uploads.ts";
+import { Writers } from "./writer.ts";
 
 // Secrets (the fish.audio key) can sit in the Kairos folder's own .env, which git ignores.
 try {
@@ -114,6 +116,12 @@ renderRoutes(app, { studio, renderer, exportInfo: () => exportInfo });
 assetRoutes(app, studio);
 soundRoutes(app, studio);
 voiceRoutes(app, studio);
+const writers = new Writers({
+  claudePath: () => findClaude(),
+  mcp: { node: process.execPath, script: mcpServerPath, hubPort: port },
+  onChange: (id, writer) => studio.events.publish({ type: "writer-progress", id, writer }),
+});
+scriptRoutes(app, studio, writers);
 referenceRoutes(app, studio, { ffmpeg: async () => (await exportInfo).ffmpeg?.path ?? null });
 filmRoutes(app, studio, {
   picture: filmPicture({ studio, camera, filmServerUrl }),

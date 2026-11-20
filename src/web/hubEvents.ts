@@ -55,6 +55,8 @@ export function useHubEventStream(): void {
         queryClient.invalidateQueries({ queryKey: queryKeys.renders });
       } else if (event.type === "references-changed") {
         queryClient.invalidateQueries({ queryKey: queryKeys.references(event.id) });
+      } else if (event.type === "writer-progress") {
+        queryClient.setQueryData(queryKeys.writer(event.id), event.writer);
       } else if (event.type === "assets-changed") {
         queryClient.invalidateQueries({ queryKey: queryKeys.assets });
       } else {

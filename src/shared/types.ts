@@ -88,7 +88,29 @@ export type VoiceInfo = z.infer<typeof VoiceInfoSchema>;
 
 /** Who speaks in a film: a speaker name ("narrator", "ruby") and its fish.audio voice. */
 export const SPEAKER_PATTERN = /^[a-z][a-z0-9-]{0,31}$/;
-export const FilmVoiceSchema = z.object({ id: z.string().min(1), name: z.string() });
+/** Who a speaker is, so Kairos can cast a fitting voice. */
+export const VOICE_TYPES = [
+  "narrator",
+  "woman",
+  "man",
+  "girl",
+  "boy",
+  "old-woman",
+  "old-man",
+] as const;
+export const VoiceTypeSchema = z.enum(VOICE_TYPES);
+export type VoiceType = z.infer<typeof VoiceTypeSchema>;
+
+export const FilmVoiceSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  /** Who the speaker is (cast by type). */
+  type: VoiceTypeSchema.optional(),
+  /** Picked by Kairos (not by you). */
+  auto: z.boolean().optional(),
+  /** A sample to listen to, on fish.audio (https). */
+  sample: z.string().startsWith("https://").optional(),
+});
 export type FilmVoice = z.infer<typeof FilmVoiceSchema>;
 export const FilmVoicesSchema = z.record(
   z.string().regex(SPEAKER_PATTERN, "Speaker names use small letters, numbers and dashes."),
@@ -143,6 +165,106 @@ export const VoiceStatusSchema = z.object({
   recent: z.array(FilmVoiceSchema),
 });
 export type VoiceStatus = z.infer<typeof VoiceStatusSchema>;
+
+/** Languages offered for narration (fish.audio codes). */
+export const NARRATION_LANGUAGES = [
+  ["en", "English"],
+  ["fr", "French"],
+  ["es", "Spanish"],
+  ["de", "German"],
+  ["it", "Italian"],
+  ["pt", "Portuguese"],
+  ["ar", "Arabic"],
+  ["ja", "Japanese"],
+  ["zh", "Chinese"],
+  ["ko", "Korean"],
+] as const;
+
+/** One planned line of the film's narration or dialogue (`voice/script.json`). */
+export const ScriptLineSchema = z.object({
+  id: z.string().min(1).max(40),
+  speaker: z
+    .string()
+    .regex(SPEAKER_PATTERN, "Speaker names use small letters, numbers and dashes."),
+  text: z
+    .string()
+    .trim()
+    .min(1, "A line needs some words.")
+    .max(2000, "Keep a line under 2000 letters."),
+  /** When it starts on the film, in seconds. */
+  start: z.number().min(0),
+  /** The voice line made from it (an id in `voice/lines.json`), once made. */
+  line: z.string().optional(),
+});
+export type ScriptLine = z.infer<typeof ScriptLineSchema>;
+
+/** What the voices say, planned before they are made. */
+export const ScriptSchema = z.object({
+  version: z.literal(1),
+  style: z.string().max(200).default(""),
+  /** fish.audio language code. */
+  language: z.string().max(10).default("en"),
+  /** Who wrote it last. */
+  writtenBy: z.enum(["claude", "you"]).default("you"),
+  /** Claude's note about it (for example: the story needs 4 more seconds). */
+  note: z.string().max(1000).default(""),
+  lines: z.array(ScriptLineSchema).max(200),
+  /** The voice lines the script made last time (their clips are replaced when it is made again). */
+  made: z.array(z.string()).default([]),
+  updatedAt: z.string().optional(),
+});
+export type Script = z.infer<typeof ScriptSchema>;
+
+/** PUT /api/films/:id/script: the lines (ids are added when missing). */
+export const ScriptInputSchema = z.object({
+  /** Who wrote it (Claude, through its tools; you, in the app). */
+  writtenBy: z.enum(["claude", "you"]).optional(),
+  style: z.string().max(200).optional(),
+  language: z.string().max(10).optional(),
+  note: z.string().max(1000).optional(),
+  lines: z.array(ScriptLineSchema.extend({ id: z.string().min(1).max(40).optional() })).max(200),
+});
+export type ScriptInput = z.input<typeof ScriptInputSchema>;
+
+/** POST /api/films/:id/cast: speakers and who they are; Kairos picks voices for the ones without one. */
+export const CastInputSchema = z.object({
+  speakers: z
+    .array(
+      z.object({
+        speaker: z
+          .string()
+          .regex(SPEAKER_PATTERN, "Speaker names use small letters, numbers and dashes."),
+        type: VoiceTypeSchema,
+      }),
+    )
+    .min(1)
+    .max(20),
+  language: z.string().max(10).optional(),
+});
+
+/** "Write the narration": what you ask Claude for. */
+export const WriteNarrationSchema = z.object({
+  style: z.string().trim().max(200).default("storyteller"),
+  speakers: z.enum(["narrator", "both", "characters"]).default("narrator"),
+  language: z.string().max(10).default("en"),
+  note: z.string().trim().max(500).default(""),
+  /** Make the voices as soon as the script is written. */
+  make: z.boolean().default(true),
+});
+export type WriteNarration = z.input<typeof WriteNarrationSchema>;
+
+/** The background writer of a film. */
+export const WriterStateSchema = z.object({
+  state: z.enum(["idle", "running", "done", "failed", "stopped"]),
+  stage: z.enum(["starting", "watching", "writing", "casting", "voicing"]).optional(),
+  /** What Claude is doing now ("Looking at 4.2 s"). */
+  detail: z.string().optional(),
+  /** The result or the problem, in plain words. */
+  message: z.string().optional(),
+  warnings: z.array(z.string()).default([]),
+  startedAt: z.string().optional(),
+});
+export type WriterState = z.infer<typeof WriterStateSchema>;
 
 /**
  * `kairos.json` at the root of every film folder.
@@ -298,6 +420,8 @@ export const BriefFileSchema = z.object({
   /** The questions as they were when the film was made (the template may change or go away). */
   fields: z.array(TemplateFieldSchema),
   answers: BriefAnswersSchema,
+  /** Make the voices with the film (New film's Voices choice). */
+  voices: z.enum(["make", "none"]).optional(),
   updatedAt: z.string(),
 });
 export type BriefFile = z.infer<typeof BriefFileSchema>;
@@ -331,6 +455,8 @@ export const NewFilmSchema = z.object({
   kind: z.string().optional(),
   /** Answers to the kind's form. */
   brief: BriefAnswersSchema.default({}),
+  /** Make the voices (narration and characters) while the film is built. */
+  voices: z.enum(["make", "none"]).default("none"),
 });
 /** What the client sends (`fps`, `template` and `brief` may be left out). */
 export type NewFilm = z.input<typeof NewFilmSchema>;
@@ -438,7 +564,12 @@ export const AppConfigSchema = z.object({
   workspace: z.string().optional(),
   /** fish.audio: the speech model, and voices used lately (newest first). The key is in `.env`, not here. */
   voice: z
-    .object({ model: z.string().optional(), recent: z.array(FilmVoiceSchema).default([]) })
+    .object({
+      model: z.string().optional(),
+      recent: z.array(FilmVoiceSchema).default([]),
+      /** Characters keep their voice from film to film: speaker name → voice. */
+      remembered: z.record(z.string(), FilmVoiceSchema).default({}),
+    })
     .optional(),
 });
 export type AppConfig = z.infer<typeof AppConfigSchema>;
@@ -682,6 +813,7 @@ export const HubEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("render-progress"), job: RenderJobSchema }),
   /** A film's list of finished videos changed. */
   z.object({ type: z.literal("renders-changed"), id: z.string() }),
+  z.object({ type: z.literal("writer-progress"), id: z.string(), writer: WriterStateSchema }),
 ]);
 export type HubEvent = z.infer<typeof HubEventSchema>;
 

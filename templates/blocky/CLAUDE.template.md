@@ -11,6 +11,12 @@ preview reloads by itself every time a file here is saved.
 2. Write the shot list in `story.js` (format below). Normally it is the only file you change.
 3. Look at frames with `kairos_frame` (a few per place, every new face or pose) and fix what looks wrong.
 4. Set the length with `kairos_film_settings` (`duration` = the sum of all `seconds`, rounded to 0.1 s).
+5. **Voices:** when the brief says "Voices: make them with the film", make the narration and the characters'
+   lines and fit the shots to them. The steps are under "Voices" in the `kairos-blocky` skill:
+   1. cast the speakers by type (`kairos_voices` with `cast`);
+   2. one script line per spoken shot (`kairos_script`), then make the voices;
+   3. each spoken shot lasts as long as its line, and the script is made again with the new starts;
+   4. the length follows.
 
 **Characters:**
 
@@ -150,3 +156,5 @@ When the Kairos tools are connected (Kairos → Settings → Claude Code), use t
   their shot lengths and frame sheets. Look at them before building or restyling the film.
 - `kairos_assets` lists the user's asset library (images, videos, sounds, fonts); `kairos_use_asset` copies one into
   this film and gives its path (a sound becomes a sound track).
+- `kairos_voices` casts the speakers by type (free); `kairos_script` writes what they say and when, and makes the
+  voices with fish.audio (uses the user's credits; unchanged lines are reused); `kairos_words` gives word timings.

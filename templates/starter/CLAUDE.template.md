@@ -11,6 +11,20 @@ to the template's questions). Build the film from it, and keep to it when you ch
 If the film has references (videos or pictures the user likes, in `references/`), look at them with
 `kairos_references` too: their notes say what to take from each.
 
+## Voices
+
+When the brief says "Voices: make them with the film", the film has a narrator (and characters who talk, when it
+fits). Once the picture works:
+
+1. Cast every speaker by type with `kairos_voices` and `cast` (narrator, woman, man, girl, boy, old-woman,
+   old-man): Kairos picks the voices.
+2. Write the script with `kairos_script`: one short line per moment, starting when the moment starts (about 2.5
+   words per second). Then make it (`make: true`).
+3. Fit the film to the voices with the real starts and lengths from the answer: move scenes or shots to them,
+   and make the film long enough for the last line.
+
+The `kairos` skill has the details (Voices).
+
 ## Files
 
 - `kairos.json`: `title`, `width` and `height` in pixels, `fps` (frames per second, 1 to 120), `duration` in
@@ -48,6 +62,8 @@ When the Kairos tools are connected (Kairos → Settings → Claude Code), use t
   their shot lengths and frame sheets. Look at them before building or restyling the film.
 - `kairos_assets` lists the user's asset library (images, videos, sounds, fonts); `kairos_use_asset` copies one into
   this film and gives its path (a sound becomes a sound track).
+- `kairos_voices` casts the speakers by type (free); `kairos_script` writes what they say and when, and makes the
+  voices with fish.audio (uses the user's credits; unchanged lines are reused); `kairos_words` gives word timings.
 
 ## Skills
 

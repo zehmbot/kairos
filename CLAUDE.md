@@ -33,7 +33,9 @@ src/server/   Fastify hub: index.ts (entry), security.ts (request guard), studio
               templates.ts (templates, briefs, save as template), thumbnails.ts (film card pictures),
               uploads.ts (files from the browser), assets.ts (asset library), references.ts (reference
               videos: shots and frame sheets), secrets.ts (keys in ~/.kairos/.env), fish.ts (fish.audio),
-              voices.ts (a film's spoken lines), fake-fish.ts (fish.audio stand-in for tests), routes/
+              voices.ts (a film's spoken lines), casting.ts (voices picked by type), script.ts (what the
+              voices say and when), writer.ts (Write the narration: `claude -p` in the background),
+              fake-fish.ts / fake-claude.ts (stand-ins for tests), routes/
 src/mcp/      Kairos tools for Claude Code: server.ts (stdio entry), tools.ts, hub-client.ts (calls the hub)
 src/web/      React UI: components/, pages/, player/, icons/, theme/
 src/film/     bridge.js: plain JS the film server adds to every film page
@@ -159,6 +161,42 @@ never paid twice. File numbers are never used twice (`next`), so a new take neve
 one: the browser caches waveforms by address. Placed lines go on the voice lane (a lane holding only `voice/`
 files). Deleting a line removes its files and clips. **Get words** (speech-to-text) writes `<file>.words.json` next
 to any sound. Save as template leaves `voice/` out.
+
+**Casting** (`src/server/casting.ts`): each speaker has a type (`narrator`, `woman`, `man`, `girl`, `boy`,
+`old-woman`, `old-man`), and Kairos picks a random fitting voice from fish.audio's public list (no key needed).
+
+- **Searching:** one tag per search (several tags read as "any of"), three pages, cached for an hour.
+- **Only plain voices:**
+  - every tag an ordinary word;
+  - a common first name or plain words as the title;
+  - at least 50 likes;
+  - the description agrees with the tags and doesn't name the voice itself.
+    This keeps copies of real people and known characters out. The picker still shows every voice.
+- **Fallbacks** for rare types: kids get a bright young woman's voice, an old woman a warm middle-aged one.
+- **No repeats:** no two speakers in a film share a voice.
+- **Characters keep their voice** from film to film (`voice.remembered` in `config.json`); the narrator doesn't.
+
+**The script** (`voice/script.json`, `src/server/script.ts`) holds the lines with speaker, words and `start`.
+
+- **Making it** turns each line into a voice line (unchanged ones reused) and places it at its start, after the
+  line before when they would overlap; the moved start is saved.
+- **Replacing clips:** `made` lists the voice lines it made, so clips and files of lines that are gone are
+  replaced.
+- **Stopping halfway:** when fish.audio stops (no credit...), what was made is still placed.
+
+**Write the narration** (`src/server/writer.ts`) runs `claude -p` in the film's folder, without a terminal:
+
+- **What Claude can do:**
+  - `--tools Read,Glob,Grep`;
+  - only the Kairos tools that look (`--mcp-config` from a temp file, `--strict-mcp-config`);
+  - the prompt on stdin;
+  - the answer through `--json-schema`: the cast and the lines.
+- **Progress:** the `stream-json` tool calls become `writer-progress` events.
+- **Then Kairos** saves the script, casts, and makes the voices.
+- **Limits:** one run per film, a 6-minute limit, and Stop ends the process tree.
+
+New film's **Voices** choice goes in the brief (`voices: "make"`), and the film guides tell Claude to cast, write
+the script, make it and fit the film.
 
 ## Claude Code
 

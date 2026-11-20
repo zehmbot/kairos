@@ -42,6 +42,47 @@ function speechEvents(text: string): string {
   return events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("");
 }
 
+const castVoice = (
+  id: string,
+  title: string,
+  tags: string[],
+  likes: number,
+  description = "A clear voice.",
+) => ({
+  _id: id,
+  type: "tts",
+  title,
+  description,
+  tags,
+  languages: ["en"],
+  like_count: likes,
+  task_count: likes * 100,
+  state: "trained",
+  visibility: "public",
+  dmca_taken_down: false,
+  author: { nickname: "Tests" },
+  samples: [{ title: "s", text: "Hi", task_id: "t", audio: `https://example.test/${id}.mp3` }],
+});
+
+/** Library voices with tags, for casting: plain ones and copies the automatic pick must skip. */
+export const CAST_VOICES = [
+  castVoice("v-sarah", "Sarah", ["female", "young", "narration", "soft"], 9000),
+  castVoice("v-paula", "Paula", ["female", "middle-aged", "educational"], 1800),
+  castVoice("v-laura", "Laura", ["female", "middle-aged", "warm", "calm"], 1700),
+  castVoice("v-friendly", "Friendly Women", ["female", "young", "cheerful", "bright"], 500),
+  castVoice("v-adrian", "Adrian", ["male", "middle-aged", "narration", "deep"], 4100),
+  castVoice("v-ethan", "Ethan", ["male", "middle-aged", "educational", "narration"], 3300),
+  castVoice("v-jordan", "Jordan", ["male", "old", "narration"], 900),
+  // Copies and doubtful voices:
+  castVoice("c-singer", "Taylor Swift", ["female", "middle-aged", "narration"], 5000),
+  castVoice("c-brand", "Roblox", ["female", "young"], 8000),
+  castVoice("c-cartoon", "Lola Loud", ["the loud house", "female", "child", "girl"], 300),
+  castVoice("c-bluey", "Rusty (Bluey)", ["male", "cartoon", "child"], 300),
+  castVoice("c-player", "ronaldo", ["male", "middle-aged"], 2000, "ronaldo voice"),
+  castVoice("c-mislabeled", "Grace", ["female", "young"], 2500, "A youthful male voice."),
+  castVoice("c-unknown", "Tim", ["neutral", "young", "child"], 0),
+];
+
 export async function startFakeFish(): Promise<FakeFish> {
   const app: FastifyInstance = Fastify();
   let speech = 0;
@@ -49,13 +90,34 @@ export async function startFakeFish(): Promise<FakeFish> {
     done(null, body),
   );
   app.addHook("onRequest", async (request, reply) => {
+    // The voice library is public (your own voices are not).
+    const query = request.query as { tag?: string; self?: string };
+    const publicList =
+      request.url.startsWith("/model") && query.tag !== undefined && !request.headers.authorization;
+    if (publicList) return;
     if (request.headers.authorization !== `Bearer ${GOOD_KEY}`) {
       return reply.code(401).send({ status: 401, message: "Invalid token" });
     }
   });
 
   app.get("/model", async (request) => {
-    const query = request.query as { self?: string; title?: string };
+    const query = request.query as {
+      self?: string;
+      title?: string;
+      tag?: string;
+      page_number?: string;
+      language?: string;
+    };
+    if (query.tag !== undefined) {
+      // Casting: tagged voices, most used first; only one page.
+      if (query.page_number && query.page_number !== "1") return { total: 0, items: [] };
+      const items = CAST_VOICES.filter(
+        (voice) =>
+          voice.tags.includes(query.tag ?? "") &&
+          (!query.language || voice.languages.includes(query.language)),
+      );
+      return { total: items.length, items };
+    }
     const items = [
       {
         _id: "voice-calm",

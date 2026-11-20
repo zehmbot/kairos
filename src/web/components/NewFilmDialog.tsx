@@ -7,7 +7,7 @@ import {
   type FilmShape,
   type TemplateSummary,
 } from "../../shared/types.ts";
-import { templatePreviewUrl, useCreateFilm, useTemplates } from "../api.ts";
+import { templatePreviewUrl, useCreateFilm, useTemplates, useVoiceStatus } from "../api.ts";
 import { answersOf, firstMissing, initialAnswers } from "../brief.ts";
 import { BriefFields } from "./BriefFields.tsx";
 import { FrameRatePicker, useFrameRate } from "./FrameRatePicker.tsx";
@@ -51,6 +51,8 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
   const [shape, setShape] = useState<FilmShape>("wide");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [voices, setVoices] = useState<"make" | "none">("make");
+  const voiceStatus = useVoiceStatus();
 
   const list = templates.data ?? [];
   const choices = list.filter((entry) => entry.id !== BLANK_TEMPLATE_ID);
@@ -78,6 +80,7 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
       setNeedsDefaults(true);
       setTitle("");
       setFormError(null);
+      setVoices("make");
       reset();
       dialog.showModal();
     } else if (!open && dialog.open) {
@@ -120,6 +123,7 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
         template: template.id,
         kind: kind.id,
         brief: answersOf(answers),
+        voices,
       },
       {
         onSuccess: (film) => {
@@ -315,6 +319,36 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
                 onChange={(id, value) => setAnswers((current) => ({ ...current, [id]: value }))}
               />
             )}
+            <fieldset className="voice-choice">
+              <legend className="field-label">Voices</legend>
+              <label className="check-row">
+                <input
+                  type="radio"
+                  name="voices"
+                  checked={voices === "make"}
+                  onChange={() => setVoices("make")}
+                />
+                <span>
+                  Make them with the film: Claude writes the narration and the characters' lines,
+                  and each speaker gets a fitting voice (uses fish.audio credits).
+                </span>
+              </label>
+              <label className="check-row">
+                <input
+                  type="radio"
+                  name="voices"
+                  checked={voices === "none"}
+                  onChange={() => setVoices("none")}
+                />
+                <span>No voices</span>
+              </label>
+              {voices === "make" && voiceStatus.isSuccess && !voiceStatus.data.key && (
+                <p className="hint">
+                  Add your fish.audio key in Settings → Voice. Until then, the script and the
+                  voices' choice are made, and the voices wait for your key.
+                </p>
+              )}
+            </fieldset>
             {(formError ?? create.error) && (
               <p className="field-error">{formError ?? create.error?.message}</p>
             )}

@@ -8,6 +8,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { formatSize } from "../shared/media.ts";
 import { DEV_WEB_PORT, HOST } from "../shared/ports.ts";
+import { scriptLineStatus } from "../shared/script.ts";
 import {
   type Asset,
   FilmStatusSchema,
@@ -16,6 +17,8 @@ import {
   type Note,
   type NoteShape,
   NoteStatusSchema,
+  type VoiceType,
+  VoiceTypeSchema,
 } from "../shared/types.ts";
 import { type Hub, HubError, HubOfflineError } from "./hub-client.ts";
 
@@ -173,6 +176,12 @@ export function createKairosServer(context: ToolContext): McpServer {
           if (references) {
             lines.push(
               `References: ${references} (look at them with kairos_references before building)`,
+            );
+          }
+          const script = await hub.script(id).catch(() => null);
+          if (script?.lines.length) {
+            lines.push(
+              `Script: ${script.lines.length} line${script.lines.length === 1 ? "" : "s"} (read it with kairos_script)`,
             );
           }
           const speakers = Object.keys(summary.config.voices ?? {});
@@ -604,9 +613,22 @@ export function createKairosServer(context: ToolContext): McpServer {
     {
       title: "Film voices",
       description:
-        "Who speaks in the film (speaker name → fish.audio voice), and the fish.audio voice library: search with `query`, or `mine` for the user's own voices. Set a speaker's voice with `choose`. Prefer voices the user picked; ask before choosing for them.",
+        "Who speaks in the film (speaker name → fish.audio voice and type). `cast` gives speakers voices automatically by type (free: narrator, woman, man, girl, boy, old-woman, old-man); speakers that have a voice keep it, and characters keep their voice from film to film. The library: search with `query`, or `mine` for the user's own voices; `choose` sets one voice yourself.",
       inputSchema: {
         film: filmArg,
+        cast: z
+          .array(
+            z.object({
+              speaker: z
+                .string()
+                .describe('A speaker name: small letters, like "narrator" or "ruby".'),
+              type: VoiceTypeSchema.describe("Who the speaker is."),
+            }),
+          )
+          .optional()
+          .describe(
+            "Speakers and their types: Kairos picks a fitting voice for each one without a voice.",
+          ),
         query: z.string().optional().describe("Search the voice library by name."),
         mine: z.boolean().optional().describe("List the user's own (cloned) voices."),
         choose: z
@@ -630,29 +652,46 @@ export function createKairosServer(context: ToolContext): McpServer {
     safely(
       async ({
         film,
+        cast,
         query,
         mine,
         choose,
       }: {
         film?: string;
+        cast?: { speaker: string; type: VoiceType }[];
         query?: string;
         mine?: boolean;
         choose?: { speaker: string; id: string; name: string };
       }) => {
         const id = await filmId(film);
         let voices = await hub.filmVoices(id);
+        const problems: string[] = [];
+        if (cast?.length) {
+          const result = await hub.cast(id, cast);
+          voices = result.voices;
+          problems.push(...result.problems);
+        }
         if (choose) {
           voices = await hub.setFilmVoices(id, {
             ...voices,
-            [choose.speaker]: { id: choose.id, name: choose.name },
+            [choose.speaker]: {
+              ...voices[choose.speaker],
+              id: choose.id,
+              name: choose.name,
+              auto: false,
+            },
           });
         }
         const lines = [
           Object.keys(voices).length
             ? `Speakers: ${Object.entries(voices)
-                .map(([speaker, voice]) => `${speaker} = ${voice.name} (${voice.id})`)
+                .map(
+                  ([speaker, voice]) =>
+                    `${speaker}${voice.type ? ` (${voice.type})` : ""} = ${voice.name} (${voice.id})`,
+                )
                 .join("; ")}`
-            : "No speakers yet: choose a voice for the narrator first.",
+            : "No speakers yet: cast them by type with `cast`.",
+          ...problems,
         ];
         if (query !== undefined || mine) {
           const found = await hub.voiceLibrary(query ?? "", Boolean(mine));
@@ -801,6 +840,100 @@ export function createKairosServer(context: ToolContext): McpServer {
             ),
           ],
         };
+      },
+    ),
+  );
+
+  server.registerTool(
+    "kairos_script",
+    {
+      title: "The film's script",
+      description:
+        "What the voices say and when (voice/script.json). Without arguments: the script, each line with its start, speaker, words and whether its voice is made. `lines` replaces the script (each line: speaker, text, start in seconds on the film; lines in time order, short enough to end before the next one, about 2.5 words per second). `make: true` makes the voices with fish.audio (uses the user's credits; unchanged lines are reused) and places each at its start, after the line before when they would overlap; it answers with each line's real start, length and words. Give speakers voices first (kairos_voices with cast).",
+      inputSchema: {
+        film: filmArg,
+        lines: z
+          .array(
+            z.object({
+              speaker: z.string().describe('"narrator", or a character in small letters.'),
+              text: z.string().describe("The words."),
+              start: z.number().min(0).describe("When it starts on the film, in seconds."),
+            }),
+          )
+          .optional()
+          .describe("The whole script, replacing the one there."),
+        style: z.string().optional().describe("How it sounds (storyteller, funny...)."),
+        language: z.string().optional().describe('A fish.audio language code (default "en").'),
+        note: z.string().optional().describe("A short note for the user about the script."),
+        make: z.boolean().optional().describe("Make the voices now (uses credits)."),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    safely(
+      async (args: {
+        film?: string;
+        lines?: { speaker: string; text: string; start: number }[];
+        style?: string;
+        language?: string;
+        note?: string;
+        make?: boolean;
+      }) => {
+        const id = await filmId(args.film);
+        const out: string[] = [];
+        if (args.lines) {
+          const saved = await hub.saveScript(id, {
+            writtenBy: "claude",
+            style: args.style,
+            language: args.language,
+            note: args.note,
+            lines: args.lines,
+          });
+          out.push(
+            `Saved the script: ${saved.lines.length} line${saved.lines.length === 1 ? "" : "s"}.`,
+          );
+        }
+        if (args.make) {
+          const made = await hub.makeScript(id);
+          out.push(
+            `Made ${made.made} voice${made.made === 1 ? "" : "s"}${made.reused ? `, reused ${made.reused}` : ""}:`,
+          );
+          for (const at of made.placed) {
+            out.push(
+              `- ${at.speaker} at ${seconds(at.start)}, ${seconds(at.duration)} (${at.file})\n  ${wordList(at.words, at.start)}`,
+            );
+          }
+          const end = Math.max(0, ...made.placed.map((at) => at.start + at.duration));
+          if (made.placed.length) out.push(`The voices end at ${seconds(end)}.`);
+          out.push(...made.warnings.map((warning) => `Note: ${warning}`));
+          return { content: [text(out.join("\n"))] };
+        }
+        const script = await hub.script(id);
+        if (!script) {
+          out.push("This film has no script yet. Write one with `lines`.");
+          return { content: [text(out.join("\n"))] };
+        }
+        const [made, voices] = await Promise.all([hub.lines(id), hub.filmVoices(id)]);
+        const words = {
+          made: "voice made",
+          changed: "changed since its voice was made",
+          new: "no voice yet",
+          "no-voice": "the speaker has no voice",
+        };
+        out.push(
+          `Script (${script.language}${script.style ? `, ${script.style}` : ""}, written by ${script.writtenBy === "claude" ? "Claude" : "the user"}):`,
+        );
+        for (const line of [...script.lines].sort((a, b) => a.start - b.start)) {
+          out.push(
+            `- ${seconds(line.start)} ${line.speaker}: "${line.text}" (${words[scriptLineStatus(line, made, voices)]})`,
+          );
+        }
+        if (script.note) out.push(`Note: ${script.note}`);
+        return { content: [text(out.join("\n"))] };
       },
     ),
   );

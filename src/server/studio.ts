@@ -62,27 +62,50 @@ export class Studio {
     this.events.publish({ type: "workspace-changed" });
   }
 
-  /** fish.audio settings: the speech model and the voices used lately. */
-  get voiceSettings(): { model: string | null; recent: FilmVoice[] } {
-    return { model: this.#config.voice?.model ?? null, recent: this.#config.voice?.recent ?? [] };
+  /** fish.audio settings: the speech model, the voices used lately, and each character's voice. */
+  get voiceSettings(): {
+    model: string | null;
+    recent: FilmVoice[];
+    remembered: Record<string, FilmVoice>;
+  } {
+    return {
+      model: this.#config.voice?.model ?? null,
+      recent: this.#config.voice?.recent ?? [],
+      remembered: this.#config.voice?.remembered ?? {},
+    };
   }
 
-  async setVoiceModel(model: string): Promise<void> {
-    this.#config = { ...this.#config, voice: { ...this.voiceSettings, model } };
+  async #saveVoice(change: Partial<NonNullable<AppConfig["voice"]>>): Promise<void> {
+    const { model, recent, remembered } = this.voiceSettings;
+    this.#config = {
+      ...this.#config,
+      voice: { model: model ?? undefined, recent, remembered, ...change },
+    };
     await saveConfig(this.home, this.#config);
+  }
+
+  setVoiceModel(model: string): Promise<void> {
+    return this.#saveVoice({ model });
   }
 
   /** Puts a voice first in the "used lately" list (at most 12). */
-  async rememberVoice(voice: FilmVoice): Promise<void> {
-    const recent = [voice, ...this.voiceSettings.recent.filter((v) => v.id !== voice.id)].slice(
-      0,
-      12,
-    );
-    this.#config = {
-      ...this.#config,
-      voice: { model: this.voiceSettings.model ?? undefined, recent },
+  rememberVoice(voice: FilmVoice): Promise<void> {
+    const plain = { id: voice.id, name: voice.name };
+    const recent = [plain, ...this.voiceSettings.recent.filter((v) => v.id !== voice.id)];
+    return this.#saveVoice({ recent: recent.slice(0, 12) });
+  }
+
+  /** A character's voice for the next films too (the narrator changes every film, so it isn't kept). */
+  rememberCharacter(speaker: string, voice: FilmVoice): Promise<void> {
+    if (speaker === "narrator") return Promise.resolve();
+    const remembered = { ...this.voiceSettings.remembered };
+    remembered[speaker] = {
+      ...(voice.sample ? { sample: voice.sample } : {}),
+      id: voice.id,
+      name: voice.name,
+      ...(voice.type ? { type: voice.type } : {}),
     };
-    await saveConfig(this.home, this.#config);
+    return this.#saveVoice({ remembered });
   }
 
   /** Path of a film's page on the film server, or `null` when the film can't be previewed. */

@@ -101,10 +101,10 @@ export function filmRoutes(
     const problem = Object.values(checked.errors)[0];
     if (problem) return badRequest(reply, problem);
 
-    // A brief is kept only when something was answered (an empty optional form changes nothing).
+    // A brief is kept only when something was asked for: an answer, or voices made with the film.
     const brief =
-      Object.keys(checked.answers).length > 0
-        ? makeBrief(template, kind, checked.answers)
+      Object.keys(checked.answers).length > 0 || input.voices === "make"
+        ? { ...makeBrief(template, kind, checked.answers), voices: input.voices }
         : undefined;
     const id = await createFilm(dir, template.dir, input, {
       size: template.defaults.size,

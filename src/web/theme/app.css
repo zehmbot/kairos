@@ -2199,9 +2199,20 @@ video.asset-media {
   gap: 8px;
 }
 
-.voice-cast-row .hint {
+.voice-cast-name {
   flex: 1;
-  min-width: 0;
+  min-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-type {
+  padding: 2px 4px;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--text-muted);
+  box-shadow: inset 0 0 0 2px var(--line);
 }
 
 .voice-speaker {
@@ -2277,4 +2288,154 @@ video.asset-media {
 
 .voice-past-end {
   color: var(--highlight);
+}
+
+.voice-type-select {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+/* ---------- The narration writer and the script ---------- */
+
+.writer-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.writer-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px;
+  background: var(--bg);
+}
+
+.writer-stage {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--track-voice);
+}
+
+/* Three pixel dots that step while Claude works. */
+.writer-dots::after {
+  content: "";
+  animation: writer-dots 1.2s steps(4) infinite;
+}
+
+@keyframes writer-dots {
+  0% {
+    content: "";
+  }
+  25% {
+    content: ".";
+  }
+  50% {
+    content: "..";
+  }
+  75% {
+    content: "...";
+  }
+}
+
+.writer-progress .hint {
+  flex: 1;
+  min-width: 120px;
+}
+
+.writer-result {
+  padding: 8px 12px;
+  box-shadow: inset 4px 0 0 var(--ok);
+}
+
+.writer-result p {
+  margin: 0;
+}
+
+.writer-result-problem {
+  box-shadow: inset 4px 0 0 var(--danger);
+}
+
+.writer-warnings {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--highlight);
+}
+
+.script-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.script-line {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg);
+}
+
+.script-line-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.script-time {
+  width: 64px;
+}
+
+.script-speaker {
+  flex: 1;
+  min-width: 90px;
+  width: auto;
+}
+
+.script-text {
+  min-height: 0;
+}
+
+.script-status {
+  align-self: flex-start;
+  padding: 2px 4px;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--bg);
+  background: var(--text-muted);
+}
+
+.script-status[data-status="made"] {
+  background: var(--ok);
+}
+
+.script-status[data-status="changed"] {
+  background: var(--highlight);
+}
+
+.script-status[data-status="no-voice"] {
+  background: var(--danger);
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .writer-dots::after {
+    content: "...";
+    animation: none;
+  }
+}
+
+.voice-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }

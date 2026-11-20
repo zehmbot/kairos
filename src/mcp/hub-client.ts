@@ -21,15 +21,37 @@ import {
   type RenderQuality,
   type RendersOverview,
   RendersOverviewSchema,
+  type Script,
+  type ScriptInput,
+  ScriptSchema,
   type VoiceInfo,
   VoiceInfoSchema,
   type VoiceLine,
   VoiceLineSchema,
+  type VoiceType,
   type Word,
   WordSchema,
   type Workspace,
   WorkspaceSchema,
 } from "../shared/types.ts";
+
+/** What making the script's voices did. */
+const MadeScriptSchema = z.object({
+  made: z.number(),
+  reused: z.number(),
+  placed: z.array(
+    z.object({
+      id: z.string(),
+      speaker: z.string(),
+      file: z.string(),
+      start: z.number(),
+      duration: z.number(),
+      words: z.array(WordSchema),
+    }),
+  ),
+  warnings: z.array(z.string()),
+});
+export type MadeScript = z.infer<typeof MadeScriptSchema>;
 
 /** Word timings saved next to a sound file. */
 const WordsAnswerSchema = z.object({
@@ -89,6 +111,13 @@ export interface Hub {
   ): Promise<{ lines: VoiceLine[]; placed: { file: string; start: number; duration: number }[] }>;
   /** Word timings of a sound; with `transcribe`, asks fish.audio when there are none yet. */
   words(id: string, file: string, transcribe: boolean): Promise<WordsAnswer>;
+  cast(
+    id: string,
+    speakers: { speaker: string; type: VoiceType }[],
+  ): Promise<{ voices: FilmVoices; problems: string[] }>;
+  script(id: string): Promise<Script | null>;
+  saveScript(id: string, input: ScriptInput): Promise<Script>;
+  makeScript(id: string): Promise<MadeScript>;
 }
 
 /** Calls the Kairos hub over HTTP (it only listens on 127.0.0.1). */
@@ -244,6 +273,39 @@ export class HubClient implements Hub {
       if (!(error instanceof HubError) || error.status !== 404 || !transcribe) throw error;
       return this.#json(WordsAnswerSchema, film, this.#send("POST", { file }));
     }
+  }
+
+  cast(id: string, speakers: { speaker: string; type: VoiceType }[]) {
+    return this.#json(
+      z.object({ voices: FilmVoicesSchema, problems: z.array(z.string()) }),
+      `/api/films/${encodeURIComponent(id)}/cast`,
+      this.#send("POST", { speakers }),
+    );
+  }
+
+  async script(id: string) {
+    const answer = await this.#json(
+      z.object({ script: ScriptSchema.nullable() }),
+      `/api/films/${encodeURIComponent(id)}/script`,
+    );
+    return answer.script;
+  }
+
+  async saveScript(id: string, input: ScriptInput) {
+    const answer = await this.#json(
+      z.object({ script: ScriptSchema }),
+      `/api/films/${encodeURIComponent(id)}/script`,
+      this.#send("PUT", input),
+    );
+    return answer.script;
+  }
+
+  makeScript(id: string) {
+    return this.#json(
+      MadeScriptSchema,
+      `/api/films/${encodeURIComponent(id)}/script/make`,
+      this.#send("POST", {}),
+    );
   }
 
   renders() {

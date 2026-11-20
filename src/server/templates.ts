@@ -206,6 +206,17 @@ export function briefMarkdown(brief: BriefFile, title: string): string {
       answer === undefined || answer === "" ? "(no answer)" : String(answer),
     );
   }
+  if (brief.voices === "make") {
+    lines.push(
+      "",
+      "## Voices",
+      "",
+      "Make them with the film: give every speaker a type (kairos_voices with cast), write what they say in",
+      "the script (kairos_script), make the voices and fit the film to them. See Voices in CLAUDE.md.",
+    );
+  } else if (brief.voices === "none") {
+    lines.push("", "## Voices", "", "No voices for this film.");
+  }
   return `${lines.join("\n")}\n`;
 }
 

@@ -19,7 +19,8 @@ export class FishError extends Error {
 }
 
 export interface FishOptions {
-  key: string;
+  /** The API key; null for public lists (the voice library needs none). */
+  key: string | null;
   /** fish.audio's address (tests point it at a fake server). */
   baseUrl?: string;
 }
@@ -70,7 +71,10 @@ async function call(options: FishOptions, path: string, init: RequestInit, timeo
   try {
     response = await fetch(`${base(options)}${path}`, {
       ...init,
-      headers: { authorization: `Bearer ${options.key}`, ...init.headers },
+      headers: {
+        ...(options.key ? { authorization: `Bearer ${options.key}` } : {}),
+        ...init.headers,
+      },
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
@@ -118,6 +122,59 @@ export async function listVoices(
         languages: Array.isArray(item.languages) ? item.languages.map(String) : [],
         cover: absolute(item.cover_image),
         sample: absolute(samples[0]?.audio),
+      };
+    })
+    .filter((voice) => voice.id);
+}
+
+/** A library voice with what casting needs: its tags and how much it is used. */
+export interface VoiceCandidate extends VoiceInfo {
+  tags: string[];
+  uses: number;
+  likes: number;
+}
+
+/** Library voices with one tag (fish.audio reads several tags as "any of"), most used first. Public. */
+export async function voiceCandidates(
+  options: FishOptions,
+  {
+    tag,
+    language,
+    pageSize = 100,
+    page = 1,
+  }: { tag: string; language?: string; pageSize?: number; page?: number },
+): Promise<VoiceCandidate[]> {
+  const params = new URLSearchParams({
+    page_size: String(pageSize),
+    page_number: String(page),
+    sort_by: "task_count",
+    tag,
+  });
+  if (language) params.set("language", language);
+  const response = await call(options, `/model?${params}`, { method: "GET" }, 30_000);
+  const body = (await response.json()) as { items?: Record<string, unknown>[] };
+  return (body.items ?? [])
+    .filter(
+      (item) =>
+        (item.type === undefined || item.type === "tts") &&
+        item.dmca_taken_down !== true &&
+        (item.state === undefined || item.state === "trained") &&
+        (item.visibility === undefined || item.visibility === "public"),
+    )
+    .map((item) => {
+      const author = item.author as { nickname?: string } | undefined;
+      const samples = (item.samples as { audio?: string }[] | undefined) ?? [];
+      return {
+        id: String(item._id ?? ""),
+        name: String(item.title ?? "Voice"),
+        author: author?.nickname ?? null,
+        description: typeof item.description === "string" ? item.description.slice(0, 300) : "",
+        languages: Array.isArray(item.languages) ? item.languages.map(String) : [],
+        cover: absolute(item.cover_image),
+        sample: absolute(samples[0]?.audio),
+        tags: Array.isArray(item.tags) ? item.tags.map((t) => String(t).toLowerCase()) : [],
+        uses: typeof item.task_count === "number" ? item.task_count : 0,
+        likes: typeof item.like_count === "number" ? item.like_count : 0,
       };
     })
     .filter((voice) => voice.id);

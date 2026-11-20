@@ -5,10 +5,12 @@
 // hat (beanie, cap, beret) + hatColor, top (plain, hoodie, overalls, cardigan, sweater, tee, check, stripes),
 // shirt, shirt2 (second color), sleeves (long, short), pants, shoes, beard (a color), size (1 = adult),
 // features { glasses, freckles, lashes }.
+// voice: who they are for casting a voice (narrator, woman, man, girl, boy, old-woman, old-man).
 
 export const BLOCKY_CAST = {
   milo: {
     name: "Milo",
+    voice: "boy",
     about: "12, curious and a bit dramatic. Usually the narrator.",
     size: 0.88,
     skin: "#e9b58a",
@@ -22,6 +24,7 @@ export const BLOCKY_CAST = {
   },
   ruby: {
     name: "Ruby",
+    voice: "girl",
     about: "8, Milo's little sister. Cheeky, loud, always one step ahead.",
     size: 0.76,
     skin: "#f3c9a5",
@@ -36,6 +39,7 @@ export const BLOCKY_CAST = {
   },
   bo: {
     name: "Grandpa Bo",
+    voice: "old-man",
     about: "74, the grandpa. Tells the same bad jokes, secretly the wisest.",
     size: 1,
     skin: "#d9a07a",
@@ -52,6 +56,7 @@ export const BLOCKY_CAST = {
   },
   nadia: {
     name: "Mom (Nadia)",
+    voice: "woman",
     about: "The mom. Calm, clever, sees everything.",
     size: 0.98,
     skin: "#c98f62",
@@ -66,6 +71,7 @@ export const BLOCKY_CAST = {
   },
   theo: {
     name: "Dad (Theo)",
+    voice: "man",
     about: "The dad. Big laugh, bad at cooking, great at hugs.",
     size: 1.04,
     skin: "#8d5a3b",
@@ -80,6 +86,7 @@ export const BLOCKY_CAST = {
   },
   zee: {
     name: "Zee",
+    voice: "boy",
     about: "Milo's best friend. Fearless, funny, never without the teal beanie.",
     size: 0.9,
     skin: "#6e4630",

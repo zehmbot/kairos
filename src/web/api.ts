@@ -27,6 +27,8 @@ import {
   RenderJobSchema,
   RendersOverviewSchema,
   type SaveTemplate,
+  type ScriptInput,
+  ScriptSchema,
   SkillSchema,
   type StartRender,
   type TemplateInput,
@@ -35,8 +37,11 @@ import {
   VoiceInfoSchema,
   VoiceLineSchema,
   VoiceStatusSchema,
+  type VoiceType,
   WordSchema,
   WorkspaceSchema,
+  type WriteNarration,
+  WriterStateSchema,
 } from "../shared/types.ts";
 
 /** Calls the hub and checks the answer with `schema`. Errors carry the hub's plain-words message. */
@@ -92,6 +97,8 @@ export const queryKeys = {
   filmVoices: (id: string) => ["films", id, "voices"],
   lines: (id: string) => ["films", id, "lines"],
   words: (id: string) => ["films", id, "words"],
+  script: (id: string) => ["films", id, "script"],
+  writer: (id: string) => ["writer", id],
 } as const;
 
 const notesUrl = (filmId: string) => `/api/films/${encodeURIComponent(filmId)}/notes`;
@@ -780,5 +787,95 @@ export function useTranscribe(filmId: string) {
     mutationFn: (file: string) =>
       call(WordsAnswerSchema, `${filmUrl(filmId)}/words`, sendJson("POST", { file })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.words(filmId) }),
+  });
+}
+
+// ---------- Casting, the script and the writer ----------
+
+/** Gives speakers voices by type (Kairos picks fitting ones). */
+export function useCast(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (speakers: { speaker: string; type: VoiceType }[]) =>
+      call(
+        z.object({ voices: FilmVoicesSchema, problems: z.array(z.string()) }),
+        `${filmUrl(filmId)}/cast`,
+        sendJson("POST", { speakers }),
+      ),
+    onSuccess: (result) => queryClient.setQueryData(queryKeys.filmVoices(filmId), result.voices),
+  });
+}
+
+/** Another random voice of the same type for a speaker. */
+export function useAnotherVoice(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (speaker: string) =>
+      call(
+        FilmVoicesSchema,
+        `${filmUrl(filmId)}/cast/${encodeURIComponent(speaker)}/another`,
+        sendJson("POST", {}),
+      ),
+    onSuccess: (voices) => queryClient.setQueryData(queryKeys.filmVoices(filmId), voices),
+  });
+}
+
+export function useScript(filmId: string) {
+  return useQuery({
+    queryKey: queryKeys.script(filmId),
+    queryFn: async () =>
+      (await call(z.object({ script: ScriptSchema.nullable() }), `${filmUrl(filmId)}/script`))
+        .script,
+  });
+}
+
+export function useSaveScript(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ScriptInput) =>
+      call(z.object({ script: ScriptSchema }), `${filmUrl(filmId)}/script`, sendJson("PUT", input)),
+    onSuccess: ({ script }) => queryClient.setQueryData(queryKeys.script(filmId), script),
+  });
+}
+
+const MadeScriptSchema = z.object({
+  made: z.number(),
+  reused: z.number(),
+  warnings: z.array(z.string()),
+});
+
+/** Makes the script's voices and places them. */
+export function useMakeScript(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      call(MadeScriptSchema, `${filmUrl(filmId)}/script/make`, sendJson("POST", {})),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.film(filmId) }),
+  });
+}
+
+/** The background writer of a film (kept up to date by `writer-progress` events). */
+export function useWriter(filmId: string) {
+  return useQuery({
+    queryKey: queryKeys.writer(filmId),
+    queryFn: () => call(WriterStateSchema, `${filmUrl(filmId)}/script/writer`),
+  });
+}
+
+export function useStartWriter(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: WriteNarration) =>
+      call(WriterStateSchema, `${filmUrl(filmId)}/script/writer`, sendJson("POST", input)),
+    onSuccess: (state) => queryClient.setQueryData(queryKeys.writer(filmId), state),
+  });
+}
+
+export function useStopWriter(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      call(WriterStateSchema, `${filmUrl(filmId)}/script/writer`, { method: "DELETE" }),
+    onSuccess: (state) => queryClient.setQueryData(queryKeys.writer(filmId), state),
   });
 }

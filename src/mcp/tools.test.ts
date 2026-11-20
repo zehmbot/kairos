@@ -15,7 +15,10 @@ import type {
   RenderJob,
   RenderQuality,
   RendersOverview,
+  Script,
+  ScriptInput,
   VoiceLine,
+  VoiceType,
 } from "../shared/types.ts";
 import { type Hub, HubError, HubOfflineError } from "./hub-client.ts";
 import { createKairosServer, MAX_NOTES } from "./tools.ts";
@@ -152,6 +155,60 @@ class FakeHub implements Hub {
     return PNG;
   }
   voices_: FilmVoices = {};
+  cast_: { speaker: string; type: VoiceType }[][] = [];
+  async cast(id: string, speakers: { speaker: string; type: VoiceType }[]) {
+    await this.film(id);
+    this.cast_.push(speakers);
+    for (const { speaker, type } of speakers) {
+      this.voices_[speaker] ??= {
+        id: `v-${speaker}`,
+        name: `Voice of ${speaker}`,
+        type,
+        auto: true,
+      };
+    }
+    return {
+      voices: this.voices_,
+      problems: speakers.some((s) => s.speaker === "nobody") ? ["No voice for nobody."] : [],
+    };
+  }
+  script_: Script | null = null;
+  async script(id: string) {
+    await this.film(id);
+    return this.script_;
+  }
+  async saveScript(id: string, input: ScriptInput) {
+    await this.film(id);
+    this.script_ = {
+      version: 1,
+      style: input.style ?? "",
+      language: input.language ?? "en",
+      writtenBy: input.writtenBy ?? "you",
+      note: input.note ?? "",
+      made: [],
+      lines: input.lines.map((line, i) => ({ ...line, id: line.id ?? `s${i}` })),
+    };
+    return this.script_;
+  }
+  async makeScript(id: string) {
+    await this.film(id);
+    const placed = (this.script_?.lines ?? []).map((line, i) => ({
+      id: line.id,
+      speaker: line.speaker,
+      file: `voice/${line.speaker}-${i + 1}.mp3`,
+      start: line.start,
+      duration: 1,
+      words: line.text
+        .split(" ")
+        .map((word, j) => ({ text: word, start: j * 0.4, end: j * 0.4 + 0.3 })),
+    }));
+    return {
+      made: placed.length,
+      reused: 0,
+      placed,
+      warnings: ["The voices end at 6 s, after the end of the film (5 s). Make the film longer."],
+    };
+  }
   lines_: VoiceLine[] = [];
   made: NewLines[] = [];
   async filmVoices(id: string) {
@@ -317,6 +374,7 @@ describe("Kairos tools", () => {
       "kairos_render",
       "kairos_renders",
       "kairos_say",
+      "kairos_script",
       "kairos_status",
       "kairos_use_asset",
       "kairos_voices",
@@ -551,6 +609,43 @@ describe("Kairos tools", () => {
     const heard = texts(await call("kairos_words", { file: "audio/take.mp3", transcribe: true }));
     expect(heard).toContain("from speech-to-text");
     expect(heard).toContain("hello@0.10 there@0.50");
+  });
+
+  it("casts voices by type, writes the script, and makes its voices", async () => {
+    const hub = new FakeHub();
+    await connect(hub);
+    const cast = texts(
+      await call("kairos_voices", {
+        cast: [
+          { speaker: "narrator", type: "narrator" },
+          { speaker: "ruby", type: "girl" },
+        ],
+      }),
+    );
+    expect(cast).toContain("narrator (narrator) = Voice of narrator (v-narrator)");
+    expect(cast).toContain("ruby (girl) = Voice of ruby");
+    expect(texts(await call("kairos_script"))).toContain("no script yet");
+
+    const saved = texts(
+      await call("kairos_script", {
+        lines: [
+          { speaker: "narrator", text: "Once upon a time", start: 0 },
+          { speaker: "ruby", text: "Wait for me", start: 4 },
+        ],
+        style: "funny",
+      }),
+    );
+    expect(saved).toContain("Saved the script: 2 lines.");
+    expect(hub.script_?.writtenBy).toBe("claude");
+    const shown = texts(await call("kairos_script"));
+    expect(shown).toContain('- 4 s ruby: "Wait for me" (no voice yet)');
+
+    const made = texts(await call("kairos_script", { make: true }));
+    expect(made).toContain("Made 2 voices:");
+    expect(made).toContain("- ruby at 4 s, 1 s (voice/ruby-2.mp3)");
+    expect(made).toContain("Wait@4.00 for@4.40 me@4.80");
+    expect(made).toContain("The voices end at 5 s.");
+    expect(made).toContain("Note: The voices end at 6 s");
   });
 
   it("says plainly when Kairos isn't running", async () => {
