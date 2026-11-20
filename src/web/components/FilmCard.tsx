@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import type { FilmSummary } from "../../shared/types.ts";
-import { thumbnailUrl } from "../api.ts";
+import { thumbnailUrl, useClaudeActivity } from "../api.ts";
 import { formatLength } from "../player/time.ts";
 import { PixelButton } from "./PixelButton.tsx";
 import { PixelIcon } from "./PixelIcon.tsx";
@@ -15,6 +15,7 @@ export function FilmCard({ film, onDelete }: { film: FilmSummary; onDelete?: () 
   // The picture of a frame; when there is none (no browser, the film throws), the film icon stays.
   const [failedFor, setFailedFor] = useState<number | null>(null);
   const showPicture = config && failedFor !== film.updatedAt;
+  const working = Boolean(useClaudeActivity().data?.[film.id]);
 
   return (
     <div className="film-card-wrap">
@@ -54,7 +55,14 @@ export function FilmCard({ film, onDelete }: { film: FilmSummary; onDelete?: () 
           ) : (
             <p className="film-card-problem">Needs a fix</p>
           )}
-          {config && <span className="px-tag">{config.status}</span>}
+          <span className="film-card-tags">
+            {config && <span className="px-tag">{config.status}</span>}
+            {working && (
+              <span className="px-tag film-card-working" data-tip="Claude is working on this film">
+                Claude is working
+              </span>
+            )}
+          </span>
         </div>
       </Link>
       {onDelete && (

@@ -35,7 +35,10 @@ src/server/   Fastify hub: index.ts (entry), security.ts (request guard), studio
               videos: shots and frame sheets), secrets.ts (keys in ~/.kairos/.env), fish.ts (fish.audio),
               voices.ts (a film's spoken lines), casting.ts (voices picked by type), script.ts (what the
               voices say and when), writer.ts (Write the narration: `claude -p` in the background),
-              fake-fish.ts / fake-claude.ts (stand-ins for tests), routes/
+              claude-run.ts (runs `claude -p` with the Kairos tools), claude-jobs.ts (make the film, an
+              ask), claude-steps.ts (a tool call in plain words), activity.ts (is Claude working on a
+              film), claude-hooks.ts (hooks in film folders), fake-fish.ts / fake-claude.ts (stand-ins
+              for tests), routes/
 src/mcp/      Kairos tools for Claude Code: server.ts (stdio entry), tools.ts, hub-client.ts (calls the hub)
 src/web/      React UI: components/, pages/, player/, icons/, theme/
 src/film/     bridge.js: plain JS the film server adds to every film page
@@ -122,7 +125,7 @@ the middle of each (at most 36) and tiles them into sheets in `.kairos/reference
 Claude sees them with `kairos_references` (6 sheets per page), and the library with `kairos_assets` and
 `kairos_use_asset`.
 
-On the film page, the side column has tabs (Notes, Sound, Voice, References, Brief; the last one shown is
+On the film page, the side column has tabs (Claude, Notes, Sound, Voice, References, Brief, Sheets; the last one shown is
 remembered per film). On wide screens the page fills the window (`App.tsx` keeps `--main-h`) and both columns
 scroll by themselves, so a long side tab never pushes the timeline away. The video keeps its size. Files dropped anywhere on the page, or added with **Add**, go where they fit: dropped on the Sound or
 References tab they go straight in, elsewhere Kairos asks what they are for (`src/web/filmAdd.ts`: the choices
@@ -263,6 +266,29 @@ in. `kairos_notes` and `kairos_frame` return PNG pictures, which Claude sees. Ke
 25,000-token limit: a 1280×720 picture costs about 1,200 tokens, so `kairos_notes` pages through notes. The voice
 tools (`kairos_voices`, `kairos_say`, `kairos_words`) say they spend the user's fish.audio credits, so Claude uses
 them only when asked. Stdout carries the protocol, so the MCP server logs to stderr only.
+
+**Claude at work, without a terminal** (`src/server/claude-jobs.ts`): New film's "Claude makes it now"
+(`make: true`, only when the film has a brief) starts a **make** run right after the film exists; the Claude tab
+sends **ask** runs (your words; "Fix my notes"; "Make it from the brief"). Both use `claude-run.ts` (as the
+narration writer does): `claude -p --output-format stream-json` in the film folder, the Kairos tools from a temp
+`--mcp-config`, `--tools Read,Glob,Grep,Edit,Write,Skill,TodoWrite`, `--allowedTools Skill,TodoWrite,mcp__kairos__*`
+and `--permission-mode acceptEdits`: reads and edits stay inside the film folder (anything else needs a permission
+no one can give in print mode), no shell, no web. Sessions are kept, so an ask runs with `--continue`, and Open
+Claude here starts `claude --continue` once Kairos has run Claude in the folder. One run per film (the narration
+writer included), 30 minutes for make, 15 for an ask; Stop ends the process tree. `.kairos/claude.json` keeps the
+session and the last 20 runs (your words, Claude's answer, the outcome).
+
+**Is Claude working on a film?** `ActivityBoard` (`src/server/activity.ts`) keeps one state per film for the
+preview's loading screen (`ClaudeAtWork`: the Claude character from `ClaudeBuddy.tsx`, the step, the time, Peek and
+Stop), the Claude tab and the film cards, and sends `claude-activity` events (`ended` once it ends: Claude's few
+words show above the player). Kairos' runs say each step from their stream (`streamStep` in `claude-steps.ts`).
+**Claude in your terminal** says it through Claude Code's HTTP hooks: `claude-hooks.ts` puts them in each film's
+`.claude/settings.json` (new films, Open Claude here, and every film at hub start), keeping your own settings and
+hooks and never writing over a broken file. They post `UserPromptSubmit`, `PreToolUse`, `PostToolUse`,
+`Notification` (`?notice=waiting` or `idle`), `Stop` and `SessionEnd` to `POST /api/claude/hook`; the hub maps
+`cwd` to a film and reads only the event, the tool's name and a few small fields (`hookCall`), never your prompt
+or a file's contents. While Kairos runs Claude on a film, hooks for it are ignored; a terminal session silent for
+20 minutes is taken as ended.
 
 **Skills** come from `skills/` (Kairos) and `~/.kairos/skills/` (the user's own). Turning one on copies it into
 `~/.claude/skills/<name>/` with a `.kairos-skill` marker (source + content hash). Kairos only changes folders that

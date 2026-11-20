@@ -11,6 +11,7 @@ import {
 } from "../../shared/types.ts";
 import {
   templatePreviewUrl,
+  useClaude,
   useCreateFilm,
   usePickVoice,
   useTemplates,
@@ -63,6 +64,10 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
   const [formError, setFormError] = useState<string | null>(null);
   const [voices, setVoices] = useState<"make" | "none">("make");
   const voiceStatus = useVoiceStatus();
+  // Claude makes the film right after Create, in the background (when Claude Code is installed).
+  const [makeNow, setMakeNow] = useState(true);
+  const claude = useClaude();
+  const claudeReady = claude.data ? Boolean(claude.data.cli) : true;
   // The narrator's voice, picked when the window opens (free) and changed here before anything is made.
   const [narrator, setNarrator] = useState<FilmVoice | null>(null);
   const [language, setLanguage] = useState("en");
@@ -106,6 +111,7 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
       setTitle("");
       setFormError(null);
       setVoices("make");
+      setMakeNow(true);
       setNarrator(null);
       setLanguage("en");
       setPickedFor(null);
@@ -152,6 +158,7 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
         kind: kind.id,
         brief: answersOf(answers),
         voices,
+        make: makeNow && claudeReady,
         ...(voices === "make" && narrator
           ? { narrator: { ...narrator, type: "narrator" as const }, language }
           : voices === "make"
@@ -446,6 +453,27 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
                 <p className="hint">
                   Add your fish.audio key in Settings → Voice. Until then, the script and the
                   voices' choice are made, and the voices wait for your key.
+                </p>
+              )}
+            </fieldset>
+            <fieldset className="voice-choice">
+              <legend className="field-label">Claude</legend>
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  checked={makeNow && claudeReady}
+                  disabled={!claudeReady}
+                  onChange={(event) => setMakeNow(event.target.checked)}
+                />
+                <span>
+                  Claude makes it now: it starts as soon as you create the film, in the background
+                  (on your Claude plan). You watch it work on the film's page.
+                </span>
+              </label>
+              {!claudeReady && (
+                <p className="hint">
+                  Install Claude Code (Settings → Claude Code) and Claude can make films right after
+                  you create them.
                 </p>
               )}
             </fieldset>

@@ -4,11 +4,6 @@
  * (who speaks and what type of voice) and the lines with their start times. Progress comes from the stream of
  * tool calls. One run per film at a time; Stop ends it.
  */
-import { type ChildProcess, execFile, spawn } from "node:child_process";
-import { rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { createInterface } from "node:readline";
 import { z } from "zod";
 import {
   type FilmVoices,
@@ -20,7 +15,8 @@ import {
   type WriteNarrationSchema,
   type WriterState,
 } from "../shared/types.ts";
-import { cmdQuote, MCP_NAME } from "./claude-cli.ts";
+import { MCP_NAME } from "./claude-cli.ts";
+import { type ClaudeRun, type KairosMcp, plainClaudeProblem, runClaude } from "./claude-run.ts";
 
 /** How long Claude may take. */
 export const WRITER_LIMIT_MS = 6 * 60 * 1000;
@@ -215,20 +211,6 @@ export function progressOf(event: unknown): Pick<WriterState, "stage" | "detail"
   return null;
 }
 
-/** Turns what Claude Code says when it fails into plain words. */
-export function plainClaudeProblem(text: string): string {
-  if (/log ?in|sign ?in|invalid api key|authenticat|unauthori[sz]ed/i.test(text)) {
-    return "Claude Code needs you to sign in: open a terminal, run claude once and sign in, then try again.";
-  }
-  if (/usage limit|rate limit|limit reached|credit balance/i.test(text)) {
-    return "Your Claude plan's limit is reached for now. Try again later.";
-  }
-  const short = text.trim().split(/\r?\n/).filter(Boolean).slice(-2).join(" ").slice(0, 300);
-  return short
-    ? `Claude Code couldn't write the script: ${short}`
-    : "Claude Code stopped before writing the script.";
-}
-
 /** The answer in the stream's last event, or the problem. */
 export function resultOf(event: unknown): { written: Written } | { problem: string } | null {
   const result = event as {
@@ -255,9 +237,11 @@ export interface WriterOptions {
   /** Where `claude` is (null when it isn't installed). */
   claudePath: () => string | null;
   /** The Kairos tools server Claude starts: node, `src/mcp/server.ts`, the hub's port. */
-  mcp: { node: string; script: string; hubPort: number };
+  mcp: KairosMcp;
   /** Every change of a film's writer state. */
   onChange: (filmId: string, state: WriterState) => void;
+  /** True while Claude already works on the film another way (making it, an ask). */
+  busy?: (filmId: string) => boolean;
   limitMs?: number;
 }
 
@@ -269,18 +253,8 @@ export type FinishWriting = (
 
 interface Job {
   state: WriterState;
-  child: ChildProcess | null;
-  /** Settles when Claude Code has ended. */
-  closed: Promise<void>;
+  run: ClaudeRun | null;
   stopped: boolean;
-}
-
-/** Ends a program and everything it started. */
-function end(child: ChildProcess): void {
-  if (child.exitCode !== null || !child.pid) return;
-  if (process.platform === "win32") {
-    execFile("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true }, () => {});
-  } else child.kill("SIGTERM");
 }
 
 export class Writers {
@@ -312,6 +286,8 @@ export class Writers {
   ): WriterState {
     if (this.running(film.id))
       throw new WriterError("Claude is already writing this film's script.");
+    if (this.#options.busy?.(film.id))
+      throw new WriterError("Claude is already working on this film.");
     const claude = this.#options.claudePath();
     if (!claude) {
       throw new WriterError(
@@ -326,8 +302,7 @@ export class Writers {
         warnings: [],
         startedAt: new Date().toISOString(),
       },
-      child: null,
-      closed: Promise.resolve(),
+      run: null,
       stopped: false,
     };
     this.#jobs.set(film.id, job);
@@ -341,8 +316,7 @@ export class Writers {
     const job = this.#jobs.get(filmId);
     if (job?.state.state !== "running") return this.state(filmId);
     job.stopped = true;
-    if (job.child) end(job.child);
-    await Promise.race([job.closed, new Promise((resolve) => setTimeout(resolve, 5000))]);
+    await job.run?.stop();
     this.#set(filmId, job, {
       state: "stopped",
       stage: undefined,
@@ -363,73 +337,32 @@ export class Writers {
       if (!job.stopped)
         this.#set(film.id, job, { state: "failed", stage: undefined, detail: undefined, message });
     };
-    const mcpPath = join(tmpdir(), `kairos-writer-${process.pid}-${film.id}.json`);
+    const limitMs = this.#options.limitMs ?? WRITER_LIMIT_MS;
+    let outcome: { written: Written } | { problem: string } | null = null;
     try {
-      const { node, script, hubPort } = this.#options.mcp;
-      await writeFile(
-        mcpPath,
-        JSON.stringify({
-          mcpServers: {
-            [MCP_NAME]: {
-              type: "stdio",
-              command: node,
-              args: [script],
-              env: { KAIROS_PORT: String(hubPort) },
-            },
-          },
-        }),
-      );
-      const args = writerArgs(mcpPath);
-      const viaCmd = process.platform === "win32" && /\.(cmd|bat)$/i.test(claude);
-      const child = viaCmd
-        ? spawn("cmd.exe", ["/d", "/s", "/c", `"${[claude, ...args].map(cmdQuote).join(" ")}"`], {
-            cwd: film.dir,
-            windowsHide: true,
-            windowsVerbatimArguments: true,
-          })
-        : spawn(claude, args, { cwd: film.dir, windowsHide: true });
-      job.child = child;
-      job.closed = new Promise((resolve) => child.on("close", () => resolve()));
-      child.stdin?.end(writerPrompt(film.facts, request, film.voices, film.kept));
-
-      let errors = "";
-      child.stderr?.on("data", (chunk: Buffer) => {
-        errors = (errors + chunk.toString()).slice(-4000);
+      const run = runClaude({
+        claude,
+        dir: film.dir,
+        args: writerArgs,
+        prompt: writerPrompt(film.facts, request, film.voices, film.kept),
+        mcp: this.#options.mcp,
+        limitMs,
+        onEvent: (event) => {
+          const progress = progressOf(event);
+          if (progress && !job.stopped) this.#set(film.id, job, progress);
+          outcome = resultOf(event) ?? outcome;
+        },
       });
-      let outcome: { written: Written } | { problem: string } | null = null;
-      const lines = createInterface({ input: child.stdout ?? process.stdin });
-      lines.on("line", (line) => {
-        let event: unknown;
-        try {
-          event = JSON.parse(line);
-        } catch {
-          return;
-        }
-        const progress = progressOf(event);
-        if (progress && !job.stopped) this.#set(film.id, job, progress);
-        outcome = resultOf(event) ?? outcome;
-      });
-      const timer = setTimeout(() => {
-        if (job.state.state !== "running" || job.stopped) return;
-        end(child);
-        fail(
-          `Claude took too long (over ${Math.round((this.#options.limitMs ?? WRITER_LIMIT_MS) / 60000)} minutes). Try again.`,
-        );
-        job.stopped = true;
-      }, this.#options.limitMs ?? WRITER_LIMIT_MS);
-      const code = await new Promise<number | null>((resolve) => {
-        child.on("error", (error) => {
-          errors += error.message;
-          resolve(null);
-        });
-        child.on("close", (exit) => resolve(exit));
-      });
-      clearTimeout(timer);
-      lines.close();
+      job.run = run;
+      const end = await run.ended;
       if (job.stopped) return;
+      if (end.timedOut) {
+        fail(`Claude took too long (over ${Math.round(limitMs / 60000)} minutes). Try again.`);
+        return;
+      }
       const answer = outcome as { written: Written } | { problem: string } | null;
       if (!answer) {
-        fail(plainClaudeProblem(errors || (code === null ? "" : `exit ${code}`)));
+        fail(plainClaudeProblem(end.errors || (end.code === null ? "" : `exit ${end.code}`)));
         return;
       }
       if ("problem" in answer) {
@@ -450,8 +383,6 @@ export class Writers {
       }
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error));
-    } finally {
-      await rm(mcpPath, { force: true });
     }
   }
 }

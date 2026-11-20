@@ -4,8 +4,10 @@ import { mediaKindOf } from "../../shared/media.ts";
 import type { AudioTrack, Note } from "../../shared/types.ts";
 import {
   useAddNote,
+  useAskClaude,
   useChangeFilm,
   useFilm,
+  useFilmClaude,
   useFilmWords,
   useHealth,
   useNotes,
@@ -25,6 +27,8 @@ import {
 } from "../components/AddToFilm.tsx";
 import { BackLink } from "../components/BackLink.tsx";
 import { BriefPanel } from "../components/BriefPanel.tsx";
+import { ClaudeAtWork, ClaudeEnded } from "../components/ClaudeAtWork.tsx";
+import { ClaudePanel } from "../components/ClaudePanel.tsx";
 import { DeleteFilmDialog } from "../components/DeleteFilmDialog.tsx";
 import { DropZone } from "../components/DropZone.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
@@ -56,7 +60,15 @@ import { filmRender, jobStatus } from "../renderText.ts";
 import { useNow } from "../useNow.ts";
 import { useVoiceSummary } from "../voiceSummary.ts";
 
-const SIDE_TABS: readonly SideTab[] = ["notes", "sound", "voice", "references", "brief", "sheets"];
+const SIDE_TABS: readonly SideTab[] = [
+  "claude",
+  "notes",
+  "sound",
+  "voice",
+  "references",
+  "brief",
+  "sheets",
+];
 const NO_TRACKS: readonly AudioTrack[] = [];
 
 /** The side tab shown for a film, remembered per film in this browser. */
@@ -125,6 +137,8 @@ export function FilmPage() {
   const health = useHealth();
   const openFolder = useOpenFilmFolder();
   const openClaude = useOpenClaude();
+  const askClaude = useAskClaude(id);
+  const filmClaude = useFilmClaude(id);
   const notes = useNotes(id, Boolean(film.data?.config));
   const addNote = useAddNote(id);
   const { draft, ...draftActions } = useNoteDraft();
@@ -275,6 +289,7 @@ export function FilmPage() {
           duration={config.duration}
           reloadKey={reloadKey}
           overlay={overlay}
+          cover={<ClaudeAtWork filmId={film.data.id} />}
           noteMarks={openNotes}
           onStoryLength={setStoryLength}
           video={config.video.map((clip) => ({
@@ -335,8 +350,8 @@ export function FilmPage() {
           ]}
         />
         <p className="hint preview-hint">
-          To change this film, press Open Claude here (or run <code>claude</code> in its folder) and
-          say what you want. The preview updates every time Claude saves a file.
+          To change this film, ask Claude in the Claude tab, or press Open Claude here and say what
+          you want in the terminal. The preview updates every time Claude saves a file.
         </p>
       </div>
     );
@@ -364,6 +379,7 @@ export function FilmPage() {
   };
 
   const tabs = [
+    { id: "claude" as const, label: "Claude" },
     { id: "notes" as const, label: "Notes", count: openNotes.length },
     { id: "sound" as const, label: "Sound", count: config?.audio.length ?? 0 },
     // Lines that need a new voice show in amber; otherwise, how many lines there are.
@@ -477,6 +493,18 @@ export function FilmPage() {
           )}
           {openFolder.isError && <p className="field-error">{openFolder.error.message}</p>}
           {openClaude.isError && <p className="field-error">{openClaude.error.message}</p>}
+          <ClaudeEnded
+            filmId={film.data.id}
+            onOpenClaude={() => openClaude.mutate(film.data.id)}
+            onRetry={(ended) => {
+              const last = filmClaude.data?.turns[0];
+              if (ended.source === "make") askClaude.mutate({ kind: "make" });
+              else if (last?.kind === "ask" && last.text) {
+                askClaude.mutate({ kind: "ask", text: last.text });
+              }
+            }}
+          />
+          {askClaude.isError && <p className="field-error">{askClaude.error.message}</p>}
           {config && (
             <StoryLength filmId={film.data.id} story={storyLength} duration={config.duration} />
           )}
@@ -518,6 +546,13 @@ export function FilmPage() {
           {canReview && (
             <div className="review-side">
               <SideTabs tabs={tabs} current={shownTab} onChange={setTab} label="Film panels">
+                {shownTab === "claude" && (
+                  <ClaudePanel
+                    filmId={film.data.id}
+                    hasBrief={film.data.hasBrief}
+                    openNotes={openNotes.length}
+                  />
+                )}
                 {shownTab === "notes" && (
                   <>
                     <PixelPanel title="New note">

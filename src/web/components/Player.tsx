@@ -29,6 +29,8 @@ interface PlayerProps {
   reloadKey: number;
   /** Drawn over the film, at the film's scaled size (note marks). Gets the current frame. */
   overlay?: (frame: number) => ReactNode;
+  /** Covers the whole stage (Claude at work). */
+  cover?: ReactNode;
   /** Notes to show on the scrub bar: a marker for one frame, a bar for a range. */
   noteMarks?: readonly { id: string; t: number; until: number | null }[];
   /** The film's sound tracks, played in step with the picture. */
@@ -89,6 +91,7 @@ export function Player({
   duration,
   reloadKey,
   overlay,
+  cover,
   noteMarks = [],
   audio = NO_AUDIO,
   timeline,
@@ -196,6 +199,7 @@ export function Player({
           {overlay?.(frame)}
         </div>
         {player.loading && !player.error && <span className="px-tag stage-tag">Loading</span>}
+        {cover}
         {player.error && (
           <div className="stage-notice">
             <Notice title="The film hit a problem">

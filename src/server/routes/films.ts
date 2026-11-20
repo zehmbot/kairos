@@ -41,6 +41,8 @@ export interface FilmRoutesOptions {
   picture?: (film: Film) => Promise<Buffer | null>;
   /** True while a render of the film is running or waiting (it can't be deleted then). */
   rendering?: (filmId: string) => boolean;
+  /** Runs once a new film exists (puts the Claude hooks in it; starts Claude when you asked it to make it). */
+  afterCreate?: (film: Film, input: { make: boolean }) => Promise<unknown>;
 }
 
 export function filmRoutes(
@@ -132,6 +134,10 @@ export function filmRoutes(
     const film = await readFilm(dir, id);
     if (!film)
       return sendError(reply, 500, "create-failed", "The film was made but can't be read.");
+    // Claude makes it from the brief only when there is one.
+    await options
+      .afterCreate?.(film, { make: input.make && film.hasBrief })
+      .catch((error: Error) => console.warn(`After creating ${id}: ${error.message}`));
     return reply.code(201).send(summary(film));
   });
 

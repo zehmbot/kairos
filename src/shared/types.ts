@@ -343,6 +343,92 @@ export const WriterStateSchema = z.object({
 });
 export type WriterState = z.infer<typeof WriterStateSchema>;
 
+/** What Claude is doing, for the loading screen's picture. */
+export const CLAUDE_STAGES = [
+  "thinking",
+  "reading",
+  "writing",
+  "looking",
+  "voices",
+  "waiting",
+] as const;
+export const ClaudeStageSchema = z.enum(CLAUDE_STAGES);
+export type ClaudeStage = z.infer<typeof ClaudeStageSchema>;
+
+/** Who runs Claude on a film: Kairos (make the film, an ask, the narration) or you, in a terminal. */
+export const ClaudeSourceSchema = z.enum(["make", "ask", "narration", "terminal"]);
+export type ClaudeSource = z.infer<typeof ClaudeSourceSchema>;
+
+/** Claude at work on a film. */
+export const ClaudeActivitySchema = z.object({
+  source: ClaudeSourceSchema,
+  stage: ClaudeStageSchema,
+  /** What it is doing now ("Writing story.js"). */
+  detail: z.string().optional(),
+  startedAt: z.string(),
+});
+export type ClaudeActivity = z.infer<typeof ClaudeActivitySchema>;
+
+/** How Claude's work on a film ended (sent once, when it ends). */
+export const ClaudeEndSchema = z.object({
+  source: ClaudeSourceSchema,
+  outcome: z.enum(["done", "failed", "stopped"]),
+  /** Claude's few words for you. */
+  summary: z.string().optional(),
+  /** The problem, in plain words. */
+  message: z.string().optional(),
+});
+export type ClaudeEnd = z.infer<typeof ClaudeEndSchema>;
+
+/** POST /api/films/:id/claude: make the film from its brief, or ask Claude for a change. */
+export const ClaudeAskSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("make") }),
+  z.object({
+    kind: z.literal("ask"),
+    text: z
+      .string()
+      .trim()
+      .min(1, "Say what Claude should change.")
+      .max(4000, "Keep it under 4000 letters."),
+  }),
+]);
+export type ClaudeAsk = z.infer<typeof ClaudeAskSchema>;
+
+/** One run of Claude that Kairos started, in the film's `.kairos/claude.json`. */
+export const ClaudeTurnSchema = z.object({
+  id: z.string(),
+  kind: z.enum(["make", "ask"]),
+  /** Your words (an ask). */
+  text: z.string().optional(),
+  outcome: z.enum(["running", "done", "failed", "stopped"]),
+  /** Claude's answer. */
+  answer: z.string().optional(),
+  /** The problem, in plain words. */
+  message: z.string().optional(),
+  startedAt: z.string(),
+  endedAt: z.string().optional(),
+});
+export type ClaudeTurn = z.infer<typeof ClaudeTurnSchema>;
+
+/** `.kairos/claude.json`. */
+export const ClaudeHistorySchema = z.object({
+  /** Claude Code's session of the last run: there is a conversation to continue in this folder. */
+  session: z.string().optional(),
+  /** Newest last; the last 20 are kept. */
+  turns: z.array(ClaudeTurnSchema).default([]),
+});
+export type ClaudeHistory = z.infer<typeof ClaudeHistorySchema>;
+
+/** GET /api/films/:id/claude. */
+export const FilmClaudeSchema = z.object({
+  activity: ClaudeActivitySchema.nullable(),
+  /** Newest first. */
+  turns: z.array(ClaudeTurnSchema),
+  /** Kairos ran Claude here before: an ask continues that conversation. */
+  conversation: z.boolean(),
+});
+export type FilmClaude = z.infer<typeof FilmClaudeSchema>;
+
 /**
  * `kairos.json` at the root of every film folder.
  * The film page itself exposes `window.renderOut(t)`, `window.READY` and `window.KAIROS_SCENES`.
@@ -543,6 +629,8 @@ export const NewFilmSchema = z.object({
   narrator: FilmVoiceSchema.optional(),
   /** The language the voices speak (fish.audio code). */
   language: z.string().max(10).optional(),
+  /** Claude makes the film from its brief right away, in the background. */
+  make: z.boolean().default(false),
 });
 /** What the client sends (`fps`, `template` and `brief` may be left out). */
 export type NewFilm = z.input<typeof NewFilmSchema>;
@@ -908,6 +996,13 @@ export const HubEventSchema = z.discriminatedUnion("type", [
   /** A film's list of finished videos changed. */
   z.object({ type: z.literal("renders-changed"), id: z.string() }),
   z.object({ type: z.literal("writer-progress"), id: z.string(), writer: WriterStateSchema }),
+  /** Claude started, moved on or stopped working on a film (`ended` says how it ended). */
+  z.object({
+    type: z.literal("claude-activity"),
+    id: z.string(),
+    activity: ClaudeActivitySchema.nullable(),
+    ended: ClaudeEndSchema.optional(),
+  }),
 ]);
 export type HubEvent = z.infer<typeof HubEventSchema>;
 

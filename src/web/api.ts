@@ -8,9 +8,13 @@ import {
   type BriefAnswers,
   BriefFileSchema,
   CameraSchema,
+  ClaudeActivitySchema,
+  type ClaudeAsk,
   ClaudeStatusSchema,
+  ClaudeTurnSchema,
   ExportInfoSchema,
   type FilmChange,
+  FilmClaudeSchema,
   FilmSummarySchema,
   FilmVoiceSchema,
   type FilmVoices,
@@ -103,6 +107,9 @@ export const queryKeys = {
   words: (id: string) => ["films", id, "words"],
   script: (id: string) => ["films", id, "script"],
   writer: (id: string) => ["writer", id],
+  /** Which films Claude works on now (kept up to date by `claude-activity` events). */
+  claudeActivity: ["claude-activity"],
+  filmClaude: (id: string) => ["films", id, "claude"],
 } as const;
 
 const notesUrl = (filmId: string) => `/api/films/${encodeURIComponent(filmId)}/notes`;
@@ -905,6 +912,41 @@ export function usePickVoice() {
   return useMutation({
     mutationFn: (input: { type?: VoiceType; language?: string; avoid?: string[] }) =>
       call(FilmVoiceSchema, "/api/voice/pick", sendJson("POST", input)),
+  });
+}
+
+/** Every film Claude works on now, by film id (kept up to date by `claude-activity` events). */
+export function useClaudeActivity() {
+  return useQuery({
+    queryKey: queryKeys.claudeActivity,
+    queryFn: () => call(z.record(z.string(), ClaudeActivitySchema), "/api/claude/activity"),
+  });
+}
+
+/** A film's Claude: what it does now, and the runs Kairos started (newest first). */
+export function useFilmClaude(filmId: string) {
+  return useQuery({
+    queryKey: queryKeys.filmClaude(filmId),
+    queryFn: () => call(FilmClaudeSchema, `${filmUrl(filmId)}/claude`),
+  });
+}
+
+/** Claude makes the film from its brief, or does what you ask, in the background. */
+export function useAskClaude(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ask: ClaudeAsk) =>
+      call(ClaudeTurnSchema, `${filmUrl(filmId)}/claude`, sendJson("POST", ask)),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.filmClaude(filmId) }),
+  });
+}
+
+/** Stops Claude's run on the film (making it, an ask). */
+export function useStopClaude(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => callNoContent(`${filmUrl(filmId)}/claude`, { method: "DELETE" }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.filmClaude(filmId) }),
   });
 }
 

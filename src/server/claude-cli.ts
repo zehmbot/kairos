@@ -116,25 +116,28 @@ export function terminalLaunch(
   dir: string,
   claudePath: string,
   has: (program: string) => boolean,
+  claudeArgs: readonly string[] = [],
 ): Launch | null {
+  const command = [claudePath, ...claudeArgs];
   if (platform === "win32") {
-    if (has("wt.exe")) return { file: "wt.exe", args: ["-d", dir, claudePath] };
+    if (has("wt.exe")) return { file: "wt.exe", args: ["-d", dir, ...command] };
     // `start` opens a new console window; its first quoted argument is the window title.
-    return { file: "cmd.exe", args: ["/d", "/c", "start", "Claude Code", "/D", dir, claudePath] };
+    return { file: "cmd.exe", args: ["/d", "/c", "start", "Claude Code", "/D", dir, ...command] };
   }
   if (platform === "darwin") {
-    const script = `tell application "Terminal" to do script "cd " & quoted form of ${appleString(dir)} & " && " & quoted form of ${appleString(claudePath)}`;
+    const quoted = command.map((part) => `quoted form of ${appleString(part)}`).join(' & " " & ');
+    const script = `tell application "Terminal" to do script "cd " & quoted form of ${appleString(dir)} & " && " & ${quoted}`;
     return {
       file: "osascript",
       args: ["-e", script, "-e", 'tell application "Terminal" to activate'],
     };
   }
   if (has("gnome-terminal")) {
-    return { file: "gnome-terminal", args: ["--working-directory", dir, "--", claudePath] };
+    return { file: "gnome-terminal", args: ["--working-directory", dir, "--", ...command] };
   }
-  if (has("konsole")) return { file: "konsole", args: ["--workdir", dir, "-e", claudePath] };
+  if (has("konsole")) return { file: "konsole", args: ["--workdir", dir, "-e", ...command] };
   if (has("x-terminal-emulator")) {
-    return { file: "x-terminal-emulator", args: ["-e", claudePath], cwd: dir };
+    return { file: "x-terminal-emulator", args: ["-e", ...command], cwd: dir };
   }
   return null;
 }
@@ -179,7 +182,8 @@ export interface ClaudeTools {
   connect(): Promise<ClaudeStatus>;
   disconnect(): Promise<ClaudeStatus>;
   /** Opens a terminal window in `dir` with Claude running. */
-  openHere(dir: string): Promise<void>;
+  /** Opens a terminal with Claude in `dir`; `continue` goes on with the folder's last conversation. */
+  openHere(dir: string, options?: { continue?: boolean }): Promise<void>;
 }
 
 export interface ClaudeToolsOptions {
@@ -244,11 +248,17 @@ export function claudeTools(options: ClaudeToolsOptions): ClaudeTools {
       }
       return status();
     },
-    async openHere(dir) {
+    async openHere(dir, options = {}) {
       const claude = needClaude();
       const has = (program: string) =>
         onPath([program], process.platform, process.env).some((path) => existsSync(path));
-      const launch = terminalLaunch(process.platform, dir, claude, has);
+      const launch = terminalLaunch(
+        process.platform,
+        dir,
+        claude,
+        has,
+        options.continue ? ["--continue"] : [],
+      );
       if (!launch) {
         throw new ClaudeCliError(
           `Kairos couldn't find a terminal app. Open a terminal in ${dir} and run claude.`,

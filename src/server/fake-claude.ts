@@ -1,22 +1,31 @@
 /**
- * A fake `claude` for tests and local checks of "Write the narration": it reads the prompt, streams the same
- * events as `claude -p --output-format stream-json` (a frame looked at, then the structured answer) and logs
- * what it was given. `FAKE_CLAUDE_MODE`: ok (default), slow, login, crash. `FAKE_CLAUDE_ANSWER`: the script. `FAKE_CLAUDE_DELAY`:
- * a pause (ms) before answering.
+ * A fake `claude` for tests and local checks of Kairos' background runs: it reads the prompt, streams the same
+ * events as `claude -p --output-format stream-json` and logs what it was given.
+ * - "Write the narration" (a `--json-schema` run): a frame looked at, then the structured answer
+ *   (`FAKE_CLAUDE_ANSWER`: the script).
+ * - Make the film or an ask (a `--permission-mode` run): reads the guide, writes `story.js` (it really writes
+ *   `made-by-claude.txt` in the folder), then answers in words (`FAKE_CLAUDE_TEXT`).
+ * `FAKE_CLAUDE_MODE`: ok (default), slow, login, crash. `FAKE_CLAUDE_DELAY`: a pause (ms) before answering.
  */
 import { chmod, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const PROGRAM = `
-import { appendFileSync } from "node:fs";
+import { appendFileSync, writeFileSync } from "node:fs";
 const mode = process.env.FAKE_CLAUDE_MODE ?? "ok";
+// Settings asks for the version and whether the Kairos tools are added.
+if (process.argv.includes("--version")) {
+  process.stdout.write("2.1.0 (Claude Code)\\n");
+  process.exit(0);
+}
+if (process.argv[2] === "mcp") process.exit(0);
 let prompt = "";
 for await (const chunk of process.stdin) prompt += chunk;
 if (process.env.FAKE_CLAUDE_LOG) {
   appendFileSync(process.env.FAKE_CLAUDE_LOG, JSON.stringify({ args: process.argv.slice(2), prompt, cwd: process.cwd() }) + "\\n");
 }
 const say = (event) => process.stdout.write(JSON.stringify(event) + "\\n");
-say({ type: "system", subtype: "init" });
+say({ type: "system", subtype: "init", session_id: "fake-session" });
 if (mode === "crash") {
   process.stderr.write("Something broke inside\\n");
   process.exit(1);
@@ -24,6 +33,17 @@ if (mode === "crash") {
 if (mode === "login") {
   say({ type: "result", subtype: "success", is_error: true, result: "Invalid API key · Please run /login" });
   process.exit(1);
+}
+if (process.argv.includes("--permission-mode")) {
+  say({ type: "assistant", message: { content: [{ type: "tool_use", name: "Skill", input: { skill: "kairos-blocky" } }] } });
+  say({ type: "assistant", message: { content: [{ type: "tool_use", name: "Write", input: { file_path: process.cwd() + "/story.js", content: "secret words" } }] } });
+  writeFileSync("made-by-claude.txt", prompt);
+  if (mode === "slow") await new Promise((resolve) => setTimeout(resolve, 60000));
+  const wait = Number(process.env.FAKE_CLAUDE_DELAY ?? 0);
+  if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+  say({ type: "assistant", message: { content: [{ type: "text", text: "Done." }] } });
+  say({ type: "result", subtype: "success", is_error: false, session_id: "fake-session", result: process.env.FAKE_CLAUDE_TEXT ?? "I made a short story in the park with Milo." });
+  process.exit(0);
 }
 say({ type: "assistant", message: { content: [{ type: "tool_use", name: "mcp__kairos__kairos_frame", input: { t: 1.5 } }] } });
 say({ type: "user", message: { content: [{ type: "tool_result" }] } });

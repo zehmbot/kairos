@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import {
+  type ClaudeActivity,
   type HubEvent,
   HubEventSchema,
   type RenderJob,
@@ -57,6 +58,22 @@ export function useHubEventStream(): void {
         queryClient.invalidateQueries({ queryKey: queryKeys.references(event.id) });
       } else if (event.type === "writer-progress") {
         queryClient.setQueryData(queryKeys.writer(event.id), event.writer);
+      } else if (event.type === "claude-activity") {
+        // Steps come often: update the list in place. A start or an end changes the film's history too.
+        let started = false;
+        queryClient.setQueryData<Record<string, ClaudeActivity>>(
+          queryKeys.claudeActivity,
+          (old) => {
+            const next = { ...(old ?? {}) };
+            started = !next[event.id] && Boolean(event.activity);
+            if (event.activity) next[event.id] = event.activity;
+            else delete next[event.id];
+            return next;
+          },
+        );
+        if (started || event.ended) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.filmClaude(event.id) });
+        }
       } else if (event.type === "assets-changed") {
         queryClient.invalidateQueries({ queryKey: queryKeys.assets });
       } else {

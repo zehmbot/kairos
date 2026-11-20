@@ -6,14 +6,19 @@ import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance } from "fastify";
 import pkg from "../../package.json" with { type: "json" };
 import { DEFAULT_FILM_PORT, DEFAULT_HUB_PORT, DEV_WEB_PORT, HOST } from "../shared/ports.ts";
+import { ActivityBoard, narrationActivity } from "./activity.ts";
 import { Camera, findBrowser } from "./camera.ts";
 import { claudeTools, findClaude } from "./claude-cli.ts";
+import { HooksFileError, installHooks } from "./claude-hooks.ts";
+import { ClaudeJobs } from "./claude-jobs.ts";
 import { kairosHome } from "./config.ts";
 import { probeExport } from "./ffmpeg.ts";
 import { buildFilmServer } from "./film-server.ts";
+import { scanFilms } from "./films.ts";
 import { Renderer } from "./renderer.ts";
 import { assetRoutes } from "./routes/assets.ts";
 import { claudeRoutes } from "./routes/claude.ts";
+import { claudeWorkRoutes } from "./routes/claude-work.ts";
 import { eventRoutes } from "./routes/events.ts";
 import { filmRoutes } from "./routes/films.ts";
 import { filmPicture, frameRoutes } from "./routes/frames.ts";
@@ -92,11 +97,38 @@ trashRoutes(app, studio);
 eventRoutes(app, studio.events);
 noteRoutes(app, { studio, camera, filmServerUrl });
 frameRoutes(app, { studio, camera, filmServerUrl });
+
+// Claude at work on a film: Kairos' own runs, and Claude in your terminal (the film folder's hooks).
+const activity = new ActivityBoard({
+  publish: (id, now, ended) =>
+    studio.events.publish({ type: "claude-activity", id, activity: now, ended }),
+});
+const kairosMcp = { node: process.execPath, script: mcpServerPath, hubPort: port };
+const jobs = new ClaudeJobs({ claudePath: () => findClaude(), mcp: kairosMcp, activity });
+claudeWorkRoutes(app, studio, { jobs, activity });
+/** Puts the hooks in a film folder (your own settings there stay). */
+const hooksIn = (dir: string) =>
+  installHooks(dir, port).catch((error: Error) => {
+    if (!(error instanceof HooksFileError)) console.warn(`Claude hooks: ${error.message}`);
+    else console.warn(error.message);
+  });
+/** Every film of the workspace gets the hooks (written only where they are missing or old). */
+const hooksEverywhere = async () => {
+  const dir = studio.filmsDir;
+  if (!dir) return;
+  for (const film of await scanFilms(dir)) await hooksIn(film.path);
+};
+void hooksEverywhere();
+studio.events.subscribe((event) => {
+  if (event.type === "workspace-changed") void hooksEverywhere();
+});
+
 claudeRoutes(
   app,
   studio,
   claudeTools({ serverPath: mcpServerPath, hubPort: port, defaultPort: DEFAULT_HUB_PORT }),
   () => skills.turnOnDefaults(),
+  hooksIn,
 );
 skillRoutes(app, skills);
 
@@ -121,13 +153,21 @@ soundRoutes(app, studio);
 voiceRoutes(app, studio);
 const writers = new Writers({
   claudePath: () => findClaude(),
-  mcp: { node: process.execPath, script: mcpServerPath, hubPort: port },
-  onChange: (id, writer) => studio.events.publish({ type: "writer-progress", id, writer }),
+  mcp: kairosMcp,
+  onChange: (id, writer) => {
+    studio.events.publish({ type: "writer-progress", id, writer });
+    narrationActivity(activity, id, writer);
+  },
+  busy: (id) => jobs.running(id),
 });
 scriptRoutes(app, studio, writers);
 referenceRoutes(app, studio, { ffmpeg: async () => (await exportInfo).ffmpeg?.path ?? null });
 filmRoutes(app, studio, {
   picture: filmPicture({ studio, camera, filmServerUrl }),
+  afterCreate: async (film, { make }) => {
+    await hooksIn(film.path);
+    if (make) await jobs.startOrNote({ id: film.id, dir: film.path }, { kind: "make" });
+  },
   // A film can't be deleted while a render of it runs or waits.
   rendering: (filmId) =>
     renderer
@@ -192,8 +232,13 @@ console.log(
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     studio.close();
-    Promise.allSettled([renderer.close(), app.close(), filmServer.close(), camera.close()]).finally(
-      () => process.exit(0),
-    );
+    activity.close();
+    Promise.allSettled([
+      jobs.close(),
+      renderer.close(),
+      app.close(),
+      filmServer.close(),
+      camera.close(),
+    ]).finally(() => process.exit(0));
   });
 }

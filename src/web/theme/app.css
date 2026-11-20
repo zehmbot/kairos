@@ -2752,3 +2752,166 @@ video.asset-media {
   height: auto;
   background: var(--bg);
 }
+
+/* ---------- Claude at work: the loading screen over the preview, the Claude tab ---------- */
+
+.claude-buddy {
+  flex: none;
+  image-rendering: pixelated;
+}
+
+.claude-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  overflow: hidden;
+  text-align: center;
+  background: var(--bg);
+}
+
+.claude-cover .claude-buddy {
+  width: min(160px, 36%);
+  max-height: 45%;
+  height: auto;
+  margin-bottom: 8px;
+}
+
+.claude-cover-title {
+  margin: 0;
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.claude-cover-step {
+  margin: 0;
+  color: var(--accent);
+}
+
+.claude-cover-time {
+  margin: 0;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.claude-cover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.claude-peek {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 40px);
+  padding: 6px 8px;
+  background: var(--surface);
+}
+
+.claude-peek-text {
+  display: grid;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.claude-peek-text .hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.claude-ended {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--primary) 14%, var(--bg));
+  box-shadow: inset 4px 0 0 var(--primary);
+}
+
+.claude-ended-problem {
+  background: color-mix(in srgb, var(--danger) 16%, var(--bg));
+  box-shadow: inset 4px 0 0 var(--danger);
+}
+
+.claude-ended p {
+  flex: 1 1 240px;
+  margin: 0;
+}
+
+.claude-ended-actions,
+.claude-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.claude-turns {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.claude-turn {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--bg);
+}
+
+.claude-turn p {
+  margin: 0;
+}
+
+.claude-turn-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.claude-turn-head .px-tag {
+  flex: none;
+  white-space: nowrap;
+}
+
+.claude-turn-answer {
+  color: var(--text-muted);
+}
+
+.px-tag[data-outcome="failed"] {
+  color: var(--danger);
+}
+
+.px-tag[data-outcome="done"] {
+  color: var(--ok);
+}
+
+.film-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.film-card-working {
+  color: var(--primary);
+}

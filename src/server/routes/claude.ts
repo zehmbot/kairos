@@ -1,19 +1,22 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { ClaudeStatus } from "../../shared/types.ts";
 import { ClaudeCliError, type ClaudeTools } from "../claude-cli.ts";
+import { readHistory } from "../claude-jobs.ts";
 import { readFilm } from "../films.ts";
 import type { Studio } from "../studio.ts";
 import { sendError } from "./errors.ts";
 
 /**
  * Claude Code on this computer: status, connect/disconnect the Kairos tools, open Claude in a film.
- * `afterConnect` runs once the tools are connected (it turns on the Kairos skills).
+ * `afterConnect` runs once the tools are connected (it turns on the Kairos skills); `beforeOpen` runs before
+ * Claude opens in a film's folder (it puts the hooks there, so the preview shows when Claude works).
  */
 export function claudeRoutes(
   app: FastifyInstance,
   studio: Studio,
   claude: ClaudeTools,
   afterConnect?: () => Promise<unknown>,
+  beforeOpen?: (dir: string) => Promise<unknown>,
 ): void {
   const handle = async (reply: FastifyReply, action: () => Promise<ClaudeStatus | undefined>) => {
     try {
@@ -46,7 +49,10 @@ export function claudeRoutes(
     const film = await readFilm(dir, request.params.id);
     if (!film) return sendError(reply, 404, "not-found", "This film doesn't exist (any more).");
     return handle(reply, async () => {
-      await claude.openHere(film.path);
+      await beforeOpen?.(film.path);
+      // Kairos ran Claude here before (it made the film): go on with that conversation.
+      const { history } = await readHistory(film.path);
+      await claude.openHere(film.path, { continue: Boolean(history.session) });
       return undefined;
     });
   });
