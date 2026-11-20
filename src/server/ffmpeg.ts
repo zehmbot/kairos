@@ -177,14 +177,91 @@ export function mixFilter(tracks: readonly SoundTrack[]): string {
   return [...parts, mix].join(";");
 }
 
+/** A video or picture drawn over the film in the render (see src/shared/clips.ts for the same layout). */
+export interface OverlayClip {
+  path: string;
+  picture: boolean;
+  /** Film time it starts at, and how long it shows (seconds). */
+  start: number;
+  length: number;
+  /** Where in the video it starts (seconds). */
+  from: number;
+  /** Its box in film pixels. */
+  box: { left: number; top: number; width: number; height: number };
+  fit: "fill" | "fit";
+  opacity: number;
+  /** Fade in and out, seconds. */
+  fade: number;
+}
+
+const num = (n: number) => String(Math.round(n * 1000) / 1000);
+
+/** The ffmpeg inputs of the clips (each one trimmed to what shows), in drawing order. */
+export function clipInputs(clips: readonly OverlayClip[], fps: number): string[] {
+  return clips.flatMap((clip) =>
+    clip.picture
+      ? ["-loop", "1", "-framerate", String(fps), "-t", num(clip.length), "-i", clip.path]
+      : ["-ss", num(clip.from), "-t", num(clip.length), "-i", clip.path],
+  );
+}
+
 /**
- * Joins the chunks listed in `listFile` (ffmpeg concat format) into the final video, without encoding
- * the picture again. With sound, the tracks are mixed in (AAC) and cut at the film's `duration`.
+ * The video filter that draws each clip (inputs `first`, `first + 1`, ...) over the film (input 0): scaled into
+ * its box (fill: cropped to cover it; fit: whole, centered), see-through and faded with its alpha, moved to its
+ * start, and shown only during its time. Colors are converted the same way as the film's frames (BT.709).
+ */
+export function clipFilter(clips: readonly OverlayClip[], first: number): string {
+  let base = "0:v";
+  const parts = clips.map((clip, i) => {
+    const w = Math.max(2, Math.round(clip.box.width / 2) * 2);
+    const h = Math.max(2, Math.round(clip.box.height / 2) * 2);
+    const x = Math.round(clip.box.left);
+    const y = Math.round(clip.box.top);
+    const fade = Math.min(clip.fade, clip.length / 2);
+    const steps = [
+      clip.fit === "fill"
+        ? `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}`
+        : `scale=${w}:${h}:force_original_aspect_ratio=decrease`,
+      "format=rgba",
+      ...(clip.opacity < 1 ? [`colorchannelmixer=aa=${num(clip.opacity)}`] : []),
+      ...(fade > 0
+        ? [
+            `fade=t=in:st=0:d=${num(fade)}:alpha=1`,
+            `fade=t=out:st=${num(clip.length - fade)}:d=${num(fade)}:alpha=1`,
+          ]
+        : []),
+      "scale=out_color_matrix=bt709:out_range=tv",
+      "format=yuva420p",
+      `setpts=PTS-STARTPTS+${num(clip.start)}/TB`,
+    ];
+    const label = `c${i}`;
+    const out = `v${i}`;
+    const end = clip.start + clip.length;
+    const place = `overlay=x=${x}+(${w}-w)/2:y=${y}+(${h}-h)/2:eof_action=pass:enable='between(t,${num(clip.start)},${num(end)})'`;
+    const chain = `[${first + i}:v]${steps.join(",")}[${label}];[${base}][${label}]${place}[${out}]`;
+    base = out;
+    return chain;
+  });
+  return [...parts, `[${base}]format=yuv420p[vout]`].join(";");
+}
+
+/** How the picture is encoded again when clips are drawn over it (the render's own settings). */
+export interface JoinEncoding {
+  encoder: RenderEncoder;
+  quality: RenderQuality;
+  fps: number;
+}
+
+/**
+ * Joins the chunks listed in `listFile` (ffmpeg concat format) into the final video. With sound, the tracks are
+ * mixed in (AAC) and cut at the film's `duration`. Without clips the picture is copied as it is; with clips they
+ * are drawn over it and the picture is encoded again.
  */
 export function joinArgs(
   listFile: string,
   output: string,
   sound?: { tracks: readonly SoundTrack[]; duration: number },
+  video?: { clips: readonly OverlayClip[]; encoding: JoinEncoding; duration: number },
 ): string[] {
   const head = [
     "-hide_banner",
@@ -199,26 +276,73 @@ export function joinArgs(
     listFile,
   ];
   const tail = ["-movflags", "+faststart", "-f", "mp4", output];
-  if (!sound || sound.tracks.length === 0) return [...head, "-c", "copy", ...tail];
+  const tracks = sound?.tracks ?? [];
+  const clips = video?.clips ?? [];
+  if (tracks.length === 0 && clips.length === 0) return [...head, "-c", "copy", ...tail];
+
+  const filters = [
+    ...(tracks.length ? [mixFilter(tracks)] : []),
+    ...(clips.length ? [clipFilter(clips, tracks.length + 1)] : []),
+  ];
+  const picture =
+    clips.length && video
+      ? [
+          "-map",
+          "[vout]",
+          ...encoderArgs(video.encoding.encoder, video.encoding.quality),
+          "-g",
+          String(Math.max(1, Math.round(video.encoding.fps * 2))),
+          "-colorspace",
+          "bt709",
+          "-color_primaries",
+          "bt709",
+          "-color_trc",
+          "bt709",
+        ]
+      : ["-map", "0:v", "-c:v", "copy"];
+  const audio = tracks.length ? ["-map", "[aout]", "-c:a", "aac", "-b:a", "192k"] : ["-an"];
+  const duration = sound?.duration ?? video?.duration;
   return [
     ...head,
-    ...sound.tracks.flatMap((track) => ["-i", track.path]),
+    ...tracks.flatMap((track) => ["-i", track.path]),
+    ...(video ? clipInputs(clips, video.encoding.fps) : []),
     "-filter_complex",
-    mixFilter(sound.tracks),
-    "-map",
-    "0:v",
-    "-map",
-    "[aout]",
-    "-c:v",
-    "copy",
-    "-c:a",
-    "aac",
-    "-b:a",
-    "192k",
-    "-t",
-    String(sound.duration),
+    filters.join(";"),
+    ...picture,
+    ...audio,
+    ...(duration !== undefined ? ["-t", String(duration)] : []),
     ...tail,
   ];
+}
+
+/** A clip file's length (seconds, null when unknown) and whether it has sound (ffprobe). */
+export async function probeMedia(
+  ffmpeg: string,
+  file: string,
+): Promise<{ duration: number | null; hasAudio: boolean }> {
+  const result = await run(ffprobeNextTo(ffmpeg), [
+    "-v",
+    "error",
+    "-show_entries",
+    "format=duration:stream=codec_type",
+    "-of",
+    "json",
+    file,
+  ]);
+  if (result.code !== 0) return { duration: null, hasAudio: false };
+  try {
+    const json = JSON.parse(result.stdout) as {
+      format?: { duration?: string };
+      streams?: { codec_type?: string }[];
+    };
+    const duration = Number(json.format?.duration);
+    return {
+      duration: Number.isFinite(duration) && duration > 0 ? duration : null,
+      hasAudio: (json.streams ?? []).some((stream) => stream.codec_type === "audio"),
+    };
+  } catch {
+    return { duration: null, hasAudio: false };
+  }
 }
 
 /** One line of an ffmpeg concat list. */

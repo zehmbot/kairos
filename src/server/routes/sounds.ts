@@ -3,9 +3,16 @@ import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
 import type { FastifyInstance, FastifyReply } from "fastify";
+import { isPicture, PICTURE_SECONDS } from "../../shared/clips.ts";
 import { nextLane } from "../../shared/lanes.ts";
 import { contentTypeOf, mediaKindOf } from "../../shared/media.ts";
-import { AudioChangeSchema, AudioTrackSchema, FromAssetSchema } from "../../shared/types.ts";
+import {
+  AudioChangeSchema,
+  AudioTrackSchema,
+  FromAssetSchema,
+  TracksChangeSchema,
+  VideoClipSchema,
+} from "../../shared/types.ts";
 import { assetFile, copyAssetToFilm } from "../assets.ts";
 import { changeFilm, type Film, FilmConfigError, readFilm } from "../films.ts";
 import { syncScriptWithTimeline } from "../script.ts";
@@ -18,7 +25,10 @@ interface IdParams {
   id: string;
 }
 
-/** A film's sound tracks: add a sound file (or a library sound), change the list. */
+/**
+ * A film's timeline: sound tracks (add a sound file or a library sound, change the list) and video clips (add a
+ * video or picture, or a library one; save both lists together).
+ */
 export function soundRoutes(app: FastifyInstance, studio: Studio): void {
   /** The film, ready to change its sound (it must have a readable kairos.json). */
   async function filmOr(
@@ -164,6 +174,111 @@ export function soundRoutes(app: FastifyInstance, studio: Studio): void {
       await syncScriptWithTimeline(film.path, film.config.audio, config.audio);
       studio.events.publish({ type: "films-changed", ids: [film.id] });
       return { audio: config.audio };
+    });
+  });
+
+  /** Every file must be a file inside the film. Returns the first problem, or null. */
+  async function missingFile(
+    film: Film,
+    files: readonly { file: string }[],
+    what: string,
+  ): Promise<string | null> {
+    for (const { file } of files) {
+      const path = resolveInside(film.path, file);
+      const info = path ? await stat(path).catch(() => null) : null;
+      if (!info?.isFile()) return `The ${what} "${file}" isn't in this film's folder.`;
+    }
+    return null;
+  }
+
+  /** Puts a video or picture on the timeline and tells the UI. */
+  async function addClip(
+    reply: FastifyReply,
+    film: Film & { config: NonNullable<Film["config"]> },
+    file: string,
+    start: number,
+    lane?: number,
+  ) {
+    // A new clip gets its own video track, unless it was dropped on one. A picture shows for a few seconds.
+    const clip = VideoClipSchema.parse({
+      file,
+      start: Math.max(0, start),
+      lane: lane ?? nextLane(film.config.video),
+      ...(isPicture(file) ? { length: PICTURE_SECONDS } : {}),
+    });
+    const config = await changeFilm(film.path, {
+      audio: film.config.audio,
+      video: [...film.config.video, clip],
+    });
+    studio.events.publish({ type: "films-changed", ids: [film.id] });
+    return reply.code(201).send({ clip, video: config.video });
+  }
+
+  app.post<{ Params: IdParams; Querystring: { name?: string; start?: string; lane?: string } }>(
+    "/api/films/:id/clips",
+    async (request, reply) => {
+      const film = await filmOr(reply, request.params.id);
+      if (!film) return reply;
+      return guard(reply, async () => {
+        const name = checkUploadName(request.query.name, ["video", "image"]);
+        const folder = `assets/${mediaKindOf(name) === "image" ? "images" : "videos"}`;
+        const saved = await saveUpload(
+          request.body as Readable,
+          join(film.path, ...folder.split("/")),
+          name,
+        );
+        const lane = Number(request.query.lane);
+        return addClip(
+          reply,
+          film,
+          `${folder}/${saved}`,
+          Number(request.query.start) || 0,
+          Number.isInteger(lane) && lane >= 0 && lane <= 15 ? lane : undefined,
+        );
+      });
+    },
+  );
+
+  app.post<{ Params: IdParams }>("/api/films/:id/clips/from-asset", async (request, reply) => {
+    const film = await filmOr(reply, request.params.id);
+    if (!film) return reply;
+    const input = FromAssetSchema.safeParse(request.body);
+    const workspace = studio.workspace;
+    if (!input.success || !workspace)
+      return sendError(reply, 400, "bad-request", "Say which video or picture to add.");
+    const assets = assetsDirOf(workspace);
+    const kind = assetFile(assets, input.data.asset)?.kind;
+    if (kind !== "video" && kind !== "image") {
+      return sendError(reply, 400, "bad-file", "Pick a video or a picture from your assets.");
+    }
+    return guard(reply, async () => {
+      const file = await copyAssetToFilm(assets, input.data.asset, film.path);
+      return addClip(reply, film, file, input.data.start ?? 0);
+    });
+  });
+
+  // The timeline: sound tracks and video clips, saved together (one Undo list). Every file must be in the film.
+  app.put<{ Params: IdParams }>("/api/films/:id/tracks", async (request, reply) => {
+    const film = await filmOr(reply, request.params.id);
+    if (!film) return reply;
+    const input = TracksChangeSchema.safeParse(request.body);
+    if (!input.success) {
+      return sendError(
+        reply,
+        400,
+        "bad-request",
+        input.error.issues[0]?.message ?? "These tracks have a problem.",
+      );
+    }
+    const problem =
+      (await missingFile(film, input.data.audio, "sound file")) ??
+      (await missingFile(film, input.data.video, "video clip"));
+    if (problem) return sendError(reply, 400, "bad-file", problem);
+    return guard(reply, async () => {
+      const config = await changeFilm(film.path, input.data);
+      await syncScriptWithTimeline(film.path, film.config.audio, config.audio);
+      studio.events.publish({ type: "films-changed", ids: [film.id] });
+      return { audio: config.audio, video: config.video };
     });
   });
 }

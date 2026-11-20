@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { clipBox, placeAt } from "../shared/clips.ts";
 import type { ExportInfo, HubEvent } from "../shared/types.ts";
 import { findBrowser } from "./camera.ts";
 import { EventBus } from "./events.ts";
@@ -53,6 +54,13 @@ describe("planning", () => {
 const browser = findBrowser();
 const ffmpeg = findFfmpeg();
 const run = promisify(execFile);
+/** Runs a program and keeps its output as bytes (a raw frame). */
+const execBuffer = (file: string, args: string[]) =>
+  new Promise<{ stdout: Buffer }>((resolve, reject) =>
+    execFile(file, args, { encoding: "buffer", maxBuffer: 1 << 24 }, (error, stdout) =>
+      error ? reject(error) : resolve({ stdout }),
+    ),
+  );
 
 describe.runIf(browser && ffmpeg)("Renderer (real browser and ffmpeg)", () => {
   const port = 7391;
@@ -202,6 +210,83 @@ describe.runIf(browser && ffmpeg)("Renderer (real browser and ffmpeg)", () => {
     expect(audio).toMatchObject({ codec_name: "aac", sample_rate: "48000" });
     expect(Number(audio?.duration)).toBeGreaterThan(1.9);
     expect(Number(audio?.duration)).toBeLessThan(2.1);
+  }, 120_000);
+
+  it("draws video clips and pictures over the film, with a video's sound", async () => {
+    const templateDir = fileURLToPath(new URL("../../templates/starter/", import.meta.url));
+    await createFilm(filmsDir, templateDir, { title: "Clip Test", shape: "wide" });
+    const dir = join(filmsDir, "clip-test");
+    const make = (args: string[]) =>
+      run(ffmpeg ?? "", ["-hide_banner", "-loglevel", "error", "-y", ...args]);
+    // A red picture, and a blue video with a tone.
+    await make([
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=red:s=64x64",
+      "-frames:v",
+      "1",
+      join(dir, "red.png"),
+    ]);
+    await make([
+      ...["-f", "lavfi", "-i", "color=c=blue:s=160x90:d=1:r=30"],
+      ...["-f", "lavfi", "-i", "sine=frequency=440:duration=1"],
+      ...["-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest"],
+      join(dir, "blue.mp4"),
+    ]);
+    const corner = placeAt("top-right", 0.25, 320, 180);
+    await writeFile(
+      join(dir, "kairos.json"),
+      JSON.stringify({
+        title: "Clip Test",
+        width: 320,
+        height: 180,
+        fps: 30,
+        duration: 2,
+        video: [
+          { file: "red.png", start: 1, length: 1, size: 0.25, ...corner },
+          { file: "blue.mp4", start: 0, length: 0.8, size: 0.5, x: 0.25, y: 0.75 },
+        ],
+      }),
+    );
+    const renderer = makeRenderer();
+    const job = await waitFor(
+      renderer,
+      (await renderer.start("clip-test", { quality: "high", gpu: false })).id,
+    );
+    expect(job.error).toBeNull();
+    const output = join(dir, "renders", "clip-test-v1.mp4");
+
+    /** The color at (x, y) of the frame at `t`. */
+    const pixel = async (t: number, x: number, y: number) => {
+      const { stdout } = await execBuffer(ffmpeg ?? "", [
+        ...["-v", "error", "-ss", String(t), "-i", output, "-frames:v", "1"],
+        ...["-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+      ]);
+      const at = (y * 320 + x) * 3;
+      return [stdout[at] ?? 0, stdout[at + 1] ?? 0, stdout[at + 2] ?? 0];
+    };
+    const red = ([r, g, b]: number[]) => (r ?? 0) > 180 && (g ?? 0) < 90 && (b ?? 0) < 90;
+    const blue = ([r, g, b]: number[]) => (b ?? 0) > 180 && (r ?? 0) < 90 && (g ?? 0) < 90;
+    const box = clipBox({ size: 0.25, ...corner }, 320, 180);
+    const cx = Math.round(box.left + box.width / 2);
+    const cy = Math.round(box.top + box.height / 2);
+    // The picture shows in the top-right corner from 1 s only; the video in the bottom-left until 0.8 s.
+    expect(red(await pixel(1.5, cx, cy))).toBe(true);
+    expect(red(await pixel(0.5, cx, cy))).toBe(false);
+    expect(blue(await pixel(0.4, 80, 135))).toBe(true);
+    expect(blue(await pixel(1.2, 80, 135))).toBe(false);
+    // Outside the clips, the film shows.
+    expect(red(await pixel(1.5, 10, 170))).toBe(false);
+
+    // The video's sound is in the mix, though the film has no sound tracks.
+    const probe = await run(ffprobeNextTo(ffmpeg ?? ""), [
+      ...["-v", "error", "-show_entries", "stream=codec_type", "-of", "json", output],
+    ]);
+    const types = (JSON.parse(probe.stdout).streams as { codec_type: string }[]).map(
+      (stream) => stream.codec_type,
+    );
+    expect(types.sort()).toEqual(["audio", "video"]);
   }, 120_000);
 
   it("reports the frame where the film breaks", async () => {

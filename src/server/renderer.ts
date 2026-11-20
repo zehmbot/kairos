@@ -14,10 +14,19 @@ import { mkdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { cpus } from "node:os";
 import { dirname, join } from "node:path";
 import type { Browser, Page } from "puppeteer-core";
+import { clipBox, clipLength, drawOrder, isPicture } from "../shared/clips.ts";
 import { frameCount, timeOf } from "../shared/frames.ts";
 import type { ExportInfo, RenderEncoder, RenderJob, RenderQuality } from "../shared/types.ts";
 import { type BrowserInfo, launchHeadless, type OpenFilm, openFilm } from "./camera.ts";
-import { chunkArgs, concatLine, joinArgs, runFfmpeg } from "./ffmpeg.ts";
+import {
+  chunkArgs,
+  concatLine,
+  joinArgs,
+  type OverlayClip,
+  probeMedia,
+  runFfmpeg,
+  type SoundTrack,
+} from "./ffmpeg.ts";
 import { type Film, readFilm } from "./films.ts";
 import { addRender, nextVersion, RENDERS_DIR, videoName } from "./renders.ts";
 import type { Studio } from "./studio.ts";
@@ -271,7 +280,7 @@ export class Renderer {
       );
       const joined = join(dir, "joined.mp4");
       // The film's sound tracks are mixed in here (readFilm already checked they exist). Muted ones are left out.
-      const tracks = config.audio.flatMap((track) => {
+      const tracks: SoundTrack[] = config.audio.flatMap((track) => {
         const file = track.muted ? null : resolveInside(film.path, track.file);
         return file
           ? [
@@ -285,7 +294,50 @@ export class Renderer {
             ]
           : [];
       });
-      await runFfmpeg(ffmpeg, joinArgs(list, joined, { tracks, duration: config.duration }));
+      // Video clips are drawn over the film, in track order; a video's own sound joins the mix.
+      const clips: OverlayClip[] = [];
+      for (const clip of drawOrder(config.video)) {
+        const path = resolveInside(film.path, clip.file);
+        if (!path) continue;
+        const picture = isPicture(clip.file);
+        const media = picture ? null : await probeMedia(ffmpeg, path);
+        const length = clipLength(clip, media?.duration ?? undefined);
+        const shown = Math.min(length ?? config.duration, config.duration - clip.start);
+        if (shown <= 0) continue;
+        clips.push({
+          path,
+          picture,
+          start: clip.start,
+          length: shown,
+          from: clip.from,
+          box: clipBox(clip, config.width, config.height),
+          fit: clip.fit,
+          opacity: clip.opacity,
+          fade: clip.fade,
+        });
+        if (media?.hasAudio && !clip.muted && clip.volume > 0) {
+          tracks.push({
+            path,
+            start: clip.start,
+            volume: clip.volume,
+            from: clip.from,
+            length: shown,
+          });
+        }
+      }
+      await runFfmpeg(
+        ffmpeg,
+        joinArgs(
+          list,
+          joined,
+          { tracks, duration: config.duration },
+          {
+            clips,
+            encoding: { encoder: job.encoder, quality: job.quality, fps: config.fps },
+            duration: config.duration,
+          },
+        ),
+      );
       const version = await nextVersion(film.path, film.id);
       const name = videoName(film.id, version);
       await rename(joined, join(film.path, RENDERS_DIR, name));

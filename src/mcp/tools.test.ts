@@ -38,6 +38,7 @@ const film = (id: string, extra: Partial<FilmSummary> = {}): FilmSummary => ({
     status: "draft",
     page: "index.html",
     audio: [],
+    video: [],
   },
   problem: null,
   previewPath: `/${id}/index.html`,
@@ -509,9 +510,14 @@ describe("Kairos tools", () => {
     expect(texts(await call("kairos_use_asset", { asset: "sounds/rain.mp3", start: 2 }))).toContain(
       "Added audio/rain.mp3 as a sound track starting at 2 s",
     );
+    // With a start, a video or a picture goes on the timeline.
+    expect(texts(await call("kairos_use_asset", { asset: "videos/wave.mp4", start: 1 }))).toContain(
+      "Added assets/videos/wave.mp4 as a video clip over the film from 1 s",
+    );
     expect(hub.used).toEqual([
       { asset: "images/logo.png", film: "intro", start: undefined },
       { asset: "sounds/rain.mp3", film: "intro", start: 2 },
+      { asset: "videos/wave.mp4", film: "intro", start: 1 },
     ]);
   });
 

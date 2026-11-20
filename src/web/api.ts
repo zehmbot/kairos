@@ -36,6 +36,7 @@ import {
   type TemplateInput,
   TemplateSummarySchema,
   TrashEntrySchema,
+  type VideoClip,
   VoiceInfoSchema,
   VoiceLineSchema,
   VoiceStatusSchema,
@@ -626,6 +627,16 @@ export function useSaveAudio(filmId: string) {
   return useMutation({
     mutationFn: (audio: AudioTrack[]) =>
       call(z.unknown(), `${filmUrl(filmId)}/audio`, sendJson("PUT", { audio })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.film(filmId) }),
+  });
+}
+
+/** Saves the timeline: the film's sound tracks and video clips together. */
+export function useSaveTracks(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (tracks: { audio: AudioTrack[]; video: VideoClip[] }) =>
+      call(z.unknown(), `${filmUrl(filmId)}/tracks`, sendJson("PUT", tracks)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.film(filmId) }),
   });
 }

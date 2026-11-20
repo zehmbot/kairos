@@ -15,6 +15,7 @@ import { useFilmAudio, useSoundSettings } from "../player/useFilmAudio.ts";
 import { useFilmPlayer } from "../player/useFilmPlayer.ts";
 import { Notice } from "./Notice.tsx";
 import { PixelButton } from "./PixelButton.tsx";
+import { type PreviewClip, VideoLayer } from "./VideoLayer.tsx";
 
 interface PlayerProps {
   /** Full address of the film page on the film server. */
@@ -34,12 +35,15 @@ interface PlayerProps {
   audio?: readonly PreviewTrack[];
   /** Drawn under the controls, in step with the player (the timeline). */
   timeline?: (state: TimelineState) => ReactNode;
+  /** The film's video clips, drawn over the film (under the marks). */
+  video?: readonly PreviewClip[];
   /** How long the film says its story lasts (null when it doesn't say), each time it loads. */
   onStoryLength?: (length: number | null) => void;
   ref?: Ref<PlayerHandle>;
 }
 
 const NO_AUDIO: readonly PreviewTrack[] = [];
+const NO_CLIPS: readonly PreviewClip[] = [];
 
 /** What the timeline needs from the player. */
 export interface TimelineState {
@@ -89,6 +93,7 @@ export function Player({
   audio = NO_AUDIO,
   timeline,
   onStoryLength,
+  video = NO_CLIPS,
   ref,
 }: PlayerProps) {
   const player = useFilmPlayer({ src, fps, duration });
@@ -178,6 +183,15 @@ export function Player({
             tabIndex={-1}
             style={{ transform: `scale(${scale})` }}
             onLoad={player.onLoad}
+          />
+          <VideoLayer
+            clips={video}
+            width={width}
+            height={height}
+            scale={scale}
+            t={timeOf(frame, fps)}
+            playing={player.playing}
+            now={now}
           />
           {overlay?.(frame)}
         </div>

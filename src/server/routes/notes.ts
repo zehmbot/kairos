@@ -78,6 +78,7 @@ function noteRoutesIn(app: FastifyInstance, options: NoteRoutesOptions): void {
         height: film.config.height,
         t: note.t,
         shapes: note.shapes,
+        film: { dir: film.path, config: film.config },
       });
       if (await saveNoteImage(film.path, note.id, png)) changed(film.id);
     } catch (error) {

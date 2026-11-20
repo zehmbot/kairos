@@ -41,6 +41,7 @@
   --track-sound-3: var(--c-lime);
   /* Spoken lines: plum lightened so it reads on the night background. */
   --track-voice: color-mix(in srgb, var(--c-plum) 50%, var(--c-white));
+  --track-video: var(--c-sky);
   --playhead: var(--c-white);
   --icon-accent: var(--accent);
 

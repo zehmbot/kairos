@@ -2690,3 +2690,52 @@ video.asset-media {
   flex: 1 1 200px;
   margin: 0;
 }
+
+/* ---------- Video clips: over the film in the preview, and on the timeline's video tracks ---------- */
+
+.video-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.video-clip {
+  position: absolute;
+  display: block;
+  max-width: none;
+}
+
+.lane-video {
+  --lane: var(--track-video);
+}
+
+.timeline-head.lane-video {
+  color: var(--lane);
+}
+
+.timeline-clip-video {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 4px;
+}
+
+.timeline-thumb {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 28px;
+  object-fit: cover;
+  background: var(--bg);
+  pointer-events: none;
+}
+
+.timeline-clip-video .timeline-clip-name {
+  position: static;
+}
+
+.timeline-select {
+  width: auto;
+  padding-block: 4px;
+}

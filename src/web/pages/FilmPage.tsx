@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { mediaKindOf } from "../../shared/media.ts";
 import type { AudioTrack, Note } from "../../shared/types.ts";
 import {
   useAddNote,
@@ -12,7 +13,7 @@ import {
   useOpenFilmFolder,
   useReferences,
   useRenders,
-  useSaveAudio,
+  useSaveTracks,
   useTranscribe,
 } from "../api.ts";
 import {
@@ -144,7 +145,7 @@ export function FilmPage() {
   const [selectClip, setSelectClip] = useState<{ file: string; n: number } | null>(null);
   const filmWords = useFilmWords(id);
   const transcribe = useTranscribe(id);
-  const saveAudio = useSaveAudio(id);
+  const saveTracks = useSaveTracks(id);
   const [tab, setTab] = useFilmTab(id);
   const [addOpen, setAddOpen] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
@@ -275,9 +276,17 @@ export function FilmPage() {
           overlay={overlay}
           noteMarks={openNotes}
           onStoryLength={setStoryLength}
+          video={config.video.map((clip) => ({
+            ...clip,
+            url: filmFileUrl(filmOrigin, film.data.id, clip.file),
+          }))}
           timeline={({ t, scenes, seekTime }) => (
             <Timeline
               duration={config.duration}
+              filmSize={{ width: config.width, height: config.height }}
+              video={config.video}
+              fileUrl={(file) => filmFileUrl(filmOrigin, film.data.id, file)}
+              onAddClips={(files, start, lane) => void adds.addClipsAt(files, start, lane)}
               time={t}
               scenes={scenes}
               notes={openNotes}
@@ -286,13 +295,15 @@ export function FilmPage() {
                 `/api/films/${encodeURIComponent(film.data.id)}/sounds/file?path=${encodeURIComponent(file)}`
               }
               onSeek={seekTime}
-              onChange={(next) => saveAudio.mutate(next)}
+              onChange={(next) => saveTracks.mutate(next)}
               onAddSounds={(files, start, lane) => void adds.addSoundsAt(files, start, lane)}
               words={filmWords.data}
               onGetWords={(file) => transcribe.mutate(file)}
               wordsBusy={transcribe.isPending ? transcribe.variables : null}
               wordsError={transcribe.error?.message ?? null}
-              onClipClick={(file) => {
+              onClipClick={(file, kind) => {
+                // Video clips have no tab: their settings are under the timeline.
+                if (kind === "video") return;
                 setTab(file.startsWith("voice/") ? "voice" : "sound");
                 setFocus({ file, n: Date.now() });
               }}
@@ -300,14 +311,27 @@ export function FilmPage() {
               stale={voiceSummary.staleFiles}
             />
           )}
-          audio={config.audio.map((track) => ({
-            url: filmFileUrl(filmOrigin, film.data.id, track.file),
-            start: track.start,
-            volume: track.volume,
-            from: track.from,
-            length: track.length,
-            muted: track.muted,
-          }))}
+          audio={[
+            ...config.audio.map((track) => ({
+              url: filmFileUrl(filmOrigin, film.data.id, track.file),
+              start: track.start,
+              volume: track.volume,
+              from: track.from,
+              length: track.length,
+              muted: track.muted,
+            })),
+            // A video clip's own sound plays with the film's sound.
+            ...config.video
+              .filter((clip) => mediaKindOf(clip.file) === "video")
+              .map((clip) => ({
+                url: filmFileUrl(filmOrigin, film.data.id, clip.file),
+                start: clip.start,
+                volume: clip.volume,
+                from: clip.from,
+                length: clip.length,
+                muted: clip.muted,
+              })),
+          ]}
         />
         <p className="hint preview-hint">
           To change this film, press Open Claude here (or run <code>claude</code> in its folder) and

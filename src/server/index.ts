@@ -63,7 +63,10 @@ const uiHosts = allowedHostsFor(dev ? [port, DEV_WEB_PORT] : [port]);
 const uiOrigins = [...uiHosts].map((host) => `http://${host}`);
 
 const studio = await Studio.open({ home: kairosHome(), templatesDir });
-const camera = new Camera(findBrowser());
+// Frame pictures take video clips' frames with ffmpeg (found below, in the background).
+const camera = new Camera(findBrowser(), undefined, {
+  ffmpeg: async () => (await exportInfo).ffmpeg?.path ?? null,
+});
 const skills = new Skills({
   builtinDir: builtinSkillsDir,
   userDir: join(kairosHome(), "skills"),

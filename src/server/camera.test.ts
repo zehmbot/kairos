@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +7,10 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { planShots } from "../../templates/blocky/blocky/timing.js";
 import { voiceLinesFrom } from "../../templates/blocky/blocky/voice.js";
+import { clipBox } from "../shared/clips.ts";
+import { FilmConfigSchema } from "../shared/types.ts";
 import { Camera, findBrowser } from "./camera.ts";
+import { findFfmpeg } from "./ffmpeg.ts";
 import { buildFilmServer } from "./film-server.ts";
 import { createFilm } from "./films.ts";
 
@@ -183,6 +187,75 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
     });
     expect(length).toBeCloseTo(expected, 3);
   }, 120_000);
+
+  it.runIf(findFfmpeg())(
+    "puts the film's video clips over the frame",
+    async () => {
+      const ffmpeg = findFfmpeg() ?? "";
+      const dir = join(filmsDir, "clip-camera");
+      await mkdir(dir);
+      await writeFile(
+        join(dir, "index.html"),
+        `<!doctype html><html><body style="margin:0;background:#000"><script>window.renderOut = () => {};</script></body></html>`,
+      );
+      // A red picture in the top-right corner, from 1 s to 2 s.
+      await new Promise<void>((resolve, reject) =>
+        execFile(
+          ffmpeg,
+          [
+            "-v",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=red:s=64x64",
+            "-frames:v",
+            "1",
+          ].concat(join(dir, "red.png")),
+          (error) => (error ? reject(error) : resolve()),
+        ),
+      );
+      const config = FilmConfigSchema.parse({
+        title: "Clips",
+        width: 320,
+        height: 180,
+        duration: 3,
+        video: [{ file: "red.png", start: 1, length: 1, size: 0.25, x: 0.8, y: 0.2 }],
+      });
+      await writeFile(join(dir, "kairos.json"), JSON.stringify(config));
+      const shot = (t: number) =>
+        camera.capture({
+          url: `http://127.0.0.1:${port}/clip-camera/index.html`,
+          width: 320,
+          height: 180,
+          t,
+          film: { dir, config },
+        });
+      /** The color at (x, y) of a PNG, read with ffmpeg. */
+      const pixel = (png: Buffer, x: number, y: number) =>
+        new Promise<number[]>((resolve, reject) => {
+          const child = execFile(
+            ffmpeg,
+            ["-v", "error", "-i", "-", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+            { encoding: "buffer", maxBuffer: 1 << 24 },
+            (error, stdout) => {
+              if (error) return reject(error);
+              const at = (y * 320 + x) * 3;
+              resolve([stdout[at] ?? 0, stdout[at + 1] ?? 0, stdout[at + 2] ?? 0]);
+            },
+          );
+          child.stdin?.end(png);
+        });
+      const box = clipBox({ size: 0.25, x: 0.8, y: 0.2 }, 320, 180);
+      const [cx, cy] = [Math.round(box.left + box.width / 2), Math.round(box.top + box.height / 2)];
+      const red = ([r, g, b]: number[]) => (r ?? 0) > 200 && (g ?? 0) < 50 && (b ?? 0) < 50;
+      expect(red(await pixel(await shot(1.5), cx, cy))).toBe(true);
+      expect(red(await pixel(await shot(0.5), cx, cy))).toBe(false);
+      expect(red(await pixel(await shot(1.5), 20, 160))).toBe(false);
+    },
+    60_000,
+  );
 
   it("explains when the film can't be drawn", async () => {
     await expect(

@@ -185,6 +185,14 @@ export function createKairosServer(context: ToolContext): McpServer {
               `Script: ${script.lines.length} line${script.lines.length === 1 ? "" : "s"} (read it with kairos_script)`,
             );
           }
+          const clips = summary.config.video;
+          if (clips.length) {
+            lines.push(
+              `Video clips over the film: ${clips
+                .map((clip) => `${clip.file} at ${seconds(clip.start)}`)
+                .join(", ")} (kairos.json "video")`,
+            );
+          }
           const speakers = Object.keys(summary.config.voices ?? {});
           const spoken = speakers.length ? (await hub.lines(id)).length : 0;
           if (speakers.length) {
@@ -497,14 +505,16 @@ export function createKairosServer(context: ToolContext): McpServer {
     {
       title: "Use an asset in a film",
       description:
-        "Copies a file from the user's asset library into the film folder and gives its path. Images, videos and fonts go to assets/<kind>/; a sound becomes a sound track in kairos.json (starting at `start` seconds).",
+        "Copies a file from the user's asset library into the film folder and gives its path. Images, videos and fonts go to assets/<kind>/; a sound becomes a sound track in kairos.json (starting at `start` seconds). With `start`, a video or a picture also goes on the timeline as a video clip over the film (kairos.json `video`: change its size, place, fit, opacity or length there).",
       inputSchema: {
         asset: z.string().describe('The asset id from kairos_assets, like "images/logo.png".'),
         start: z
           .number()
           .min(0)
           .optional()
-          .describe("For sounds: when the track starts, in seconds."),
+          .describe(
+            "For sounds: when the track starts, in seconds. For videos and pictures: put it on the timeline from then.",
+          ),
         film: filmArg,
       },
       annotations: {
@@ -518,12 +528,15 @@ export function createKairosServer(context: ToolContext): McpServer {
       const id = await filmId(film);
       const path = await hub.useAsset(asset, id, start);
       const sound = path.startsWith("audio/");
+      const clip = !sound && start !== undefined && /^assets\/(videos|images)\//.test(path);
       return {
         content: [
           text(
             sound
               ? `Added ${path} as a sound track starting at ${seconds(start ?? 0)}. Kairos plays it with the preview and mixes it into the video.`
-              : `Copied to ${path} in the film folder. Load it from the film page with that path.`,
+              : clip
+                ? `Added ${path} as a video clip over the film from ${seconds(start ?? 0)} (kairos.json "video"). Kairos draws it in the preview, the frames and the video.`
+                : `Copied to ${path} in the film folder. Load it from the film page with that path.`,
           ),
         ],
       };

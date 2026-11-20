@@ -53,7 +53,7 @@ export function useFilmAdds(filmId: string, now: () => number, onTab: (tab: Side
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = (purpose: Purpose) => {
-    if (purpose === "sound")
+    if (purpose === "sound" || purpose === "clip")
       void queryClient.invalidateQueries({ queryKey: queryKeys.film(filmId) });
     if (purpose === "reference")
       void queryClient.invalidateQueries({ queryKey: queryKeys.references(filmId) });
@@ -119,6 +119,8 @@ export function useFilmAdds(filmId: string, now: () => number, onTab: (tab: Side
       const copied: string[] = [];
       if (purpose === "sound")
         await sendJson(`${film}/sounds/from-asset`, { asset: asset.id, start: now() });
+      else if (purpose === "clip")
+        await sendJson(`${film}/clips/from-asset`, { asset: asset.id, start: now() });
       else if (purpose === "reference")
         await sendJson(`${film}/references/from-asset`, { asset: asset.id });
       else {
@@ -155,10 +157,31 @@ export function useFilmAdds(filmId: string, now: () => number, onTab: (tab: Side
     }
   };
 
+  /** Videos and pictures dropped on the timeline: at that time, on that video track (none: a new one each). */
+  const addClipsAt = async (files: readonly File[], start: number, lane?: number) => {
+    setError(null);
+    setMessage(null);
+    try {
+      for (const [i, file] of files.entries()) {
+        setStatus(`Adding ${file.name}…`);
+        const onLane = lane === undefined ? "" : `&lane=${Math.min(15, lane + i)}`;
+        await uploadFile(`${uploadUrl(filmId, "clip", file.name, start)}${onLane}`, file, (f) =>
+          setStatus(`Adding ${file.name}… ${Math.round(f * 100)}%`),
+        );
+        refresh("clip");
+      }
+    } catch (problem) {
+      setError((problem as Error).message);
+    } finally {
+      setStatus(null);
+    }
+  };
+
   return {
     addFiles,
     addAsset,
     addSoundsAt,
+    addClipsAt,
     status,
     error,
     message,

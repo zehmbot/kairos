@@ -29,7 +29,10 @@ The `kairos` skill has the details (Voices).
 
 - `kairos.json`: `title`, `width` and `height` in pixels, `fps` (frames per second, 1 to 120), `duration` in
   seconds, `status`, and `audio`: sound tracks like `[{ "file": "audio/music.mp3", "start": 0, "volume": 0.5 }]`
-  (start in seconds, volume 0 to 2). Kairos plays them with the preview and mixes them into the video.
+  (start in seconds, volume 0 to 2). Kairos plays them with the preview and mixes them into the video. And
+  `video`: videos and pictures Kairos draws over the film, like
+  `[{ "file": "assets/images/logo.png", "start": 0, "length": 5, "size": 0.2, "x": 0.88, "y": 0.84 }]`
+  (see Video clips in the `kairos` skill).
 - `index.html`: the page that holds the film. It uses a canvas here, but any HTML, CSS, SVG or WebGL works.
   Build it at the exact size in `kairos.json`; Kairos scales the preview itself.
 - `film.js`: defines `window.renderOut(t)`, which draws the frame at time `t` (in seconds, from 0 to

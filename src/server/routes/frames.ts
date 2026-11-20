@@ -42,6 +42,7 @@ export function filmPicture(options: FrameRoutesOptions) {
         height: config.height,
         t: thumbnailTime(config.duration),
         maxSide: THUMB_SIDE,
+        film: { dir: film.path, config },
       }),
     );
   };
@@ -97,6 +98,7 @@ export function frameRoutes(app: FastifyInstance, options: FrameRoutesOptions): 
         width: film.config.width,
         height: film.config.height,
         t: Math.min(t, film.config.duration),
+        film: { dir: film.path, config: film.config },
       });
       // How long the film says its story lasts (Blocky follows its voices), for Claude to fit the length.
       if (length !== null)

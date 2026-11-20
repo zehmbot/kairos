@@ -5,7 +5,8 @@
 import { existsSync } from "node:fs";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { marksSvg } from "../shared/marks.ts";
-import type { NoteShape } from "../shared/types.ts";
+import type { FilmConfig, NoteShape } from "../shared/types.ts";
+import { clipImagesAt } from "./clips.ts";
 
 declare global {
   interface Window {
@@ -143,6 +144,8 @@ export interface CaptureRequest {
   shapes?: readonly NoteShape[];
   /** Longest side of the picture, in pixels. Pictures are never bigger than the film. */
   maxSide?: number;
+  /** The film's folder and settings: its video clips are put over the frame (under the marks). */
+  film?: { dir: string; config: Pick<FilmConfig, "video" | "width" | "height"> };
 }
 
 export class Camera {
@@ -152,9 +155,17 @@ export class Camera {
   #idleTimer: NodeJS.Timeout | undefined;
   #queue: Promise<unknown> = Promise.resolve();
 
-  constructor(browser: BrowserInfo | null, idleMs = 60_000) {
+  readonly #ffmpeg: () => Promise<string | null>;
+
+  /** `ffmpeg` finds ffmpeg, for the frames of video clips (pictures need none). */
+  constructor(
+    browser: BrowserInfo | null,
+    idleMs = 60_000,
+    options: { ffmpeg?: () => Promise<string | null> } = {},
+  ) {
     this.browser = browser;
     this.#idleMs = idleMs;
+    this.#ffmpeg = options.ffmpeg ?? (async () => null);
   }
 
   /** Takes a PNG picture of frame `t`, with the marks drawn on top. Pictures are taken one at a time. */
@@ -212,6 +223,32 @@ export class Camera {
         const value = Number((window as { KAIROS_LENGTH?: unknown }).KAIROS_LENGTH);
         return Number.isFinite(value) && value > 0 ? value : null;
       });
+      // Video clips over the film, as the preview and the render show them (the marks go over them).
+      const clips = request.film?.config.video.length
+        ? await clipImagesAt(
+            request.film.dir,
+            request.film.config,
+            request.t,
+            await this.#ffmpeg().catch(() => null),
+          )
+        : [];
+      if (clips.length > 0) {
+        await page.evaluate(async (list) => {
+          const layer = document.createElement("div");
+          layer.style.cssText =
+            "position:fixed;left:0;top:0;width:100vw;height:100vh;overflow:hidden;pointer-events:none;z-index:2147483646";
+          for (const clip of list) {
+            const img = document.createElement("img");
+            img.src = clip.src;
+            img.style.cssText = `position:absolute;left:${clip.box.left}px;top:${clip.box.top}px;width:${clip.box.width}px;height:${clip.box.height}px;object-fit:${clip.fit === "fill" ? "cover" : "contain"};opacity:${clip.opacity}`;
+            layer.appendChild(img);
+          }
+          document.documentElement.appendChild(layer);
+          await Promise.all(
+            [...layer.querySelectorAll("img")].map((img) => img.decode().catch(() => undefined)),
+          );
+        }, clips);
+      }
       if (request.shapes && request.shapes.length > 0) {
         const svg = marksSvg(request.shapes, request.width, request.height);
         await page.evaluate((markup) => {

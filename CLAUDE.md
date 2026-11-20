@@ -141,12 +141,30 @@ file) and are moved back in step when they drift over 80 ms. The render mixes th
 (`mixFilter` in `src/server/ffmpeg.ts`: `atrim` for trimmed tracks, `adelay`, `volume`, `amix` with
 `normalize=0`, `apad`, cut with `-t` at the film's length, AAC 192k; muted tracks are left out).
 
-**Timeline:** under the player (`src/web/components/Timeline.tsx`, the math in `src/web/timeline.ts`): the film's
-scenes, then sound lanes with waveforms (`src/web/player/waveform.ts`, read through
-`GET /api/films/:id/sounds/file` because the film server is another origin). Clips move, trim and snap (playhead,
-scene and clip edges); a drag saves the last pointer position, not the last drawn one. Every change saves the
-whole list with `PUT /api/films/:id/audio`; Undo/Redo keep the lists before. Sounds dropped on the timeline land
-at that time and lane (`?lane=`); other new sounds get a free lane (`nextLane`, `src/shared/lanes.ts`).
+**Timeline:** under the player (`src/web/components/Timeline.tsx`, the math in `src/web/timeline.ts`).
+
+- **Lanes:** video lanes on top (the highest first), the film's scenes, then sound lanes with waveforms
+  (`src/web/player/waveform.ts`, read through `GET /api/films/:id/sounds/file` because the film server is another
+  origin).
+- **One list:** sound tracks and video clips are one draft list (`kind`). Clips move, trim and snap (playhead,
+  scene and clip edges); a drag saves the last pointer position, not the last drawn one.
+- **Saving:** every change saves both lists with `PUT /api/films/:id/tracks`; Undo/Redo keep the lists before.
+- **Dropping:** files dropped on the timeline land at that time and lane (`?lane=`). Other new ones get a free lane
+  (`nextLane`, `src/shared/lanes.ts`).
+
+**Video clips** (`video` in `kairos.json`, `VideoClipSchema`) are the user's videos and pictures over the film:
+a box of the film's shape (`size`, `x`, `y`), `fit` fill or fit, `opacity`, `fade`, and for videos their own sound.
+Kairos draws them, never the film page, and three places share one layout (`src/shared/clips.ts`):
+
+- **Preview:** `VideoLayer` (muted `<video>` and `<img>` elements over the iframe, under the marks) follows the
+  player's clock. A video's sound joins the preview's audio list.
+- **Render:** the join encodes again with the clips (`clipFilter`: scale, alpha, fades, `overlay` in their time),
+  and a video's sound joins `mixFilter` (`probeMedia`).
+- **Frame pictures:** the camera puts each clip's frame (`clipImagesAt`, `src/server/clips.ts`: ffmpeg for
+  videos) into the page under the marks.
+
+Clips are added with `POST /api/films/:id/clips` (upload), `/clips/from-asset`, or the asset `use` route with a
+`start`.
 
 ## Voices
 

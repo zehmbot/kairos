@@ -148,8 +148,11 @@ are our own: never use a game's or brand's name, logos, avatars or another creat
 
 ## Files
 
-- `kairos.json`: title, size, `fps`, `duration` (the story's length), `status`, and `audio` (sound
-  tracks: `[{ "file": "audio/voice.mp3", "start": 0, "volume": 1 }]`).
+- `kairos.json`: title, size, `fps`, `duration` (the story's length), `status`, `audio` (sound
+  tracks: `[{ "file": "audio/voice.mp3", "start": 0, "volume": 1 }]`), and
+  `video`: videos and pictures Kairos draws over the film, like
+  `[{ "file": "assets/images/logo.png", "start": 0, "length": 5, "size": 0.2, "x": 0.88, "y": 0.84 }]`
+  (see Video clips in the `kairos` skill).
 - `index.html` and `film.js` hold the film; `story.js` is the story; `assets/fonts/` has the caption font
   (Poppins, SIL Open Font License).
 - Scenes on the Kairos timeline come from the places in the story.

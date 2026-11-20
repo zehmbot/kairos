@@ -117,6 +117,79 @@ describe("sounds", () => {
   });
 });
 
+describe("video clips", () => {
+  it("puts an uploaded video or picture on the timeline, written short", async () => {
+    const video = await upload("/api/films/intro/clips?name=Intro%20Clip.mp4&start=1.5");
+    expect(video.statusCode).toBe(201);
+    expect(video.json().clip).toMatchObject({
+      file: "assets/videos/intro-clip.mp4",
+      start: 1.5,
+      lane: 0,
+      size: 1,
+      fit: "fill",
+    });
+    // A picture shows for 3 s at first; dropped on a track, it goes there.
+    await upload("/api/films/intro/clips?name=logo.png&start=0&lane=0");
+    const config = JSON.parse(await readFile(join(filmDir(), "kairos.json"), "utf8"));
+    expect(config.video).toEqual([
+      { file: "assets/videos/intro-clip.mp4", start: 1.5, lane: 0 },
+      { file: "assets/images/logo.png", start: 0, lane: 0, length: 3 },
+    ]);
+    // Only videos and pictures.
+    expect((await upload("/api/films/intro/clips?name=a.mp3")).statusCode).toBe(400);
+  });
+
+  it("saves sound tracks and clips together, only with files inside the film", async () => {
+    await upload("/api/films/intro/clips?name=logo.png");
+    await upload("/api/films/intro/sounds?name=rain.mp3");
+    const { audio, video } = (await film()).config ?? { audio: [], video: [] };
+    const saved = await app.inject({
+      method: "PUT",
+      url: "/api/films/intro/tracks",
+      payload: {
+        audio: audio.map((track) => ({ ...track, start: 2 })),
+        video: video.map((clip) => ({ ...clip, size: 0.25, x: 0.8, y: 0.2, opacity: 0.5 })),
+      },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect((await film()).config?.audio[0]?.start).toBe(2);
+    expect((await film()).config?.video[0]).toMatchObject({ size: 0.25, opacity: 0.5 });
+    const outside = await app.inject({
+      method: "PUT",
+      url: "/api/films/intro/tracks",
+      payload: { audio, video: [{ file: "../secret.png", start: 0 }] },
+    });
+    expect(outside.statusCode).toBe(400);
+    expect(outside.json().message).toContain("isn't in this film's folder");
+  });
+
+  it("reports a missing clip file as the film's problem", async () => {
+    await upload("/api/films/intro/clips?name=logo.png");
+    await rm(join(filmDir(), "assets", "images", "logo.png"));
+    expect((await film()).problem).toBe('The video clip "assets/images/logo.png" is missing.');
+  });
+
+  it("puts a library video on the timeline from a time", async () => {
+    await upload("/api/assets?name=wave.mp4");
+    const added = await app.inject({
+      method: "POST",
+      url: "/api/films/intro/clips/from-asset",
+      payload: { asset: "videos/wave.mp4", start: 4 },
+    });
+    expect(added.statusCode).toBe(201);
+    expect((await film()).config?.video).toMatchObject([
+      { file: "assets/videos/wave.mp4", start: 4 },
+    ]);
+    // Through "use" (Claude's kairos_use_asset) with a start, too.
+    await app.inject({
+      method: "POST",
+      url: "/api/assets/videos/wave.mp4/use",
+      payload: { film: "intro", start: 1 },
+    });
+    expect((await film()).config?.video.map((clip) => clip.start)).toEqual([4, 1]);
+  });
+});
+
 describe("assets", () => {
   it("imports files into the folder of their kind and lists them", async () => {
     const song = await upload("/api/assets?name=Theme.mp3");

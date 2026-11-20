@@ -3,9 +3,10 @@ import { mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
 import type { FastifyInstance, FastifyReply } from "fastify";
+import { isPicture, PICTURE_SECONDS } from "../../shared/clips.ts";
 import { nextLane } from "../../shared/lanes.ts";
 import { contentTypeOf, KIND_FOLDERS, type MediaKind, mediaKindOf } from "../../shared/media.ts";
-import { AudioTrackSchema } from "../../shared/types.ts";
+import { AudioTrackSchema, VideoClipSchema } from "../../shared/types.ts";
 import { assetFile, copyAssetToFilm, deleteAsset, importAsset, listAssets } from "../assets.ts";
 import { changeFilm, FilmConfigError, readFilm } from "../films.ts";
 import { openFolder } from "../open-folder.ts";
@@ -86,13 +87,31 @@ export function assetRoutes(
       return guard(reply, async () => {
         const id = `${request.params.kind}/${request.params.name}`;
         const path = await copyAssetToFilm(assets, id, film.path);
-        if (assetFile(assets, id)?.kind === "sound" && film.config) {
+        const kind = assetFile(assets, id)?.kind;
+        const start = Math.max(0, Number(request.body?.start) || 0);
+        if (kind === "sound" && film.config) {
           const track = AudioTrackSchema.parse({
             file: path,
-            start: Math.max(0, Number(request.body?.start) || 0),
+            start,
             lane: nextLane(film.config.audio),
           });
           await changeFilm(film.path, { audio: [...film.config.audio, track] });
+        } else if (
+          (kind === "video" || kind === "image") &&
+          film.config &&
+          request.body?.start !== undefined
+        ) {
+          // With a start, a video or picture goes on the timeline too (its own video track).
+          const clip = VideoClipSchema.parse({
+            file: path,
+            start,
+            lane: nextLane(film.config.video),
+            ...(isPicture(path) ? { length: PICTURE_SECONDS } : {}),
+          });
+          await changeFilm(film.path, {
+            audio: film.config.audio,
+            video: [...film.config.video, clip],
+          });
         }
         studio.events.publish({ type: "films-changed", ids: [film.id] });
         return { path };

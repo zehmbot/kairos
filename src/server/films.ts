@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   type AudioTrack,
   type BriefFile,
+  compactClip,
   compactTrack,
   DEFAULT_FPS,
   FILM_SHAPES,
@@ -12,6 +13,7 @@ import {
   FilmConfigSchema,
   type FilmVoices,
   type NewFilm,
+  type VideoClip,
 } from "../shared/types.ts";
 import { writeFileAtomic } from "./atomic-write.ts";
 import { isSafeFilmId, resolveInside } from "./workspace.ts";
@@ -104,6 +106,15 @@ export async function readFilm(filmsDir: string, id: string): Promise<Film | nul
         problem = `The audio file "${track.file}" must be inside the film folder.`;
       } else if (!(await stat(file).catch(() => null))?.isFile()) {
         problem = `The audio file "${track.file}" is missing.`;
+      }
+    }
+    for (const clip of result.config.video) {
+      if (problem) break;
+      const file = resolveInside(path, clip.file);
+      if (!file) {
+        problem = `The video clip "${clip.file}" must be inside the film folder.`;
+      } else if (!(await stat(file).catch(() => null))?.isFile()) {
+        problem = `The video clip "${clip.file}" is missing.`;
       }
     }
   }
@@ -267,7 +278,11 @@ export class FilmConfigError extends Error {}
  */
 export async function changeFilm(
   filmDir: string,
-  change: FilmChange | { audio: AudioTrack[] } | { voices: FilmVoices },
+  change:
+    | FilmChange
+    | { audio: AudioTrack[] }
+    | { voices: FilmVoices }
+    | { audio: AudioTrack[]; video: VideoClip[] },
 ): Promise<FilmConfig> {
   const file = join(filmDir, CONFIG_FILE);
   const text = await readFile(file, "utf8");
@@ -282,10 +297,12 @@ export async function changeFilm(
   if (typeof json !== "object" || json === null || Array.isArray(json)) {
     throw new FilmConfigError(`${CONFIG_FILE} must hold an object, so Kairos won't change it.`);
   }
-  // Sound tracks are written short: without their default values.
+  // Sound tracks and video clips are written short: without their default values.
   const next = {
     ...json,
-    ...("audio" in change ? { ...change, audio: change.audio.map(compactTrack) } : change),
+    ...change,
+    ...("audio" in change ? { audio: change.audio.map(compactTrack) } : {}),
+    ...("video" in change ? { video: change.video.map(compactClip) } : {}),
   };
   const parsed = FilmConfigSchema.safeParse(next);
   if (!parsed.success) {

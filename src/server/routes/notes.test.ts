@@ -75,6 +75,8 @@ describe("notes API", () => {
         height: 1080,
         t: 2,
         shapes,
+        // The film comes along, so its video clips are in the picture too.
+        film: expect.objectContaining({ config: expect.objectContaining({ video: [] }) }),
       },
     ]);
     expect((await list())[0]?.image).toBe(`notes/${note.id}.png`);

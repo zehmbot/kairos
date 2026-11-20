@@ -73,6 +73,29 @@ When the Kairos tools are connected:
 5. `kairos_note_update` with `status: "fixed"`, only once you have seen the frame and it is right.
 6. Tell the user what you changed, note by note. If a note is unclear, ask rather than guess.
 
+## Video clips
+
+The user's own videos and pictures (a real shot, a logo, a screenshot) go over the film as clips, listed in
+`kairos.json`. Kairos draws them: in the preview, in frame pictures and in the video. The film page never does.
+
+```json
+"video": [
+  { "file": "assets/videos/street.mp4", "start": 4, "from": 1, "length": 3 },
+  { "file": "assets/images/logo.png", "start": 0, "length": 12, "size": 0.18, "x": 0.89, "y": 0.84 }
+]
+```
+
+- `start` and `length`: when it shows on the film, in seconds. A picture needs a `length`; a video plays to
+  its end when it has none. `from`: where in the video it starts.
+- `size`: its box's width as a share of the film's width (1 = the whole frame, the default: a cut-away). The box
+  has the film's shape, centered at `x`, `y` (0 to 1 across and down).
+- `fit`: `"fill"` (the default) covers the box, cropping the clip; `"fit"` shows it whole, with the film around.
+- `opacity` (0 to 1), `fade` (seconds in and out), and for videos `volume` (0 to 2) and `muted`.
+- `lane`: its video track; higher tracks draw over lower ones.
+- Put files in with `kairos_use_asset` (with `start`, it also places the clip), or copy them into `assets/`.
+
+The user moves, trims and sets clips on the timeline: keep them as they are unless asked.
+
 ## Sound
 
 Sound files live in the film folder (for example `audio/`) and are listed in `kairos.json`:

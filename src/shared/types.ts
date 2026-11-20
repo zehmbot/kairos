@@ -61,6 +61,49 @@ export function compactTrack(track: AudioTrack): z.input<typeof AudioTrackSchema
 }
 
 /** `"audio": "file.mp3"` (one track) or a list of tracks. Always read as a list. */
+/**
+ * A video or a picture on the film's timeline, drawn by Kairos over the film (preview, pictures and the video).
+ * Its box has the film's shape: `size` of the film's width, centered at `x`, `y` (0 to 1 across the frame).
+ */
+export const VideoClipSchema = z.object({
+  /** The video or picture, inside the film folder, like `assets/videos/intro.mp4`. */
+  file: z.string().min(1, "Each video clip needs a file."),
+  /** When it starts on the film's timeline, in seconds. */
+  start: z.number().min(0, "A video clip can't start before the film.").default(0),
+  /** Where in the video it starts playing, in seconds (a trimmed start). */
+  from: z.number().min(0, "A video clip's `from` can't be negative.").default(0),
+  /** How long it shows, in seconds. Left out: to the end of the video (a picture needs one). */
+  length: z.number().positive("A video clip's `length` must be more than 0.").optional(),
+  /** Which video track it sits on (0 = the lowest; higher tracks draw over lower ones). */
+  lane: z.number().int().min(0).max(15).optional(),
+  /** "fill": covers its box (cropped); "fit": the whole picture shows, the film around it. */
+  fit: z.enum(["fill", "fit"]).default("fill"),
+  /** Its box's width, as a share of the film's width (1 = the whole frame). */
+  size: z.number().min(0.05, "A clip's size goes from 0.05 to 1.").max(1).default(1),
+  /** The middle of its box, from 0 to 1 across and down the frame. */
+  x: z.number().min(0).max(1).default(0.5),
+  y: z.number().min(0).max(1).default(0.5),
+  /** 1 = solid, 0 = invisible. */
+  opacity: z.number().min(0).max(1).default(1),
+  /** Fades in at its start and out at its end, in seconds (0 = none). */
+  fade: z.number().min(0).max(5).default(0),
+  /** Its own sound (videos): 0 to 2, and muted. */
+  volume: z.number().min(0).max(2).default(1),
+  muted: z.boolean().default(false),
+});
+export type VideoClip = z.infer<typeof VideoClipSchema>;
+
+/** A clip as written in kairos.json: the default values are left out. */
+export function compactClip(clip: VideoClip): z.input<typeof VideoClipSchema> {
+  const defaults = VideoClipSchema.parse({ file: clip.file });
+  const short: Record<string, unknown> = { file: clip.file, start: clip.start };
+  for (const [key, value] of Object.entries(clip)) {
+    if (key === "file" || key === "start" || value === undefined) continue;
+    if (defaults[key as keyof VideoClip] !== value) short[key] = value;
+  }
+  return short as z.input<typeof VideoClipSchema>;
+}
+
 const AudioSchema = z
   .union([z.string().min(1), z.array(AudioTrackSchema)])
   .transform((audio) =>
@@ -316,6 +359,8 @@ export const FilmConfigSchema = z.object({
   page: z.string().default("index.html"),
   /** Sound: one file, or tracks with a start and a volume (mixed together in the render). */
   audio: AudioSchema.default([]),
+  /** Videos and pictures over the film, on the timeline's video tracks. */
+  video: z.array(VideoClipSchema).max(200).default([]),
   /** Who speaks in the film and with which fish.audio voice. */
   voices: FilmVoicesSchema.optional(),
 });
@@ -522,6 +567,12 @@ export type FilmChange = z.infer<typeof FilmChangeSchema>;
 
 /** PUT /api/films/:id/audio: the whole list of sound tracks of a film. */
 export const AudioChangeSchema = z.object({ audio: z.array(AudioTrackSchema) });
+
+/** PUT /api/films/:id/tracks: the timeline's sound tracks and video clips, saved together. */
+export const TracksChangeSchema = z.object({
+  audio: z.array(AudioTrackSchema),
+  video: z.array(VideoClipSchema).max(200),
+});
 
 const MediaKindSchema = z.enum(["image", "video", "sound", "font"]);
 

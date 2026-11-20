@@ -5,10 +5,14 @@
 import { type MediaKind, mediaKindOf } from "../shared/media.ts";
 
 /** What a file is for. */
-export type Purpose = "sound" | "reference" | "film" | "library";
+export type Purpose = "sound" | "clip" | "reference" | "film" | "library";
 
 export const PURPOSE_TEXT: Record<Purpose, { label: string; sub: string }> = {
   sound: { label: "Add to the film's sound", sub: "A sound track, from the player's current time" },
+  clip: {
+    label: "Put it on the timeline",
+    sub: "Over the film, from the player's current time (a video track)",
+  },
   reference: { label: "Reference for Claude", sub: "Claude looks at it to match the style" },
   film: { label: "Use in this film", sub: "Copied into the film folder for Claude to use" },
   library: { label: "Keep in my assets", sub: "Saved in your library, for any film" },
@@ -19,8 +23,8 @@ export function purposesFor(kind: MediaKind, name: string, fromLibrary = false):
   const svg = name.toLowerCase().endsWith(".svg");
   const all: Record<MediaKind, Purpose[]> = {
     sound: ["sound", "library"],
-    video: ["reference", "film", "library"],
-    image: svg ? ["film", "library"] : ["reference", "film", "library"],
+    video: ["clip", "reference", "film", "library"],
+    image: svg ? ["film", "library"] : ["clip", "reference", "film", "library"],
     font: ["film", "library"],
   };
   return all[kind].filter((purpose) => !(fromLibrary && purpose === "library"));
@@ -49,13 +53,15 @@ export function groupFiles(files: readonly File[]): { groups: FileGroup[]; unkno
   };
 }
 
-/** Where a file is sent for a purpose. `start` (seconds) is for sounds. */
+/** Where a file is sent for a purpose. `start` (seconds) is for sounds and clips. */
 export function uploadUrl(filmId: string, purpose: Purpose, name: string, start = 0): string {
   const film = `/api/films/${encodeURIComponent(filmId)}`;
   const q = `name=${encodeURIComponent(name)}`;
   switch (purpose) {
     case "sound":
       return `${film}/sounds?${q}&start=${start.toFixed(2)}`;
+    case "clip":
+      return `${film}/clips?${q}&start=${start.toFixed(2)}`;
     case "reference":
       return `${film}/references?${q}`;
     case "film":
