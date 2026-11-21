@@ -956,7 +956,10 @@ export type ExportInfo = z.infer<typeof ExportInfoSchema>;
 /** POST /api/films/:id/renders */
 export const StartRenderSchema = z.object({
   quality: RenderQualitySchema.default("high"),
-  /** Use the graphics card when one works (much faster). */
+  /**
+   * Use the graphics card when one works: it draws the frames (films get their richest look) and encodes the video.
+   * Off: the processor does both, slower, and films draw a lighter look.
+   */
   gpu: z.boolean().default(true),
 });
 export type StartRender = z.input<typeof StartRenderSchema>;
@@ -969,6 +972,8 @@ export const RenderJobSchema = z.object({
   state: z.enum(["queued", "running", "joining", "done", "failed", "cancelled"]),
   quality: RenderQualitySchema,
   encoder: RenderEncoderSchema,
+  /** The graphics card draws the frames (false: the processor draws them). */
+  gpu: z.boolean().default(true),
   /** Frames drawn so far, of `total`. */
   done: z.number().int(),
   total: z.number().int(),

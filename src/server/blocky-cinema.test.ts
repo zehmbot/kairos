@@ -181,6 +181,30 @@ describe("Blocky Cinema: physics any frame can read", () => {
     ) as unknown as { stages: { to: { x: number; z: number } }[] };
     const to = knocked.stages[0]?.to as { x: number; z: number };
     expect(Math.hypot(pelvis.x - to.x, pelvis.z - to.z)).toBeLessThan(2);
+    // Every joint stays a hinge within the toy's own range all the way down (characters.js JOINTS).
+    const joints: [string, string, [number, number]][] = [
+      ["pelvis", "chest", [-0.6, 1.3]],
+      ["chest", "head", [-0.6, 0.7]],
+      ["chest", "armL", [-3.3, 1.3]],
+      ["chest", "armR", [-3.3, 1.3]],
+      ["armL", "foreL", [-2.6, 0]],
+      ["armR", "foreR", [-2.6, 0]],
+      ["pelvis", "thighL", [-2.3, 1.0]],
+      ["pelvis", "thighR", [-2.3, 1.0]],
+      ["thighL", "shinL", [0, 2.6]],
+      ["thighR", "shinR", [0, 2.6]],
+    ];
+    for (let t = fall.t0; t <= fall.t1; t += 0.05) {
+      for (const [parent, child, [min, max]] of joints) {
+        const a = sampleTrack(fall.parts.get(parent) as Track, t).quaternion;
+        const b = sampleTrack(fall.parts.get(child) as Track, t).quaternion;
+        const rel = a.clone().invert().multiply(b);
+        const angle = 2 * Math.atan2(rel.x, rel.w);
+        expect(angle, `${child} at ${t.toFixed(2)} s`).toBeGreaterThan(min - 0.12);
+        expect(angle, `${child} at ${t.toFixed(2)} s`).toBeLessThan(max + 0.12);
+        expect(Math.hypot(rel.y, rel.z), `${child} off its hinge`).toBeLessThan(0.12);
+      }
+    }
   });
 });
 

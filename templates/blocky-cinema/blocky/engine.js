@@ -17,7 +17,7 @@ import {
   moveEffects,
   planEffects,
 } from "./fx.js";
-import { layoutOf } from "./layouts.js";
+import { layoutOf, solidsOf } from "./layouts.js";
 import { headDrop, personState, planMotion, wrapAngle } from "./motion.js";
 import { drawOverlays } from "./overlays.js";
 import { loadPhysics } from "./physics.js";
@@ -112,10 +112,55 @@ const APERTURE = {
   insert: 0.0016,
 };
 
+/** Is a camera position inside the room (clear of its walls) and out of its furniture? */
+function roomForCamera(layout, p) {
+  if (layout.walls) {
+    const w = layout.walls;
+    if (p.x < w.minX + 0.6 || p.x > w.maxX - 0.6 || p.z < w.minZ + 0.6 || p.z > w.maxZ - 0.6)
+      return false;
+  }
+  return solidsOf(layout).every((box) => {
+    const c = Math.cos(box.rot ?? 0);
+    const s = Math.sin(box.rot ?? 0);
+    const dx = p.x - box.x;
+    const dz = p.z - box.z;
+    return !(
+      Math.abs(dx * c - dz * s) < box.w / 2 + 0.5 &&
+      Math.abs(dx * s + dz * c) < box.d / 2 + 0.5 &&
+      Math.abs(p.y - box.y) < box.h / 2 + 0.5
+    );
+  });
+}
+
+/**
+ * A camera that would stand outside the room's walls or inside furniture moves in along its line toward what it
+ * looks at, until it's clear, and widens its lens so the framing stays the same (as a crew does in a small room).
+ */
+function fitInRoom(view, layout) {
+  if (!layout.walls && !(layout.solids ?? []).length) return view;
+  if (roomForCamera(layout, view.position)) return view;
+  const far = view.position.distanceTo(view.target);
+  for (let k = 0.02; k <= 0.86; k += 0.02) {
+    const p = view.position.clone().lerp(view.target, k);
+    if (!roomForCamera(layout, p)) continue;
+    const near = p.distanceTo(view.target);
+    const half = Math.atan((Math.tan(THREE.MathUtils.degToRad(view.fov) / 2) * far) / near);
+    return {
+      ...view,
+      position: p,
+      fov: Math.min(72, THREE.MathUtils.radToDeg(2 * half)),
+      // The subject is that much closer now (the focus follows).
+      focus: Math.max(0.5, view.focus - (far - near)),
+    };
+  }
+  return view;
+}
+
 /**
  * How much furniture spoils the view (0 = not at all): standing between the camera and anyone it frames (their head
- * or chest: 1 each), or covering the middle of the picture close to the camera (a TV edge, a door: the part of it
- * covered, beyond a fifth). Rays from the camera against the place's own meshes.
+ * or chest: 1 each), covering the middle of the picture in front of them (beyond a fifth of it), or standing close
+ * to the camera anywhere in the picture, edges too (a shelf down one side: beyond an eighth of it). Rays from the
+ * camera against the place's own meshes.
  */
 const raycaster = new THREE.Raycaster();
 const probe = new THREE.PerspectiveCamera();
@@ -129,6 +174,8 @@ const radius = (mesh) => {
 };
 function furnitureInView(place, look, aspect, framed) {
   let cost = 0;
+  // Still inside furniture or outside the walls after moving in (rays from there see through it all): the worst.
+  if (!roomForCamera(layoutOf(place.name), look.position)) cost += 3;
   place.meshes ??= (() => {
     const list = [];
     place.group.traverse((o) => {
@@ -159,29 +206,34 @@ function furnitureInView(place, look, aspect, framed) {
   probe.updateProjectionMatrix();
   probe.updateMatrixWorld(true);
   const subject = Math.min(...framed.map((s) => s.head.distanceTo(position)));
-  let covered = 0;
-  let rays = 0;
+  /** Is there furniture along this ray (a point of the picture), nearer than `far`? */
+  const blocked = (x, y, far) => {
+    raycaster.setFromCamera(new THREE.Vector2(x, y), probe);
+    raycaster.far = far;
+    // The floor, rugs, walls and ceiling don't count: only furniture standing in the way.
+    return raycaster
+      .intersectObjects(place.meshes, false)
+      .some((h) => h.point.y > 0.2 && radius(h.object) < 12);
+  };
+  let middle = 0;
   for (let gx = -2; gx <= 2; gx++) {
-    for (let gy = -2; gy <= 2; gy++) {
-      rays++;
-      raycaster.setFromCamera(new THREE.Vector2(gx * 0.32, gy * 0.32), probe);
-      raycaster.far = subject * 0.75;
-      // The floor, rugs, walls and ceiling don't count: only furniture standing in the way.
-      const hit = raycaster
-        .intersectObjects(place.meshes, false)
-        .find((h) => h.point.y > 0.2 && radius(h.object) < 12);
-      if (hit) covered++;
-    }
+    for (let gy = -2; gy <= 2; gy++) if (blocked(gx * 0.32, gy * 0.32, subject * 0.75)) middle++;
   }
-  return cost + Math.max(0, covered / rays - 0.2);
+  // The whole picture, edges too: furniture close to the camera (a slab of shelf down one side) covering more
+  // than an eighth of it.
+  let near = 0;
+  for (let gx = -3; gx <= 3; gx++) {
+    for (let gy = -3; gy <= 3; gy++) if (blocked(gx * 0.31, gy * 0.31, subject * 0.45)) near++;
+  }
+  return cost + Math.max(0, middle / 25 - 0.2) + Math.max(0, near / 49 - 0.125);
 }
 
 /**
  * The look (quality level) to draw with: `SETTINGS.look` when the story sets one, `?look=` in the page's address;
- * else the live preview in Kairos
- * (`?kairos=preview`) gets "standard", frames and renders get "cinematic", one level lighter each when the browser
- * draws without a graphics card (software drawing). Only the finish changes: where people are, how they move and the
- * physics are the same at every level.
+ * else the live preview in Kairos (`?kairos=preview`) gets "standard", frames and renders get "cinematic", and
+ * "draft" whenever the browser draws without a graphics card (software drawing: a computer without one, or a render
+ * where you chose not to use it). Only the finish changes: where people are, how they move and the physics are the
+ * same at every level.
  */
 function chooseLook(renderer, settings) {
   const looks = ["draft", "standard", "cinematic"];
@@ -194,8 +246,8 @@ function chooseLook(renderer, settings) {
   const software = /swiftshader|llvmpipe|software|basic render/i.test(gpu);
   const preview =
     new URLSearchParams(globalThis.location?.search ?? "").get("kairos") === "preview";
-  if (preview) return software ? "draft" : "standard";
-  return software ? "standard" : "cinematic";
+  if (software) return "draft";
+  return preview ? "standard" : "cinematic";
 }
 
 /** A soft round shadow texture (the contact shadow under someone's feet). */
@@ -725,18 +777,21 @@ export function createEngine({ width: W, height: H, story }) {
         const samples = moments.map((time) => ({ time, still: stillAt(time) }));
         const costOf = (turn, rise) =>
           samples.reduce((sum, { time, still }) => {
-            const look = frameShot({
-              shot,
-              subjects: still,
-              place,
-              aspect: W / H,
-              u: time - start,
-              seconds,
-              index,
-              object,
-              extraTurn: turn,
-              extraRise: rise,
-            });
+            const look = fitInRoom(
+              frameShot({
+                shot,
+                subjects: still,
+                place,
+                aspect: W / H,
+                u: time - start,
+                seconds,
+                index,
+                object,
+                extraTurn: turn,
+                extraRise: rise,
+              }),
+              layout,
+            );
             const framed = close ? still.slice(0, 1) : still;
             const people = close && viewBlocked(look.position, look.target, still.slice(1)) ? 1 : 0;
             return sum + people + furnitureInView(place, look, W / H, framed);
@@ -777,23 +832,11 @@ export function createEngine({ width: W, height: H, story }) {
     }
     scene.updateMatrixWorld(true);
 
-    const view = frameShot({
-      shot,
-      subjects,
-      place,
-      aspect: W / H,
-      u,
-      seconds,
-      index,
-      object,
-      extraTurn,
-      extraRise,
-    });
-    if (shot.move === "pan" && shotMoves.length) {
-      // The camera stays where it framed the walk's start and turns to keep the walker in the picture.
-      const from = frameShot({
+    // Inside the room, clear of furniture (a camera that would stand behind a wall moves in with a wider lens).
+    const view = fitInRoom(
+      frameShot({
         shot,
-        subjects: subjectsAt(t, true),
+        subjects,
         place,
         aspect: W / H,
         u,
@@ -802,7 +845,26 @@ export function createEngine({ width: W, height: H, story }) {
         object,
         extraTurn,
         extraRise,
-      });
+      }),
+      layout,
+    );
+    if (shot.move === "pan" && shotMoves.length) {
+      // The camera stays where it framed the walk's start and turns to keep the walker in the picture.
+      const from = fitInRoom(
+        frameShot({
+          shot,
+          subjects: subjectsAt(t, true),
+          place,
+          aspect: W / H,
+          u,
+          seconds,
+          index,
+          object,
+          extraTurn,
+          extraRise,
+        }),
+        layout,
+      );
       view.position.copy(from.position);
       view.focus = view.position.distanceTo(subjects[0]?.head ?? view.target);
     }

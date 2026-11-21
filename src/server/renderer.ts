@@ -157,6 +157,7 @@ export class Renderer {
       state: "queued",
       quality: input.quality,
       encoder,
+      gpu: input.gpu,
       done: 0,
       total: frameCount(config.duration, config.fps),
       queuedAt: new Date().toISOString(),
@@ -271,7 +272,8 @@ export class Renderer {
       const worker = async () => {
         // Each worker gets its own browser: one browser takes its screenshots one at a time,
         // so separate browsers render about 3x faster than windows of one browser.
-        const browser = await launchHeadless(browserInfo);
+        // Without the graphics card, the browser draws with the processor (films pick a lighter look).
+        const browser = await launchHeadless(browserInfo, { gpu: job.gpu });
         active.browsers.add(browser);
         try {
           if (active.cancelled) return;

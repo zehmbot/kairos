@@ -98,8 +98,8 @@ export function RenderDialog({ open, onClose, filmId, title }: RenderDialogProps
                   onChange={(event) => setGpu(event.target.checked)}
                 />
                 <span>
-                  Use the graphics card ({card.name}). Much faster. Turn it off for the very best
-                  quality with the CPU.
+                  Use the graphics card ({card.name}). Fast, and films get their richest look. Off:
+                  the processor draws and encodes the video, slower, with a lighter look.
                 </span>
               </label>
             ) : (

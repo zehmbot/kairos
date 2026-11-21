@@ -157,12 +157,15 @@ acting and cinematic light. Blocky Story is unchanged.
     getting up, carrying, throwing, flinching, reactions to feelings.
   - **`blocky/figure.js`** (`figureAt`) gives anyone's whole body at any moment, with arms aimed by IK
     (`blocky/rig.js`: the rig as numbers, its frames and blending).
-  - **Knock-downs:** a hard punch turns the one hit into ten jointed bodies; the engine draws them
-    (`applyFrames`) and blends getting up from where they lie.
+  - **Knock-downs:** a hard punch turns the one hit into eleven jointed bodies, each joint a hinge held within
+    the toy's own range (characters.js `JOINTS`). The engine draws them (`applyFrames`) and blends getting up from
+    where they lie.
 - **Never inside anything:** walks never end inside furniture (`freeSpot`), standing up makes room, and the
   planner reports people standing inside each other.
 - **The camera:** it frames from the plan, and tests each shot's view at five moments against the place's meshes
-  (furniture between it and anyone, or covering the picture), turning or rising to the clearest view.
+  (furniture between it and anyone, covering the middle of the picture, or close to the camera anywhere in it),
+  turning or rising to the clearest view. A camera that would stand behind a wall or inside furniture moves in
+  along its line with a wider lens (`fitInRoom`).
 - **The picture:**
   - **Lights:** a key, fill and rim light around each shot's camera, motivated lamps (spot lights with soft
     shadows), contact shadows under feet, exposure near normal.
@@ -173,7 +176,9 @@ acting and cinematic light. Blocky Story is unchanged.
 - **Looks** (quality levels, `chooseLook`): draft, standard and cinematic change only the finish.
   - **The preview** (`?kairos=preview` from the film page) gets standard.
   - **Frames and renders** get cinematic.
-  - **Without a graphics card,** each is one level lighter.
+  - **Without a graphics card** (software drawing: a computer without one, or a render with the card turned off),
+    everything gets draft.
+  - **`?look=`** in the page's address, or `SETTINGS.look` in story.js, forces one.
 
 ## Files: uploads, assets and references
 
@@ -199,7 +204,9 @@ film's `assets/`).
 ## Rendering
 
 `src/server/renderer.ts` turns a film into `renders/<id>-v<N>.mp4` (versions only go up; the list is
-`.kairos/renders.json`, `src/server/renders.ts`). Frames are split into chunks of about 4 s. Up to 4 workers
+`.kairos/renders.json`, `src/server/renders.ts`). The Render dialog's one switch, **Use the graphics card** (`gpu`),
+covers both the drawing and the encoding: off, the workers' browsers start with `--disable-gpu` (the processor
+draws, and films can pick a lighter look) and the processor encodes. Frames are split into chunks of about 4 s. Up to 4 workers
 (about one per 3 CPU cores and per 1.5 GB of free memory) each start **their own hidden browser**: one browser takes screenshots one at a time,
 so separate browsers are about 3× faster, and in a hidden browser only a window's front tab draws. Each worker
 calls `window.__kairos.render(t)` per frame, takes a fast PNG and streams it into its own ffmpeg (`image2pipe`),

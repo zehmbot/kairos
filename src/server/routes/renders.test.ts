@@ -37,6 +37,7 @@ const fakeRenderer = {
       state: "queued",
       quality: input.quality,
       encoder: input.gpu ? "h264_nvenc" : "libx264",
+      gpu: input.gpu,
       done: 0,
       total: 150,
       queuedAt: new Date().toISOString(),

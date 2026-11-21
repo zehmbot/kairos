@@ -5,6 +5,7 @@
 // kept, and a frame reads the two steps around its time and blends them. Nothing depends on which frames were drawn
 // before, so every render worker gets the same physics.
 import * as THREE from "three";
+import { JOINTS } from "./characters.js";
 import { layoutOf, solidsOf } from "./layouts.js";
 import { personState } from "./motion.js";
 import { GROUPS } from "./physics.js";
@@ -57,7 +58,12 @@ export function thingSpots(things) {
   return spots;
 }
 
-/** The parts of a falling figure: the rig frame each hangs from, its box (size-1 units) and where its middle is. */
+/**
+ * The parts of a falling figure: the rig frame each hangs from, its box (size-1 units), where its middle is, and its
+ * joint to its parent: a hinge around the joint's own x axis, held within the figure's range for that joint
+ * (characters.js JOINTS), so a fall never bends a toy joint further than the toy can.
+ */
+const range = (joint) => JOINTS[joint].ranges[0];
 const LIMBS = [
   { name: "pelvis", frame: "pelvis", box: [1.8, 0.6, 0.9], center: [0, 0, 0] },
   {
@@ -67,6 +73,7 @@ const LIMBS = [
     center: [0, 1, 0],
     parent: "pelvis",
     anchor: [0, 0, 0],
+    hinge: range("waist"),
   },
   {
     name: "head",
@@ -75,6 +82,7 @@ const LIMBS = [
     center: [0, 0.72, 0],
     parent: "chest",
     anchor: [0, RIG.neckY, 0],
+    hinge: range("neck"),
   },
   {
     name: "armL",
@@ -83,6 +91,7 @@ const LIMBS = [
     center: [0, -0.22, 0],
     parent: "chest",
     anchor: [RIG.shoulderX, RIG.shoulderY, 0],
+    hinge: range("shoulderL"),
   },
   {
     name: "armR",
@@ -91,7 +100,9 @@ const LIMBS = [
     center: [0, -0.22, 0],
     parent: "chest",
     anchor: [-RIG.shoulderX, RIG.shoulderY, 0],
+    hinge: range("shoulderR"),
   },
+  // Elbows bend the other way round from their angle in poses (the rig turns them by minus the angle).
   {
     name: "foreL",
     frame: "elbowL",
@@ -99,7 +110,7 @@ const LIMBS = [
     center: [0, -0.52, 0],
     parent: "armL",
     anchor: [0, -RIG.upperArm, 0],
-    hinge: [-2.5, 0],
+    hinge: [-range("elbowL")[1], -range("elbowL")[0]],
   },
   {
     name: "foreR",
@@ -108,7 +119,7 @@ const LIMBS = [
     center: [0, -0.52, 0],
     parent: "armR",
     anchor: [0, -RIG.upperArm, 0],
-    hinge: [-2.5, 0],
+    hinge: [-range("elbowR")[1], -range("elbowR")[0]],
   },
   {
     name: "thighL",
@@ -117,6 +128,7 @@ const LIMBS = [
     center: [0, -0.44, 0],
     parent: "pelvis",
     anchor: [RIG.hipX, 0, 0],
+    hinge: range("hipL"),
   },
   {
     name: "thighR",
@@ -125,6 +137,7 @@ const LIMBS = [
     center: [0, -0.44, 0],
     parent: "pelvis",
     anchor: [-RIG.hipX, 0, 0],
+    hinge: range("hipR"),
   },
   {
     name: "shinL",
@@ -133,7 +146,7 @@ const LIMBS = [
     center: [0, -0.55, 0.02],
     parent: "thighL",
     anchor: [0, -RIG.thigh, 0],
-    hinge: [0, 2.5],
+    hinge: range("kneeL"),
   },
   {
     name: "shinR",
@@ -142,7 +155,7 @@ const LIMBS = [
     center: [0, -0.55, 0.02],
     parent: "thighR",
     anchor: [0, -RIG.thigh, 0],
-    hinge: [0, 2.5],
+    hinge: range("kneeR"),
   },
 ];
 export const LIMB_NAMES = LIMBS.map((limb) => limb.name);
@@ -476,9 +489,7 @@ export function simulate(
               z: meters(limb.anchor[2] * size),
             };
             const anchorB = { x: 0, y: 0, z: 0 };
-            if (limb.hinge)
-              world.hinge(handles.get(limb.parent), handle, anchorA, anchorB, limb.hinge, 0.6);
-            else world.ballJoint(handles.get(limb.parent), handle, anchorA, anchorB);
+            world.hinge(handles.get(limb.parent), handle, anchorA, anchorB, limb.hinge, 0.6);
           }
         }
         const push = (part, speed) => {

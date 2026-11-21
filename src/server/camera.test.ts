@@ -421,6 +421,26 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
     }
   }, 300_000);
 
+  it("draws with the processor when the graphics card is turned off", async () => {
+    const browserInfo = findBrowser();
+    if (!browserInfo) throw new Error("no browser");
+    const drawer = async (gpu: boolean) => {
+      const hidden = await launchHeadless(browserInfo, { gpu });
+      try {
+        const page = await hidden.newPage();
+        return await page.evaluate(() => {
+          const gl = document.createElement("canvas").getContext("webgl2");
+          const info = gl?.getExtension("WEBGL_debug_renderer_info");
+          return gl && info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : "none";
+        });
+      } finally {
+        await hidden.close();
+      }
+    };
+    // Off: software drawing (Blocky Cinema then picks its draft look).
+    expect(await drawer(false)).toMatch(/swiftshader/i);
+  }, 60_000);
+
   it("explains when the film can't be drawn", async () => {
     await expect(
       camera.capture({

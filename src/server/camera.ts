@@ -75,8 +75,14 @@ export function findBrowser(
   return browserCandidates(platform, env).find((candidate) => exists(candidate.path)) ?? null;
 }
 
-/** Starts the browser hidden. The camera and the renderer each start their own. */
-export function launchHeadless(browser: BrowserInfo): Promise<Browser> {
+/**
+ * Starts the browser hidden. The camera and the renderer each start their own. `gpu: false` turns the graphics card
+ * off: everything is drawn by the processor (a render where you chose not to use the card).
+ */
+export function launchHeadless(
+  browser: BrowserInfo,
+  { gpu = true }: { gpu?: boolean } = {},
+): Promise<Browser> {
   return puppeteer.launch({
     executablePath: browser.path,
     headless: true,
@@ -88,6 +94,7 @@ export function launchHeadless(browser: BrowserInfo): Promise<Browser> {
       // 3D films (WebGL): fall back to software drawing when the GPU can't be used. Only the
       // user's own films are opened here, so the warning about untrusted pages doesn't apply.
       "--enable-unsafe-swiftshader",
+      ...(gpu ? [] : ["--disable-gpu"]),
     ],
   });
 }
