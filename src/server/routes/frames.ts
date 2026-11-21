@@ -124,7 +124,7 @@ export function frameRoutes(app: FastifyInstance, options: FrameRoutesOptions): 
           reply,
           404,
           "no-sheets",
-          "This film has no sheets (they come with the Blocky template).",
+          "This film has no sheets (they come with the Blocky Story and Blocky Cinema templates).",
         );
       }
       if (!camera.browser) {

@@ -122,6 +122,26 @@ describe("Skills", () => {
     expect(await stateOf("kairos-a")).toBe("on");
   });
 
+  it("removes its untouched copy of a skill it no longer ships, and nothing else", async () => {
+    await writeSkill(dirs.builtinDir, "kairos-old", "An old guide that Kairos stops shipping.");
+    await writeSkill(dirs.builtinDir, "kairos-edited", "Another old guide, edited by the user.");
+    await skills.turnOn("kairos-a");
+    await skills.turnOn("kairos-old");
+    await skills.turnOn("kairos-edited");
+    await writeFile(join(dirs.claudeDir, "kairos-edited", "mine.md"), "My notes.");
+    // A folder Kairos didn't put there, with the same kind of name.
+    await writeSkill(dirs.claudeDir, "kairos-theirs", "Someone else's skill.");
+    await rm(join(dirs.builtinDir, "kairos-old"), { recursive: true });
+    await rm(join(dirs.builtinDir, "kairos-edited"), { recursive: true });
+
+    expect(await skills.retire()).toEqual(["kairos-old"]);
+    expect(await exists(join(dirs.claudeDir, "kairos-old"))).toBe(false);
+    expect(await exists(join(dirs.claudeDir, "kairos-edited", "mine.md"))).toBe(true);
+    expect(await exists(join(dirs.claudeDir, "kairos-theirs", SKILL_FILE))).toBe(true);
+    expect(await stateOf("kairos-a")).toBe("on");
+    expect(await skills.retire()).toEqual([]);
+  });
+
   it("leaves a copy the user edited, until they press Update", async () => {
     await skills.turnOn("kairos-a");
     await writeFile(join(dirs.claudeDir, "kairos-a", "more.md"), "My edit.");
@@ -198,7 +218,6 @@ describe("the skills Kairos ships", () => {
     expect(names.sort()).toEqual([
       "kairos",
       "kairos-3d",
-      "kairos-blocky",
       "kairos-blocky-cinema",
       "kairos-blocky-story",
       "kairos-camera",

@@ -320,6 +320,27 @@ export class Skills {
   }
 
   /**
+   * Removes Kairos' copies of skills it no longer ships (taken out of the repo), so Claude stops reading an old
+   * guide. Only folders with Kairos' marker that nobody edited: an edited copy, or a folder Kairos didn't put
+   * there, stays.
+   */
+  async retire(): Promise<string[]> {
+    const sources = await this.#sources();
+    const entries = await readdir(this.#options.claudeDir, { withFileTypes: true }).catch(() => []);
+    const removed: string[] = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !SKILL_NAME_PATTERN.test(entry.name)) continue;
+      if (sources.has(entry.name)) continue;
+      const marker = await this.#marker(entry.name);
+      if (marker?.source !== "kairos") continue;
+      if ((await hashOf(this.#target(entry.name))) !== marker.hash) continue;
+      await rm(this.#target(entry.name), { recursive: true, force: true });
+      removed.push(entry.name);
+    }
+    return removed;
+  }
+
+  /**
    * Brings Kairos' copies up to date when Kairos ships a newer skill. Copies the user edited in
    * Claude's folder are left alone (the Skills page then offers Update).
    */

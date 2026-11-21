@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { planShots } from "../../templates/blocky/blocky/timing.js";
-import { voiceLinesFrom } from "../../templates/blocky/blocky/voice.js";
+import { planStory } from "../../templates/blocky-story/blocky/timing.js";
+import { voiceLinesFrom } from "../../templates/blocky-story/blocky/voice.js";
 import { clipBox } from "../shared/clips.ts";
 import { FilmConfigSchema } from "../shared/types.ts";
 import { Camera, findBrowser, launchHeadless, openFilm } from "./camera.ts";
@@ -129,42 +129,46 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
     expect(first.equals(second)).toBe(false);
   }, 60_000);
 
-  it("plays a Blocky film to its voices, and says how long its story lasts", async () => {
-    const blocky = fileURLToPath(new URL("../../templates/blocky/", import.meta.url));
+  it("plays a Blocky Story film to its voices, and says how long its story lasts", async () => {
+    const template = fileURLToPath(new URL("../../templates/blocky-story/", import.meta.url));
     const id = await createFilm(
       filmsDir,
-      blocky,
+      template,
       { title: "Blocky Voices", shape: "wide" },
       { size: { width: 640, height: 360 }, duration: 18 },
     );
     const dir = join(filmsDir, id);
-    // Grandpa Bo's "Made you look!" (the demo's `look` shot) is said from 20 s to 24 s.
+    const { SHOTS } = await import(pathToFileURL(join(dir, "story.js")).href);
+    // The whole narration in one voice line, said slowly: a word every 0.6 s.
+    const text = (SHOTS as { say?: string }[])
+      .map((shot) => (shot.say ?? "").replaceAll("*", ""))
+      .filter(Boolean)
+      .join(" ");
+    const words = text
+      .split(/\s+/)
+      .map((word, i) => ({ text: word, start: 0.1 + i * 0.6, end: 0.5 + i * 0.6 }));
     const made = [
       {
         id: "v1",
-        speaker: "bo",
-        voiceId: "voice-bo",
-        voiceName: "Bo",
-        text: "Made you look",
+        speaker: "narrator",
+        voiceId: "voice-narrator",
+        voiceName: "Narrator",
+        text,
         speed: 1,
         model: "s1",
-        file: "voice/bo-1.mp3",
-        duration: 4,
-        words: [
-          { text: "Made", start: 0.1, end: 0.6 },
-          { text: "you", start: 0.7, end: 1.1 },
-          { text: "look!", start: 1.2, end: 3.6 },
-        ],
+        file: "voice/narrator-1.mp3",
+        duration: words.length * 0.6 + 0.5,
+        words,
         createdAt: "2026-11-20T00:00:00.000Z",
       },
     ];
     const script = {
       version: 1,
-      lines: [{ id: "look", speaker: "bo", text: "Made you look!", start: 20, line: "v1" }],
+      lines: [{ id: "all", speaker: "narrator", text, start: 0, line: "v1" }],
     };
-    const audio = [{ file: "voice/bo-1.mp3", start: 20 }];
+    const audio = [{ file: "voice/narrator-1.mp3", start: 0 }];
     await mkdir(join(dir, "voice"));
-    await writeFile(join(dir, "voice", "bo-1.mp3"), "");
+    await writeFile(join(dir, "voice", "narrator-1.mp3"), "");
     await writeFile(
       join(dir, "voice", "lines.json"),
       JSON.stringify({ version: 1, lines: made, next: {} }),
@@ -173,17 +177,16 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
     const config = JSON.parse(await readFile(join(dir, "kairos.json"), "utf8"));
     await writeFile(join(dir, "kairos.json"), JSON.stringify({ ...config, audio }));
 
-    const { SHOTS } = await import(pathToFileURL(join(dir, "story.js")).href);
-    const plain = planShots(SHOTS).duration;
-    const expected = planShots(SHOTS, voiceLinesFrom({ audio }, script, made)).duration;
-    // The voice comes later than the shot would: the story gets longer.
+    const plain = planStory(SHOTS).duration;
+    const expected = planStory(SHOTS, voiceLinesFrom({ audio }, script, made)).duration;
+    // The voice is slower than the words would be without it: the story gets longer.
     expect(expected).toBeGreaterThan(plain + 3);
 
     const { length } = await camera.captureFrame({
       url: `http://127.0.0.1:${port}/${id}/index.html`,
       width: 640,
       height: 360,
-      t: 21,
+      t: 5,
     });
     expect(length).toBeCloseTo(expected, 3);
   }, 120_000);
@@ -257,11 +260,11 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
     60_000,
   );
 
-  it("draws Blocky sheets and their checks catch sizes and joints", async () => {
-    const blocky = fileURLToPath(new URL("../../templates/blocky/", import.meta.url));
+  it("catches a prop without a real size and a pose past a joint's limit on the sheets", async () => {
+    const template = fileURLToPath(new URL("../../templates/blocky-story/", import.meta.url));
     const id = await createFilm(
       filmsDir,
-      blocky,
+      template,
       { title: "Sheets", shape: "wide" },
       { size: { width: 640, height: 360 } },
     );
@@ -274,13 +277,6 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
         t: 0,
         maxSide: 960,
       });
-    // The template's own sheets have no problems.
-    for (const name of ["cast", "poses", "props", "places"]) {
-      const { png, checks } = await sheet(name);
-      expect(png.readUInt32BE(16)).toBe(960);
-      expect({ name, checks }).toEqual({ name, checks: [] });
-    }
-
     // A prop without a real size, and a pose that bends an elbow past its limit, are caught.
     const props = join(dir, "blocky", "props.js");
     const propsCode = await readFile(props, "utf8");

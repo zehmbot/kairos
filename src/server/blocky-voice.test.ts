@@ -1,104 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  BREATH,
-  LEAD,
-  lineAt,
-  linkLines,
-  planShots,
-} from "../../templates/blocky/blocky/timing.js";
-import { voiceLinesFrom } from "../../templates/blocky/blocky/voice.js";
+import { voiceLinesFrom } from "../../templates/blocky-story/blocky/voice.js";
 
-/** A voice line in film time, for the tests. */
-const line = (id: string, text: string, start: number, end: number, speaker = "narrator") => ({
-  id,
-  speaker,
-  text,
-  said: text,
-  start,
-  end,
-  words: [],
-});
-
-const round = (n: number) => Math.round(n * 1000) / 1000;
-const times = (plan: { entries: { start: number; seconds: number }[]; duration: number }) => ({
-  starts: plan.entries.map((e) => round(e.start)),
-  lengths: plan.entries.map((e) => round(e.seconds)),
-  duration: round(plan.duration),
-});
-
-describe("Blocky shots follow their voices", () => {
-  const shots = [
-    { say: "Every Sunday, Grandpa Bo", seconds: 2 },
-    { say: "told the same old joke.", seconds: 2, line: "joke" },
-    { say: "Made you look!", seconds: 1.5 },
-  ];
-
-  it("plays every shot's own seconds without voices", () => {
-    expect(times(planShots(shots))).toEqual({
-      starts: [0, 2, 4],
-      lengths: [2, 2, 1.5],
-      duration: 5.5,
-    });
-  });
-
-  it("starts spoken shots just before their lines, and a long line stretches its shot", () => {
-    const lines = [
-      line("a", "Every Sunday, Grandpa Bo", 0, 1.6),
-      line("joke", "told the same old joke", 2.5, 4.4),
-      line("c", "*Made* you look", 5, 7.6, "bo"),
-    ];
-    const plan = planShots(shots, lines);
-    expect(plan.entries.map((e: { line: { id: string } | null }) => e.line?.id)).toEqual([
-      "a",
-      "joke",
-      "c",
-    ]);
-    expect(times(plan)).toEqual({
-      starts: [0, 2.5 - LEAD, 5 - LEAD],
-      lengths: [2.5 - LEAD, 2.5, round(7.6 + BREATH - (5 - LEAD))],
-      duration: round(7.6 + BREATH),
-    });
-  });
-
-  it("moves a shot with its line, and silent shots share the time until the next voice", () => {
-    const story = [
-      { say: "Hello", seconds: 1 },
-      { seconds: 1 },
-      { seconds: 1 },
-      { say: "Goodbye", seconds: 1 },
-    ];
-    // Plenty of time: the silent shots keep their length, the last one holds until the voice.
-    const far = planShots(story, [line("h", "hello", 0, 0.8), line("g", "goodbye", 6, 7)]);
-    expect(times(far).starts).toEqual([0, 1.05, 2.05, 6 - LEAD]);
-    // Little time: they shrink.
-    const near = planShots(story, [line("h", "hello", 0, 0.8), line("g", "goodbye", 2, 3)]);
-    expect(times(near).starts[3]).toBe(round(2 - LEAD));
-    expect(near.entries[1]?.seconds).toBeLessThan(1);
-    expect(near.entries[1]?.seconds).toBeGreaterThanOrEqual(0.3);
-  });
-
-  it("links by line key first, then by words, in time order", () => {
-    const lines = [line("x", "hi there", 0, 1), line("y", "Hi there!", 2, 3)];
-    expect(linkLines([{ say: "Hi *there*" }, { say: "Hi there", line: "x" }], lines)).toEqual([
-      null,
-      lines[0],
-    ]);
-    expect(linkLines([{ say: "Hi there" }, { say: "Hi there" }], lines).map((l) => l?.id)).toEqual([
-      "x",
-      "y",
-    ]);
-  });
-
-  it("finds the line being said, and keeps it a moment after", () => {
-    const lines = [line("a", "one", 1, 2), line("b", "two", 3, 4)];
-    expect(lineAt(lines, 0.5)).toBeNull();
-    expect(lineAt(lines, 1.5)?.id).toBe("a");
-    expect(lineAt(lines, 2.2)).toBeNull();
-    expect(lineAt(lines, 2.2, 0.3)?.id).toBe("a");
-  });
-});
-
-describe("Blocky reads the film's voices", () => {
+describe("Blocky Story reads the film's voices", () => {
   const made = [
     {
       id: "v1",
@@ -151,11 +54,11 @@ describe("Blocky reads the film's voices", () => {
   });
 });
 
-describe("Blocky sizes", () => {
+describe("Blocky Story sizes", () => {
   it("sizes a built object to its real size, at the figure's scale", async () => {
-    const { PROPS } = await import("../../templates/blocky/blocky/props.js");
+    const { PROPS } = await import("../../templates/blocky-story/blocky/props.js");
     const { fitSize, longestSide, meters, UNITS_PER_METER, sizeWords } = await import(
-      "../../templates/blocky/blocky/sizes.js"
+      "../../templates/blocky-story/blocky/sizes.js"
     );
     // The mouse is built about 2 units long; it becomes 11 cm of a 1.8 m figure 5.3 units tall.
     const mouse = PROPS.mouse();

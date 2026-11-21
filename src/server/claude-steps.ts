@@ -15,11 +15,13 @@ export interface ClaudeStep {
 const fileName = (path: unknown): string =>
   typeof path === "string" && path.trim() ? (path.split(/[\\/]/).pop() ?? path) : "a file";
 
-/** `kairos-blocky` -> `Blocky`. */
-function guideName(skill: unknown): string | null {
+/** `kairos-blocky-cinema` -> `Blocky Cinema`, `kairos-3d` -> `3D`, `kairos` -> `Kairos`. */
+export function guideName(skill: unknown): string | null {
   if (typeof skill !== "string" || !skill.startsWith("kairos")) return null;
-  const name = skill.replace(/^kairos-?/, "") || "Kairos";
-  return name[0]?.toUpperCase() + name.slice(1);
+  const words = (skill.replace(/^kairos-?/, "") || "kairos").split("-").filter(Boolean);
+  return words
+    .map((word) => (word === "3d" ? "3D" : word[0]?.toUpperCase() + word.slice(1)))
+    .join(" ");
 }
 
 const seconds = (t: unknown) => `${Math.round(Number(t ?? 0) * 10) / 10} s`;

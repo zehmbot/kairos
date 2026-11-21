@@ -78,10 +78,14 @@ const skills = new Skills({
   userDir: join(kairosHome(), "skills"),
   claudeDir: claudeSkillsDir(),
 });
-// Kairos ships newer skills from time to time: refresh the copies that are on (and weren't edited).
+// Kairos ships newer skills from time to time: refresh the copies that are on (and weren't edited), and remove
+// the copies of skills it no longer ships.
 try {
   const updated = await skills.refresh();
   if (updated.length > 0) console.log(`Updated skills: ${updated.join(", ")}`);
+  const retired = await skills.retire();
+  if (retired.length > 0)
+    console.log(`Removed skills Kairos no longer ships: ${retired.join(", ")}`);
 } catch (error) {
   console.warn(`Could not update the skills: ${(error as Error).message}`);
 }

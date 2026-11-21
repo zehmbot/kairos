@@ -171,7 +171,7 @@ describe("frame route", () => {
   it("draws sheets only for films that have them", async () => {
     const none = await app.inject("/api/films/intro/sheet?name=props");
     expect(none.statusCode).toBe(404);
-    expect(none.json().message).toContain("Blocky template");
+    expect(none.json().message).toContain("Blocky Cinema templates");
   });
 
   it("checks the time", async () => {

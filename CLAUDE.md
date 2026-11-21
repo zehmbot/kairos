@@ -88,12 +88,11 @@ template starts from. It is never shown as a template card. The **Templates page
 templates' `template.json` (the template editor, `src/web/templateForm.ts`: question ids come from the question text
 and saved ids are kept, so earlier briefs still match); Kairos' templates can only be duplicated.
 
-**Blocky** (`templates/blocky/`) is a template with an engine: Claude writes the shot list in `story.js` (places,
-shot types, the cast, faces, poses, captions) and `blocky/*.js` turns it into frames: three.js toy figures with
-drawn faces, six places with day/evening/night light, framing computed for any film size, word-by-word captions
-and icons on a 2D layer, and bloom, focus blur, vignette and grain. Lights stay dim and the exposure high, so only
-lamps, windows and fire glow. Everything is a pure function of `t` (seeded randomness only). The `kairos-blocky`
-skill is its style guide. **Real sizes and jointed figures:** `blocky/sizes.js` sets one scale (an adult figure
+**The Blocky engine** is in two templates, Blocky Story and Blocky Cinema, each with its own copy in `blocky/`:
+Claude writes the shot list in `story.js` (places, shot types, the cast, faces, poses, captions) and `blocky/*.js`
+turns it into frames: three.js toy figures with drawn faces, six places with day/evening/night light, framing
+computed for any film size, word-by-word captions and icons on a 2D layer, and bloom, focus blur, vignette and
+grain. Everything is a pure function of `t` (seeded randomness only). **Real sizes and jointed figures:** `blocky/sizes.js` sets one scale (an adult figure
 is 5.3 units = 1.8 m) and every prop's real size; the engine fits each prop to it (`fitSize`), places use it, and
 seats sit at the figures' knee height. Figures are jointed toys (`characters.js`: neck, waist, shoulders, elbows,
 wrists, hips, knees, ankles, each with a rounded cap and a range in `JOINTS`; `apply(pose)` clamps and reports
@@ -103,17 +102,16 @@ past their limits, parts off the body, doors, tables and seats at the wrong size
 film server adds the bridge to a film's other top-level pages, `GET /api/films/:id/sheet` draws one with the camera
 (problems in `x-kairos-checks`), the film page's Sheets tab shows them (`hasSheets`), and Claude uses
 `kairos_sheet`. **The voice leads:** `blocky/voice.js` reads the film's voices while it loads
-(`kairos.json` clips, `voice/script.json`, `voice/lines.json`), and `blocky/timing.js` (`planShots`) starts each
-spoken shot just before its line (a shot names it with `line`, the script line's `id`, or has the same words).
-Captions show the voice's real words, and the speaker's mouth moves on them. The story's length goes to
+(`kairos.json` clips, `voice/script.json`, `voice/lines.json`), and `blocky/timing.js` cuts the shots on the
+voice's real words (below). Captions show those words, and the speaker's mouth moves on them. The story's length goes to
 `window.KAIROS_LENGTH`: the bridge sends it with `ready`, the film page offers **Make it N s** when it differs from
 `duration`, and the frame route answers it in `x-kairos-story-length` (so `kairos_frame` tells Claude). Its
 characters and world are our own: never a game's or brand's name, logos or
 avatars. Biome checks the template's code too, so placeholders in `.js` are written inside strings
 (`Number("{{width}}")`).
 
-**Blocky Story** (`templates/blocky-story/`, its guide the `kairos-blocky-story` skill) is the new Blocky, built
-next to the old one until it replaces it. Its engine is a copy of Blocky's, reorganized around two ideas:
+**Blocky Story** (`templates/blocky-story/`, its guide the `kairos-blocky-story` skill) is built around two ideas
+(its lights stay dim and the exposure high, so only lamps, windows and fire glow):
 
 - **The narration never stops.** `blocky/timing.js` (`planStory`) treats all the shots' `say` as one stream of
   words (the voice's real words, `wordStream`, or ~2.6 words per second without voices): each shot cuts in just

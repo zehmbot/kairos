@@ -31,7 +31,7 @@ export interface Film {
   updatedAt: number;
   /** Made with a brief (`.kairos/brief.json`). */
   hasBrief: boolean;
-  /** The film has sheets (`sheet.html`, from the Blocky template): every character, pose, prop and place. */
+  /** The film has sheets (`sheet.html`, from a Blocky template): every character, pose, prop and place. */
   hasSheets: boolean;
 }
 

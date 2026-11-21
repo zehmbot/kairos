@@ -118,12 +118,17 @@ describe("sounds", () => {
 });
 
 describe("sheets", () => {
-  it("knows which films have sheets (the Blocky template's sheet.html)", async () => {
+  it("knows which films have sheets (a Blocky template's sheet.html)", async () => {
     expect((await film()).hasSheets).toBe(false);
     const made = await app.inject({
       method: "POST",
       url: "/api/films",
-      payload: { title: "Toy", shape: "wide", template: "blocky", brief: { story: "A test." } },
+      payload: {
+        title: "Toy",
+        shape: "wide",
+        template: "blocky-cinema",
+        brief: { story: "A test." },
+      },
     });
     expect(made.json().hasSheets).toBe(true);
   });
