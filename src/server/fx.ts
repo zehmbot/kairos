@@ -1,5 +1,5 @@
 /**
- * Effect sounds on the timeline. A film that places sound effects (Blocky Story: `window.KAIROS_SOUNDS`, one per
+ * Effect sounds on the timeline. A film that places sound effects (Blocky Cinema: `window.KAIROS_SOUNDS`, one per
  * effect, with a key) gets them as tracks on the timeline's Effects lane (`sfx: true`, with their `key`):
  * - a new effect gets its sound;
  * - an effect that moved in the story moves its sound, unless you moved that sound yourself (`moved`), and its

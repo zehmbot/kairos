@@ -32,7 +32,7 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
   const [scenes, setScenes] = useState<FilmScene[]>([]);
   // How long the film's story lasts, when the film says (Blocky times itself to its voices).
   const [length, setLength] = useState<number | null>(null);
-  // The effect sounds the film places, when it says (Blocky Story).
+  // The effect sounds the film places, when it says (Blocky Cinema).
   const [sounds, setSounds] = useState<FilmSound[] | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [frameError, setFrameError] = useState<string | null>(null);

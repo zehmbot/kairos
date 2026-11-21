@@ -88,30 +88,29 @@ template starts from. It is never shown as a template card. The **Templates page
 templates' `template.json` (the template editor, `src/web/templateForm.ts`: question ids come from the question text
 and saved ids are kept, so earlier briefs still match); Kairos' templates can only be duplicated.
 
-**The Blocky engine** is in two templates, Blocky Story and Blocky Cinema, each with its own copy in `blocky/`:
-Claude writes the shot list in `story.js` (places, shot types, the cast, faces, poses, captions) and `blocky/*.js`
-turns it into frames: three.js toy figures with drawn faces, six places with day/evening/night light, framing
-computed for any film size, word-by-word captions and icons on a 2D layer, and bloom, focus blur, vignette and
-grain. Everything is a pure function of `t` (seeded randomness only). **Real sizes and jointed figures:** `blocky/sizes.js` sets one scale (an adult figure
-is 5.3 units = 1.8 m) and every prop's real size; the engine fits each prop to it (`fitSize`), places use it, and
-seats sit at the figures' knee height. Figures are jointed toys (`characters.js`: neck, waist, shoulders, elbows,
-wrists, hips, knees, ankles, each with a rounded cap and a range in `JOINTS`; `apply(pose)` clamps and reports
-what a pose asked past a limit). **Sheets:** `sheet.html` + `blocky/sheet.js` draw the cast, poses, faces, props
-or a place on one 1920×1080 picture and leave the problems their checks found (unsized or mis-sized props, joints
-past their limits, parts off the body, doors, tables and seats at the wrong size) in `window.KAIROS_CHECKS`. The
-film server adds the bridge to a film's other top-level pages, `GET /api/films/:id/sheet` draws one with the camera
-(problems in `x-kairos-checks`), the film page's Sheets tab shows them (`hasSheets`), and Claude uses
-`kairos_sheet`. **The voice leads:** `blocky/voice.js` reads the film's voices while it loads
-(`kairos.json` clips, `voice/script.json`, `voice/lines.json`), and `blocky/timing.js` cuts the shots on the
-voice's real words (below). Captions show those words, and the speaker's mouth moves on them. The story's length goes to
-`window.KAIROS_LENGTH`: the bridge sends it with `ready`, the film page offers **Make it N s** when it differs from
-`duration`, and the frame route answers it in `x-kairos-story-length` (so `kairos_frame` tells Claude). Its
-characters and world are our own: never a game's or brand's name, logos or
-avatars. Biome checks the template's code too, so placeholders in `.js` are written inside strings
-(`Number("{{width}}")`).
+**Blocky Cinema** (`templates/blocky-cinema/`, its guide the `kairos-blocky-cinema` skill) is a template with an
+engine: Claude writes the shot list in `story.js` (places, shot types, the cast, faces, poses, walks, actions,
+things, effects, captions) and `blocky/*.js` turns it into frames: three.js toy figures with drawn faces, six places
+with day/evening/night light, framing computed for any film size, word-by-word captions and icons on a 2D layer, and
+bloom, focus blur, vignette and grain. Everything is a pure function of `t` (seeded randomness only). **Real sizes
+and jointed figures:** `blocky/sizes.js` sets one scale (an adult figure is 5.3 units = 1.8 m) and every prop's real
+size; the engine fits each prop to it (`fitSize`), places use it, and seats sit at the figures' knee height. Figures
+are jointed toys (`characters.js`: neck, waist, shoulders, elbows, wrists, hips, knees, ankles, each with a rounded
+cap and a range in `JOINTS`; `apply(pose)` clamps and reports what a pose asked past a limit). **Sheets:**
+`sheet.html` + `blocky/sheet.js` draw the cast, poses, faces, props or a place on one 1920×1080 picture and leave
+the problems their checks found (unsized or mis-sized props, joints past their limits, parts off the body, doors,
+tables and seats at the wrong size) in `window.KAIROS_CHECKS`. The film server adds the bridge to a film's other
+top-level pages, `GET /api/films/:id/sheet` draws one with the camera (problems in `x-kairos-checks`), the film
+page's Sheets tab shows them (`hasSheets`), and Claude uses `kairos_sheet`. **The voice leads:** `blocky/voice.js`
+reads the film's voices while it loads (`kairos.json` clips, `voice/script.json`, `voice/lines.json`), and
+`blocky/timing.js` cuts the shots on the voice's real words (below). Captions show those words, and the speaker's
+mouth moves on them. The story's length goes to `window.KAIROS_LENGTH`: the bridge sends it with `ready`, the film
+page offers **Make it N s** when it differs from `duration`, and the frame route answers it in
+`x-kairos-story-length` (so `kairos_frame` tells Claude). Its characters and world are our own: never a game's or
+brand's name, logos or avatars. Biome checks the template's code too, so placeholders in `.js` are written inside
+strings (`Number("{{width}}")`).
 
-**Blocky Story** (`templates/blocky-story/`, its guide the `kairos-blocky-story` skill) is built around two ideas
-(its lights stay dim and the exposure high, so only lamps, windows and fire glow):
+Its engine:
 
 - **The narration never stops.** `blocky/timing.js` (`planStory`) treats all the shots' `say` as one stream of
   words (the voice's real words, `wordStream`, or ~2.6 words per second without voices): each shot cuts in just
@@ -138,9 +137,6 @@ avatars. Biome checks the template's code too, so placeholders in `.js` are writ
   - **Runs:** they bring dust and a `patter` sound.
   - **The Moves sheet:** it shows the gaits and the sit and stand transitions, and checks the story's walks and
     that feet don't slide.
-
-**Blocky Cinema** (`templates/blocky-cinema/`, being tried out; its guide the `kairos-blocky-cinema` skill) is a
-copy of Blocky Story's engine with physics, acting and cinematic light. Blocky Story is unchanged.
 
 - **Physics** (`blocky/physics.js`, the only file that imports Rapier's deterministic build, served by the film
   server at `RAPIER_PATH`; `blocky/simulation.js`):
@@ -248,7 +244,7 @@ boom, sparkle, magic, puff, flash, chime, party, heart, patter) from code: filte
 seeded, 44.1 kHz WAV, peaks at 0.8. `GET /api/sounds` lists them, `GET /api/sounds/:name` plays one, and a film
 gets its copy in `audio/fx/` when it uses one. Effect sounds start at 65% (a volume you set is kept: `tuned`). Effect tracks have `sfx: true` and sit on the timeline's **Effects** lane:
 
-- **A film that places sounds** (Blocky Story) sends them with `ready`; the film page puts them to
+- **A film that places sounds** (Blocky Cinema) sends them with `ready`; the film page puts them to
   `PUT /api/films/:id/fx`, and a render syncs them from its first page before mixing. `src/server/fx.ts`
   (`withEffectSounds`) adds new keys, moves keys whose time changed, and removes keys that are gone.
 - **Your edits stay:** saving the timeline (`noteEffectEdits`) marks a placed sound you moved (`moved`: it keeps
@@ -322,7 +318,7 @@ yours).
 
 - **Making it** turns each line into a voice line (unchanged ones reused) and places it at its start, after the
   line before when they would overlap; the moved start is saved. `only` + `fresh` make a new take of some lines.
-- **Packed narration** (`narration: "packed"` in `kairos.json`, Blocky Story): the lines go back to back in script
+- **Packed narration** (`narration: "packed"` in `kairos.json`, Blocky Cinema): the lines go back to back in script
   order, each clip trimmed to its words (`trimToWords`: `from`/`length`), 0.12 s apart (0.28 s after a sentence),
   so the voice never stops. Starts only give the order. A timeline change that moves or removes a voice clip packs
   them again, and "Write the narration" asks Claude for continuous narration.

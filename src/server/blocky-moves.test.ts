@@ -1,7 +1,7 @@
 // @ts-expect-error: three ships without type declarations in this project.
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { FX_SOUNDS, moveEffects } from "../../templates/blocky-story/blocky/fx.js";
+import { FX_SOUNDS, moveEffects } from "../../templates/blocky-cinema/blocky/fx.js";
 import {
   CLEARANCE,
   crossesBlock,
@@ -11,7 +11,7 @@ import {
   personState,
   planMotion,
   speedProfile,
-} from "../../templates/blocky-story/blocky/motion.js";
+} from "../../templates/blocky-cinema/blocky/motion.js";
 import {
   ANKLE_Y,
   blendPoses,
@@ -26,9 +26,9 @@ import {
   sitDownPose,
   speedOf,
   standUpPose,
-} from "../../templates/blocky-story/blocky/poses.js";
-import { cameraSide, viewBlocked } from "../../templates/blocky-story/blocky/shots.js";
-import { planStory } from "../../templates/blocky-story/blocky/timing.js";
+} from "../../templates/blocky-cinema/blocky/poses.js";
+import { cameraSide, viewBlocked } from "../../templates/blocky-cinema/blocky/shots.js";
+import { planStory } from "../../templates/blocky-cinema/blocky/timing.js";
 import { SOUND_NAMES } from "./sounds.ts";
 
 type Move = {
@@ -75,7 +75,7 @@ const plan = (shots: object[], places: string[] = []) => {
 const close = (a: number, b: number, digits = 4) => expect(a).toBeCloseTo(b, digits);
 const LIMITS = { leg: [-2.3, 1.0], knee: [0, 2.6], ankle: [-0.8, 0.8] };
 
-describe("Blocky Story legs: the feet stay where they are", () => {
+describe("Blocky Cinema legs: the feet stay where they are", () => {
   it("finds the leg angles for a foot, and the foot for the angles", () => {
     for (const [z, y] of [
       [0, -1.6],
@@ -148,7 +148,7 @@ describe("Blocky Story legs: the feet stay where they are", () => {
   });
 });
 
-describe("Blocky Story walks", () => {
+describe("Blocky Cinema walks", () => {
   it("turns toward the way first, speeds up, slows down, turns around and sits down", () => {
     const { moves, motion } = plan([
       { who: ["milo"], at: { milo: "front" }, go: { milo: "seat" }, say: words(16) },
@@ -310,7 +310,7 @@ describe("Blocky Story walks", () => {
   });
 });
 
-describe("Blocky Story runs and the camera", () => {
+describe("Blocky Cinema runs and the camera", () => {
   it("puts dust where a run sets off and stops, and the patter of feet on the Effects lane", () => {
     const shots = [
       {

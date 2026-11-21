@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { planStory } from "../../templates/blocky-story/blocky/timing.js";
-import { voiceLinesFrom } from "../../templates/blocky-story/blocky/voice.js";
+import { planStory } from "../../templates/blocky-cinema/blocky/timing.js";
+import { voiceLinesFrom } from "../../templates/blocky-cinema/blocky/voice.js";
 import { clipBox } from "../shared/clips.ts";
 import { FilmConfigSchema } from "../shared/types.ts";
 import { Camera, findBrowser, launchHeadless, openFilm } from "./camera.ts";
@@ -129,8 +129,8 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
     expect(first.equals(second)).toBe(false);
   }, 60_000);
 
-  it("plays a Blocky Story film to its voices, and says how long its story lasts", async () => {
-    const template = fileURLToPath(new URL("../../templates/blocky-story/", import.meta.url));
+  it("plays a Blocky Cinema film to its voices, and says how long its story lasts", async () => {
+    const template = fileURLToPath(new URL("../../templates/blocky-cinema/", import.meta.url));
     const id = await createFilm(
       filmsDir,
       template,
@@ -261,7 +261,7 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
   );
 
   it("catches a prop without a real size and a pose past a joint's limit on the sheets", async () => {
-    const template = fileURLToPath(new URL("../../templates/blocky-story/", import.meta.url));
+    const template = fileURLToPath(new URL("../../templates/blocky-cinema/", import.meta.url));
     const id = await createFilm(
       filmsDir,
       template,
@@ -304,8 +304,8 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
     ]);
   }, 180_000);
 
-  it("draws Blocky Story's sheets, effects and moves included, and catches a wrong effect and walk", async () => {
-    const template = fileURLToPath(new URL("../../templates/blocky-story/", import.meta.url));
+  it("catches a wrong effect and a walk to nowhere on the effects and moves sheets", async () => {
+    const template = fileURLToPath(new URL("../../templates/blocky-cinema/", import.meta.url));
     const id = await createFilm(
       filmsDir,
       template,
@@ -321,38 +321,30 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
         t: 0,
         maxSide: 960,
       });
-    for (const name of ["cast", "poses", "props", "places", "effects", "moves"]) {
-      const { checks } = await sheet(name);
-      expect({ name, checks }).toEqual({ name, checks: [] });
-    }
-    // The film itself: it times its story and places its effect sounds.
-    const frame = await camera.captureFrame({
-      url: `http://127.0.0.1:${port}/${id}/`,
-      width: 360,
-      height: 640,
-      t: 3,
-    });
-    expect(frame.length).toBeGreaterThan(20);
-
     const storyFile = join(dir, "story.js");
     const story = await readFile(storyFile, "utf8");
+    const punch = 'act: { theo: { punch: "milo", at: "all.", hard: true } },';
+    expect(story).toContain(punch);
     await writeFile(
       storyFile,
-      story.replace(
-        'fx: [{ punch: true, at: "secret" }],',
-        'fx: [{ sparkle: true }, { punch: true, at: "secrets" }],',
-      ),
+      story.replace(punch, `${punch} fx: [{ sparkle: true }, { punch: true, at: "everything" }],`),
     );
     expect((await sheet("effects")).checks).toEqual([
-      expect.stringContaining('Shot 2: "sparkle" isn\'t an effect.'),
+      expect.stringContaining('Shot 4: "sparkle" isn\'t an effect.'),
       expect.stringContaining(
-        'Shot 2: punch is on "secrets", but the shot doesn\'t say that word.',
+        'Shot 4: punch is on "everything", but the shot doesn\'t say that word.',
       ),
     ]);
     // A walk to a spot the place doesn't have.
-    await writeFile(storyFile, story.replace('go: { milo: "sofaR" },', 'go: { milo: "kitchen" },'));
+    await writeFile(
+      storyFile,
+      story.replace('go: { milo: "pillow" },', 'go: { milo: "kitchen" },'),
+    );
     expect((await sheet("moves")).checks).toEqual([
-      expect.stringContaining('Shot 4: Milo can\'t go to "kitchen": home has center, left, right'),
+      expect.stringContaining('Shot 6: Milo can\'t go to "kitchen": home has center, left, right'),
+      // What depended on the walk says so too.
+      expect.stringContaining("Shot 6: Milo is too far from the pillow to pick it up"),
+      expect.stringContaining("Shot 7: Milo throws, but holds nothing"),
     ]);
   }, 240_000);
 

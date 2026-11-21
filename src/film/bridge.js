@@ -101,7 +101,7 @@
     return Number.isFinite(length) && length > 0 ? { length } : {};
   }
 
-  /** The effect sounds the film places (`window.KAIROS_SOUNDS`), when it says (Blocky Story). */
+  /** The effect sounds the film places (`window.KAIROS_SOUNDS`), when it says (Blocky Cinema). */
   function readSounds() {
     const raw = window.KAIROS_SOUNDS;
     if (!Array.isArray(raw)) return {};

@@ -74,5 +74,5 @@ When the Kairos tools are connected (Kairos → Settings → Claude Code), use t
 
 Kairos adds skills to Claude Code (turn them on or off in Kairos → Skills). Use them when they fit: `kairos` (how
 this folder works), `kairos-directing` (idea, shots, rhythm), `kairos-camera` (framing, lenses, camera moves),
-`kairos-3d` (three.js films) and `kairos-captions` (words on screen). Films made with the Blocky Story or Blocky
-Cinema templates have their own guides: `kairos-blocky-story` and `kairos-blocky-cinema`.
+`kairos-3d` (three.js films), `kairos-captions` (words on screen) and `kairos-blocky-cinema` (films made with the
+Blocky Cinema template).

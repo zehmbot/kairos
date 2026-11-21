@@ -454,7 +454,7 @@ describe("Kairos tools", () => {
     // A film without sheets says where they come from.
     const none = await call("kairos_sheet", { sheet: "props" });
     expect(none.isError).toBe(true);
-    expect(texts(none)).toContain("they come with the Blocky Story and Blocky Cinema templates");
+    expect(texts(none)).toContain("they come with the Blocky Cinema template");
 
     hub.films_ = hub.films_.map((entry) => ({ ...entry, hasSheets: true }));
     hub.sheetChecks = [

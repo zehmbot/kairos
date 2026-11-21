@@ -228,5 +228,5 @@ The kairos-3d skill has the details.
 
 For the craft of the video itself, use the other Kairos skills when they fit: kairos-directing (idea, shots,
 rhythm), kairos-camera (framing, lenses, camera moves), kairos-3d (three.js) and kairos-captions (on-screen words).
-Films made with a Blocky template (a `story.js` and a `blocky/` folder) are directed with kairos-blocky-cinema
-(Blocky Cinema: it has `blocky/physics.js`) or kairos-blocky-story (Blocky Story).
+Films made with the Blocky Cinema template (a `story.js` and a `blocky/` folder) are directed with
+kairos-blocky-cinema.

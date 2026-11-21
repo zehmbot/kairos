@@ -17,7 +17,7 @@ export interface SoundInfo {
   label: string;
 }
 
-/** Every sound, in menu order. Keep in step with FX_SOUNDS in the Blocky Story engine (fx.js). */
+/** Every sound, in menu order. Keep in step with FX_SOUNDS in the Blocky Cinema engine (fx.js). */
 export const SOUNDS: readonly SoundInfo[] = [
   { name: "whoosh", label: "Whoosh" },
   { name: "swish", label: "Quick swish" },

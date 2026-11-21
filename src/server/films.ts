@@ -82,7 +82,8 @@ async function lastChange(dir: string): Promise<number> {
         ),
       ),
   );
-  return Math.round(Math.max(0, ...times));
+  // Rounded down: a picture or file written in the same millisecond is never older than the film.
+  return Math.floor(Math.max(0, ...times));
 }
 
 /** Reads one film. Returns `null` when `id` is not a film folder. */

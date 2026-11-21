@@ -157,7 +157,7 @@ export function FilmPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   // How long the film says its story lasts (a Blocky film follows its voices).
   const [storyLength, setStoryLength] = useState<number | null>(null);
-  // The effect sounds the film places (Blocky Story): sent to Kairos when they change, for the Effects lane.
+  // The effect sounds the film places (Blocky Cinema): sent to Kairos when they change, for the Effects lane.
   const sentSounds = useRef<string | null>(null);
   const onSounds = useCallback(
     (sounds: FilmSound[] | null) => {

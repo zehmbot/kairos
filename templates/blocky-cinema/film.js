@@ -1,4 +1,4 @@
-// A Blocky Story film. The story lives in story.js; the engine in blocky/ turns it into frames.
+// A Blocky Cinema film. The story lives in story.js; the engine in blocky/ turns it into frames.
 import { createEngine } from "./blocky/engine.js";
 import * as story from "./story.js";
 
