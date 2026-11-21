@@ -58,6 +58,7 @@ export const FX_SOUNDS = [
   "chime",
   "party",
   "heart",
+  "patter",
 ];
 
 /** Old shot keys still work: icons become particles. */
@@ -139,6 +140,87 @@ export function planEffects(entries) {
         volume: FX_VOLUME,
         options: {},
       });
+    }
+  }
+  return events;
+}
+
+/** How often a long run's patter of feet plays again (the sound lasts about this long). */
+export const PATTER_EVERY = 1.2;
+
+/**
+ * The effects of running (motion.js moves): a puff of dust where a run sets off and where it stops, and the patter
+ * of feet while it goes on. Walking stays quiet. Keys come from the shot the run is in, so they stay the same.
+ */
+export function moveEffects(moves, entries) {
+  const events = [];
+  const entryAt = (t) => (entries.findLast((e) => e.start <= t) ?? entries[0])?.index ?? 0;
+  for (const move of moves) {
+    for (const stage of move.stages ?? []) {
+      if (stage.kind !== "travel" || stage.pace !== "run") continue;
+      const asked = entries[move.entry]?.shot ?? {};
+      const base = `${(hash(`${asked.say ?? ""}|${asked.place ?? ""}|${move.id}`) >>> 0).toString(36)}-run`;
+      const from = stage.path.at(0);
+      const to = stage.path.at(stage.path.length);
+      if (!move.enters) {
+        events.push({
+          key: `${base}-0`,
+          type: "dust",
+          entry: entryAt(stage.t0),
+          t0: stage.t0,
+          t1: stage.t0 + FX.dust.length,
+          on: move.id,
+          point: { x: from.x, z: from.z, y: move.start.y ?? 0 },
+          text: "",
+          sound: "patter",
+          volume: FX_VOLUME,
+          options: {},
+        });
+      } else {
+        events.push({
+          key: `${base}-0`,
+          type: "steps",
+          entry: entryAt(stage.t0),
+          t0: stage.t0,
+          t1: stage.t0 + 0.2,
+          on: move.id,
+          text: "",
+          sound: "patter",
+          volume: FX_VOLUME,
+          options: {},
+        });
+      }
+      let n = 1;
+      for (let t = stage.t0 + PATTER_EVERY; t < stage.t1 - 0.4; t += PATTER_EVERY) {
+        events.push({
+          key: `${base}-${n++}`,
+          type: "steps",
+          entry: entryAt(t),
+          t0: t,
+          t1: t + 0.2,
+          on: move.id,
+          text: "",
+          sound: "patter",
+          volume: FX_VOLUME,
+          options: {},
+        });
+      }
+      if (!move.exits) {
+        const stop = Math.max(stage.t0, stage.t1 - 0.12);
+        events.push({
+          key: `${base}-stop`,
+          type: "dust",
+          entry: entryAt(stop),
+          t0: stop,
+          t1: stop + FX.dust.length,
+          on: move.id,
+          point: { x: to.x, z: to.z, y: move.end.y ?? 0 },
+          text: "",
+          sound: null,
+          volume: FX_VOLUME,
+          options: {},
+        });
+      }
     }
   }
   return events;
@@ -285,8 +367,8 @@ function counted(text, k) {
 }
 
 /**
- * Draws the effects of the current shot. `view`: `{ W, H, headAt(id) -> {x,y,r}|null, ringAt(id, radius, n) ->
- * [[x,y]...]|null, focus }` (the focus is the shot's main character).
+ * Draws the effects of the current shot. `view`: `{ W, H, headAt(id) -> {x,y,r}|null, ringAt(id or {x,y,z},
+ * radius, n) -> [[x,y]...]|null, focus }` (the focus is the shot's main character).
  */
 export function drawEffects(ctx, events, entry, t, view) {
   const { W, H } = view;
@@ -402,7 +484,8 @@ export function drawEffects(ctx, events, entry, t, view) {
         break;
       }
       case "dust": {
-        const ring = e.on ? view.ringAt(e.on, 0.9, 8) : null;
+        // Around someone, or where a run set off or stopped.
+        const ring = e.point || e.on ? view.ringAt(e.point ?? e.on, 0.9, 8) : null;
         if (!ring) break;
         ring.forEach(([x, y], i) => {
           const k = clamp(u / 0.8);

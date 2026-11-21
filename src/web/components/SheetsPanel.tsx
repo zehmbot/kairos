@@ -10,6 +10,7 @@ const SHEETS = [
   ["props", "Props"],
   ["places", "Places"],
   ["effects", "Effects"],
+  ["moves", "Moves"],
 ] as const;
 const PLACES = ["home", "bedroom", "school", "town", "park", "forest"];
 

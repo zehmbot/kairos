@@ -34,6 +34,7 @@ export const SOUNDS: readonly SoundInfo[] = [
   { name: "chime", label: "Chime" },
   { name: "party", label: "Party" },
   { name: "heart", label: "Heart" },
+  { name: "patter", label: "Running feet" },
 ];
 export const SOUND_NAMES = SOUNDS.map((sound) => sound.name);
 
@@ -317,6 +318,42 @@ const SYNTH: Record<string, () => Float32Array> = {
       ),
       0.16,
     );
+  },
+  // Quick running feet: soft thumps with a scuff, a little uneven (about four steps a second).
+  patter: () => {
+    const out = new Float32Array(Math.round(1.15 * RATE));
+    const random = seeded(29);
+    for (let k = 0; k < 5; k++) {
+      const at = k * 0.235 + (random() - 0.5) * 0.02;
+      const gain = 0.75 + random() * 0.25;
+      mixInto(
+        out,
+        noise(
+          0.12,
+          40 + k,
+          (t) => 380 - 1200 * t,
+          (t) => env(t, 0.003, 0.028),
+          "low",
+          0.9,
+        ),
+        at,
+        gain,
+      );
+      mixInto(
+        out,
+        noise(
+          0.09,
+          60 + k,
+          () => 2600,
+          (t) => env(t, 0.004, 0.02),
+          "band",
+          1.6,
+        ),
+        at + 0.012,
+        0.28 * gain,
+      );
+    }
+    return out;
   },
 };
 

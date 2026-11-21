@@ -17,7 +17,18 @@ export const SHOT_TYPES = {
   insert: { fov: 36 },
 };
 export const SHOT_NAMES = Object.keys(SHOT_TYPES);
-export const MOVE_NAMES = ["hold", "push", "pull", "drift", "orbit", "rise", "zoom", "shake"];
+export const MOVE_NAMES = [
+  "hold",
+  "push",
+  "pull",
+  "drift",
+  "orbit",
+  "rise",
+  "zoom",
+  "shake",
+  "follow",
+  "pan",
+];
 export const ANGLES = {
   front: 0,
   left: 0.55,
@@ -34,11 +45,84 @@ const halfH = (fovDeg, aspect) =>
   Math.atan(Math.tan(THREE.MathUtils.degToRad(fovDeg) / 2) * aspect);
 
 /**
+ * Which way the camera films people from: a flat unit vector `{ x, z }` from them toward the camera, and the
+ * `forward` it starts from. Along the way they face; from the side when they face each other (on the open side of
+ * the place, where its wide shot stands); then turned by `turn`. `people`: `[{ x, z, fx, fz }]`, where each one is
+ * and which way they face. frameShot and the walks (motion.js: where "off-left" is) both use it.
+ */
+export function cameraSide(people, wide, turn = 0) {
+  let fx = 0;
+  let fz = 0;
+  for (const p of people) {
+    fx += p.fx;
+    fz += p.fz;
+  }
+  if (people.length > 1 && Math.hypot(fx, fz) < 0.5 * people.length) {
+    const a = people[0];
+    const b = people.at(-1);
+    let ax = -(b.z - a.z);
+    let az = b.x - a.x;
+    const ox = wide[0] - (a.x + b.x) / 2;
+    const oz = wide[2] - (a.z + b.z) / 2;
+    if (ax * ox + az * oz < 0) {
+      ax = -ax;
+      az = -az;
+    }
+    if (ax * ax + az * az > 1e-6) {
+      fx = ax;
+      fz = az;
+    }
+  }
+  let length = Math.hypot(fx, fz);
+  if (length < 0.1) {
+    fx = 0;
+    fz = 1;
+    length = 1;
+  }
+  fx /= length;
+  fz /= length;
+  const c = Math.cos(turn);
+  const s = Math.sin(turn);
+  return { x: fx * c + fz * s, z: -fx * s + fz * c, forward: { x: fx, z: fz } };
+}
+
+/**
+ * Is the view from `position` to `target` blocked by someone in `others` (`[{ head, size }]`): their head or chest
+ * close to the line between the camera and what it looks at?
+ */
+export function viewBlocked(position, target, others) {
+  const line = target.clone().sub(position);
+  const length = line.length();
+  if (length < 1e-6) return false;
+  line.divideScalar(length);
+  return others.some((other) =>
+    [0, -1.6].some((down) => {
+      const point = other.head.clone().add(new THREE.Vector3(0, down * other.size, 0));
+      const along = point.clone().sub(position).dot(line);
+      if (along < length * 0.04 || along > length * 0.96) return false;
+      const closest = position.clone().addScaledVector(line, along);
+      return closest.distanceTo(point) < 1.3 * other.size;
+    }),
+  );
+}
+
+/**
  * Where the camera is for this moment of the shot.
  * subjects: [{ head: Vector3, chest: Vector3, forward: Vector3, size }] (the first is the focus).
+ * `extraTurn` turns the camera around the subject (to see past someone in the way).
  * Returns { position, target, fov, focus, blur } (blur: whip motion blur 0-1).
  */
-export function frameShot({ shot, subjects, place, aspect, u, seconds, index, object }) {
+export function frameShot({
+  shot,
+  subjects,
+  place,
+  aspect,
+  u,
+  seconds,
+  index,
+  object,
+  extraTurn = 0,
+}) {
   const type =
     SHOT_TYPES[shot.shot] !== undefined ? shot.shot : subjects.length ? "medium" : "wide";
   const p = clamp(u / Math.max(seconds, 0.01));
@@ -87,13 +171,16 @@ export function frameShot({ shot, subjects, place, aspect, u, seconds, index, ob
     // Medium and wider shots frame everyone; closer shots frame the focus only.
     const framed = type === "close" || type === "xclose" ? [focus] : subjects;
     const size = Math.max(...framed.map((s) => s.size));
-    const forward = framed.reduce((sum, s) => sum.add(s.forward), new THREE.Vector3()).setY(0);
-    if (forward.lengthSq() < 0.01) forward.set(0, 0, 1);
-    forward.normalize();
-    const turn = ANGLES[shot.angle] ?? (index % 2 ? 0.32 : -0.32);
+    const turn = (ANGLES[shot.angle] ?? (index % 2 ? 0.32 : -0.32)) + extraTurn;
+    const facing = cameraSide(
+      framed.map((s) => ({ x: s.head.x, z: s.head.z, fx: s.forward.x, fz: s.forward.z })),
+      place.wide.pos,
+      turn,
+    );
+    const forward = new THREE.Vector3(facing.forward.x, 0, facing.forward.z);
     // Someone lying down is filmed from the side of the bed, from above.
     const lying = framed.every((s) => s.lying);
-    const dir = forward.clone().applyAxisAngle(up, turn);
+    const dir = new THREE.Vector3(facing.x, 0, facing.z);
     const center = framed
       .reduce((sum, s) => sum.add(s.head), new THREE.Vector3())
       .divideScalar(framed.length);
@@ -104,11 +191,21 @@ export function frameShot({ shot, subjects, place, aspect, u, seconds, index, ob
     fov = spec.fov;
     const frameH = spec.height * size;
     const frameW = spec.width * size + span;
-    const dist = Math.max(
+    const fit = Math.max(
       frameH / 2 / Math.tan(THREE.MathUtils.degToRad(fov) / 2),
       frameW / 2 / Math.tan(halfH(fov, aspect)),
     );
+    // People standing at different depths (one on the sofa, one in front of it): the camera steps back so the
+    // nearest one is as far as the framing wants, instead of the camera ending up in them.
+    const depth = Math.max(0, ...framed.map((s) => s.head.clone().sub(center).dot(dir)));
+    const dist = fit + depth;
     target = center.clone().add(new THREE.Vector3(0, -spec.eyes * frameH, 0));
+    // A group with people sitting and standing: the highest head stays in the picture (even after a push in).
+    if (framed.length > 1) {
+      const highest = Math.max(...framed.map((s) => s.head.y + 1.2 * s.size));
+      const top = target.y + (frameH / 2) * 0.86;
+      if (highest > top) target.y += highest - top;
+    }
     if (lying) {
       // From above the pillow, looking down, with the top of the head up in the picture.
       target = center.clone();

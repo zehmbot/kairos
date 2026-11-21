@@ -308,7 +308,7 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
     ]);
   }, 180_000);
 
-  it("draws Blocky Story's sheets, effects included, and catches a wrong effect", async () => {
+  it("draws Blocky Story's sheets, effects and moves included, and catches a wrong effect and walk", async () => {
     const template = fileURLToPath(new URL("../../templates/blocky-story/", import.meta.url));
     const id = await createFilm(
       filmsDir,
@@ -325,7 +325,7 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
         t: 0,
         maxSide: 960,
       });
-    for (const name of ["cast", "poses", "props", "places", "effects"]) {
+    for (const name of ["cast", "poses", "props", "places", "effects", "moves"]) {
       const { checks } = await sheet(name);
       expect({ name, checks }).toEqual({ name, checks: [] });
     }
@@ -353,7 +353,12 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
         'Shot 2: punch is on "secrets", but the shot doesn\'t say that word.',
       ),
     ]);
-  }, 180_000);
+    // A walk to a spot the place doesn't have.
+    await writeFile(storyFile, story.replace('go: { milo: "sofaR" },', 'go: { milo: "kitchen" },'));
+    expect((await sheet("moves")).checks).toEqual([
+      expect.stringContaining('Shot 4: Milo can\'t go to "kitchen": home has center, left, right'),
+    ]);
+  }, 240_000);
 
   it("explains when the film can't be drawn", async () => {
     await expect(

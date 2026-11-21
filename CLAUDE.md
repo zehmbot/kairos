@@ -126,6 +126,20 @@ next to the old one until it replaces it. Its engine is a copy of Blocky's, reor
   change the figures and the camera; `drawEffects` draws on the 2D layer. Each effect brings a sound:
   `window.KAIROS_SOUNDS` (`[{ key, sound, t, volume }]`) goes to Kairos with `ready` (see Sound effects). The
   sheets get an `effects` sheet, which also checks the story's effects.
+- **People move** (`blocky/motion.js`): a shot's `go` walks someone to a spot, up to someone, onto a seat, or in
+  and out of the picture (`off-left`, `off-right`, `off-back`), and `look` turns someone toward someone.
+  - **Planning:** `planMotion` plans every walk once: stand up, turn on the spot, speed up, go around the
+    furniture and people (`findPath` over each place's footprints in `blocky/layouts.js`), slow down, turn, sit
+    down. People who moved, sat or lay down stay so in the next shots of the same place.
+  - **Reading it:** `personState(t)` reads it back.
+  - **The feet:** the gaits in `poses.js` come from leg IK (`legIK`), and their phase is the distance walked, so
+    feet on the ground don't slide.
+  - **The camera:** it frames walkers without their bob (follow, or hold for entrances and exits;
+    `cameraSide` is shared with the planner so "off-left" is the picture's left).
+  - **Lively standing:** listeners look at the talker and at walkers, and talking hands gesture on key words.
+  - **Runs:** they bring dust and a `patter` sound.
+  - **The Moves sheet:** it shows the gaits and the sit and stand transitions, and checks the story's walks and
+    that feet don't slide.
 
 ## Files: uploads, assets and references
 
@@ -176,9 +190,9 @@ ramps), used by the preview (`duckGain`, every 50 ms) and the render (`duckExpre
 `eval=frame`). New film's "Music" (an asset) adds one; the Sound tab's "Music under the voice" turns it on.
 
 **Sound effects** (`src/server/sounds.ts`): Kairos makes its own (whoosh, swish, pop, boing, ding, count, thud,
-boom, sparkle, magic, puff, flash, chime, party, heart) from code: filtered noise and pitched tones, seeded, 44.1 kHz
-WAV, peaks at 0.8. `GET /api/sounds` lists them, `GET /api/sounds/:name` plays one, and a film gets its copy in
-`audio/fx/` when it uses one. Effect sounds start at 65% (a volume you set is kept: `tuned`). Effect tracks have `sfx: true` and sit on the timeline's **Effects** lane:
+boom, sparkle, magic, puff, flash, chime, party, heart, patter) from code: filtered noise and pitched tones,
+seeded, 44.1 kHz WAV, peaks at 0.8. `GET /api/sounds` lists them, `GET /api/sounds/:name` plays one, and a film
+gets its copy in `audio/fx/` when it uses one. Effect sounds start at 65% (a volume you set is kept: `tuned`). Effect tracks have `sfx: true` and sit on the timeline's **Effects** lane:
 
 - **A film that places sounds** (Blocky Story) sends them with `ready`; the film page puts them to
   `PUT /api/films/:id/fx`, and a render syncs them from its first page before mixing. `src/server/fx.ts`

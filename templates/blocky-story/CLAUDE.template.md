@@ -15,13 +15,17 @@ time a file here is saved.
 3. **Cut it into shots** in `story.js` (format below): every shot's `say` is the next 3-7 words of the narration,
    in order, so all the shots' `say` together are the whole narration. Normally `story.js` is the only file you
    change.
-4. **Add effects** (`fx`) where the words call for them: a punch-in on the key word, notes when someone sings,
+4. **Make people move** (`go`) when the story moves: someone walks in, crosses the room, goes up to someone,
+   sits down, gets up, runs off. About one shot in three has someone moving; nobody should stand frozen in one
+   spot for the whole film.
+5. **Add effects** (`fx`) where the words call for them: a punch-in on the key word, notes when someone sings,
    magic when someone appears, a counting label for a number, a shake on an impact. About one shot in two has
    one; never the same effect on two shots in a row. Each effect brings its sound by itself.
-5. Look at frames with `kairos_frame` (a few per place, every effect word, every new face or pose) and the
-   effects sheet (`kairos_sheet` with `effects`), and fix what looks wrong.
-6. Set the length with `kairos_film_settings` (`duration` = the story's length: `kairos_frame` says it).
-7. **Voices:** when the brief says "Voices: make them with the film", make the narration (steps under "Voices"
+6. Look at frames with `kairos_frame` (a few per place, every effect word, every walk, every new face or pose),
+   the effects sheet (`kairos_sheet` with `effects`) and the moves sheet (`moves`: it checks every walk), and fix
+   what looks wrong.
+7. Set the length with `kairos_film_settings` (`duration` = the story's length: `kairos_frame` says it).
+8. **Voices:** when the brief says "Voices: make them with the film", make the narration (steps under "Voices"
    below). The voice leads: shots cut on its real words by themselves.
 
 **Characters:**
@@ -55,6 +59,8 @@ export const SHOTS = [
   who: ["milo", "ruby"],    // who is in the shot; the first one is the focus
   focus: "ruby",            // optional: who the camera is about
   at: { milo: "sofaL" },    // optional: a spot in the place (see below)
+  go: { milo: "sofa" },     // someone walks somewhere during the shot (see Moving)
+  look: { milo: "ruby" },   // someone turns to face someone else
   turn: { milo: 0.4 },      // optional: turn someone (radians)
   pose: { milo: "sit" },    // see poses
   face: { milo: "shocked" },// see faces
@@ -63,13 +69,45 @@ export const SHOTS = [
   prop: "letter",           // an object on the place's table or surface (use with shot: "insert")
   say: "and then *nobody* laughed.", // the next words of the narration (*key words* stay yellow)
   fx: [{ punch: true, at: "nobody" }], // effects (below), each on a word or at the start of the shot
-  move: "push",             // hold, push, pull, drift, orbit, rise, zoom, shake
+  move: "push",             // hold, push, pull, drift, orbit, rise, zoom, shake, follow, pan
   angle: "left",            // front, left, right, side, sideR, back
   whip: true,               // start with a fast blurred swing (between moments), with a whoosh
-  look: "away",             // characters don't turn their heads to the camera
+  look: "away",             // nobody turns their head to the camera (instead of `look: { ... }`)
   beat: true, seconds: 0.5, // a reaction without words (at most 0.6 s): the voice goes on over it
 }
 ```
+
+### Moving (`go`)
+
+`go: { milo: "sofa" }` sends Milo to a spot during the shot; `go: { milo: { to, from, pace, at, via } }` says more:
+
+- **`to`**: a spot of the place, someone in the shot (`"ruby"`: he walks up to her, she turns to face him), or
+  out of the picture: `"off-left"`, `"off-right"`, `"off-back"`.
+- **`from`**: where the walk starts: a spot, or `"off-left"`, `"off-right"`, `"off-back"` to come into the picture
+  (they aren't seen before). Left out: where they are.
+- **`pace`**: `walk` (the default), `run` (dust and running feet, with their sound), `sneak`, `tiptoe`.
+- **`at`**: the word the walk starts on (like effects). Left out: the start of the shot.
+- **`via`**: spots to go by, in order.
+
+What the engine does by itself:
+
+- **The walk:** someone facing the wrong way turns first with small steps, speeds up, walks around the furniture
+  and the people in the way, slows down, and turns to face the way the spot faces (or the person they walked
+  up to). Their feet stay planted.
+- **Sitting and standing:** a walk to a seat ends sitting on it (they turn their back to it and sit down) unless
+  the shot gives them a standing pose. Someone sitting stands up before walking off. Someone sitting whose next
+  shot gives a standing pose (`wave`, `cheer`...) stands up; someone standing nearby who gets a sitting pose walks
+  to the nearest seat and sits.
+- **People stay where they went:** in the next shots in the same place, someone who walked to the door is still
+  by the door, and someone who sat down is still sitting, until a shot moves them (`at`, `go`) or the place
+  changes.
+- **The camera:** it follows someone walking between spots, holds where someone comes in (or leaves from), and
+  `move: "pan"` keeps it still and turns it to follow; `move: "follow"` follows even entrances and exits.
+- **Alive while standing:** listeners look at whoever talks and at anyone walking; people shift their weight;
+  talking hands gesture on the narration's `*key words*` and the head nods at the end of a sentence.
+
+Keep walks short: a walk takes about a second for every 3 units (a room is about 25 units across); a run is three
+times faster. A walk can go on into the next shot of the same place; the moves sheet says when one doesn't fit.
 
 ### Effects (`fx`)
 
@@ -138,7 +176,7 @@ heart.
 - **Poses:**
   - **standing:** idle, talk, wave, point, cheer, shrug, cry, scared, think, facepalm, hug, angry, laugh, dance,
     jump;
-  - **moving forward:** walk, run, sneak;
+  - **moving:** walk, run, sneak, tiptoe (on the spot they go straight ahead; use `go` to walk somewhere);
   - **sitting:** sit, sitTalk, sitSad;
   - **lying:** lie, sleep, faint.
 - **Faces:** neutral, happy, grin, laugh, sad, crying, shocked, scared, angry, furious (red face), smug, sleepy,
@@ -166,6 +204,8 @@ heart.
 - **Following:** when the user edits, remakes or deletes a line, the lines after it move up to stay packed, and
   the film follows without any change here.
 - **Beats:** a shot with `beat: true` and no `say` is a quick reaction (at most 0.6 s) cut in under the voice.
+- **Off the picture:** `off-left`, `off-right`, `off-back` for `go` (`to` and `from`). Inside rooms, people leave by
+  the door (`to: "door"`): the walls are in the way.
 
 ## The engine
 
@@ -173,7 +213,9 @@ heart.
 
 - **the cast:** `cast.js`;
 - **figures and faces:** `characters.js`, `faces.js`;
-- **poses and places:** `poses.js`, `places.js`;
+- **poses and places:** `poses.js` (with the gaits, sitting down and standing up), `places.js`, `layouts.js`
+  (each place's spots, furniture footprints and walls);
+- **moving:** `motion.js` (where everyone is in each shot, and the walks);
 - **objects:** `props.js`;
 - **the camera:** `shots.js`;
 - **captions and extras:** `captions.js`, `overlays.js`;
@@ -183,8 +225,8 @@ heart.
 - **the timeline:** `engine.js`, with `timing.js` (shots cut on the narration's words) and `voice.js` (reads the
   voices);
 - **sizes:** `sizes.js` (an adult figure is 1.8 m; every prop's real size; seats at the figures' knee height);
-- **sheets:** `sheet.js` and `../sheet.html` (every character, pose, face, prop, place and effect on one picture,
-  with checks).
+- **sheets:** `sheet.js` and `../sheet.html` (every character, pose, face, prop, place, effect and move on one
+  picture, with checks).
 
 **Real sizes.** Every object is as big as it is in life, next to figures 1.8 m tall. A new prop in `props.js` needs
 its real size in `SIZES` (its longest side, in meters): the engine sizes it from that. Places follow the same
@@ -198,7 +240,9 @@ limit (`JOINTS` in `characters.js`); an elbow or a knee bends one way only.
 **Sheets: check your work there.** `kairos_sheet` shows a sheet and the problems its checks found: `props` after
 adding a prop (is it the right size?), `cast` after adding or changing a character, `poses` after adding a pose
 (every part attached, no joint past its limit), `places` after changing a place, `effects` after adding effects
-(it shows each effect, and checks the story's: a known effect, on a word the shot says, with a known sound). Fix
+(it shows each effect, and checks the story's: a known effect, on a word the shot says, with a known sound),
+`moves` after adding walks (it shows the gaits, sitting down and standing up, and checks the story's walks: a
+known spot, a seat to sit on, a way around the furniture, time enough in the shot, feet that don't slide). Fix
 every problem it lists.
 
 Change it only when the story needs something it doesn't have (a new place, a pose, a prop, an effect). Keep

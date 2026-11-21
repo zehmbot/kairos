@@ -1,10 +1,9 @@
 // The places a story happens in. Each is built once per light ("day", "evening", "night") and cached.
-// A place gives: the group, `spots` where characters stand, sit or lie, the `wide` establishing shot,
-// a `surface` for close-ups of small objects, fog, and `update(t)` for anything that moves.
-//
-// Spots: { x, z, rot } (rot turns the character: 0 faces +z, toward the usual camera side),
-// plus `seat` (sitting height) or `bed` (lying height), and `y` for raised ground.
+// A place gives: the group, its layout (layouts.js: `spots` where characters stand, sit or lie, the furniture's
+// footprints, the `wide` establishing shot, a `surface` for close-ups of small objects), fog, and `update(t)` for
+// anything that moves.
 import * as THREE from "three";
+import { LAYOUTS } from "./layouts.js";
 import {
   bed,
   bench,
@@ -33,7 +32,6 @@ import {
   tv,
   windowPane,
 } from "./props.js";
-import { BED_HEIGHT, SEAT_HEIGHT } from "./sizes.js";
 import { block, canvasTexture, mesh, paint, rng, roundedBox, speckle } from "./util.js";
 
 /** Light settings for each time of day. */
@@ -221,21 +219,7 @@ function home(preset) {
 
   return {
     group: g,
-    spots: {
-      center: { x: 0, z: 1, rot: 0 },
-      left: { x: -3, z: 1.4, rot: 1.0 },
-      right: { x: 3, z: 1.4, rot: -1.0 },
-      back: { x: -6, z: -4.5, rot: 0.5 },
-      front: { x: 5.5, z: 3, rot: -0.6 },
-      door: { x: 9, z: -9.8, rot: 0 },
-      window: { x: -5.5, z: -10.2, rot: Math.PI },
-      sofa: { x: 0, z: -7.3, rot: 0, seat: SEAT_HEIGHT },
-      sofaL: { x: -2.4, z: -7.3, rot: 0.15, seat: SEAT_HEIGHT },
-      sofaR: { x: 2.4, z: -7.3, rot: -0.15, seat: SEAT_HEIGHT },
-    },
-    seats: ["sofaL", "sofaR", "sofa"],
-    wide: { pos: [3, 7, 14], target: [0, 3, -5] },
-    surface: [0.4, 1.37, -3.1],
+    ...LAYOUTS.home,
     fog: null,
   };
 }
@@ -286,20 +270,7 @@ function bedroom(preset) {
 
   return {
     group: g,
-    spots: {
-      center: { x: 1.5, z: 1.5, rot: 0 },
-      left: { x: -1.6, z: 1.8, rot: 1.0 },
-      right: { x: 4.6, z: 1.8, rot: -1.0 },
-      back: { x: 4, z: -5, rot: 0.3 },
-      window: { x: 5, z: -8.4, rot: Math.PI },
-      bed: { x: -6, z: -4.4, rot: 0, bed: BED_HEIGHT + 0.2 },
-      bedSit: { x: -3, z: -3, rot: 1.2, seat: BED_HEIGHT },
-      desk: { x: 7.4, z: -6, rot: -Math.PI / 2, seat: SEAT_HEIGHT },
-    },
-    seats: ["bedSit", "desk"],
-    beds: ["bed"],
-    wide: { pos: [5, 7.5, 12], target: [-1, 2.5, -4] },
-    surface: [-1.8, 2.02, -8.5],
+    ...LAYOUTS.bedroom,
     fog: null,
   };
 }
@@ -402,18 +373,7 @@ function school(preset) {
 
   return {
     group: g,
-    spots: {
-      center: { x: 0, z: 2, rot: 0 },
-      left: { x: -2.8, z: 2.4, rot: 1.0 },
-      right: { x: 2.8, z: 2.4, rot: -1.0 },
-      back: { x: 0, z: -8, rot: 0 },
-      front: { x: -1.5, z: 7, rot: 0.3 },
-      lockerL: { x: -5.6, z: -1, rot: Math.PI / 2 },
-      lockerR: { x: 5.6, z: -3, rot: -Math.PI / 2 },
-    },
-    seats: [],
-    wide: { pos: [0, 6, 16], target: [0, 3.2, -14] },
-    surface: [0, 0.02, 4.5],
+    ...LAYOUTS.school,
     fog: { color: "#dfe3ea", near: 40, far: 90 },
     exposure: 1.5,
     env: 0.2,
@@ -504,17 +464,7 @@ function town(preset) {
 
   return {
     group: g,
-    spots: {
-      center: { x: 0, z: 6.4, rot: 0, y: 0.3 },
-      left: { x: -3, z: 6.6, rot: 1.0, y: 0.3 },
-      right: { x: 3, z: 6.6, rot: -1.0, y: 0.3 },
-      back: { x: -5, z: -6.4, rot: 0.2, y: 0.3 },
-      road: { x: 0, z: 0, rot: 0 },
-      far: { x: -9, z: -6.5, rot: 0.6, y: 0.3 },
-    },
-    seats: [],
-    wide: { pos: [-3, 5.5, 20], target: [0, 4, -2] },
-    surface: [1, 0.32, 8],
+    ...LAYOUTS.town,
     fog: { color: sky(preset), near: 60, far: 160 },
   };
 }
@@ -583,17 +533,7 @@ function park(preset) {
 
   return {
     group: g,
-    spots: {
-      center: { x: 0, z: 2, rot: 0 },
-      left: { x: -3, z: 2.4, rot: 1.0 },
-      right: { x: 3, z: 2.4, rot: -1.0 },
-      back: { x: -4, z: -6, rot: 0.4 },
-      slide: { x: -6.5, z: -6.5, rot: 0.6 },
-      bench: { x: 8.4, z: -2.6, rot: -0.9, seat: SEAT_HEIGHT },
-    },
-    seats: ["bench"],
-    wide: { pos: [4, 6.5, 24], target: [-1, 3, -6] },
-    surface: [7.6, 1.52, -2.2],
+    ...LAYOUTS.park,
     fog: { color: sky(preset), near: 70, far: 200 },
   };
 }
@@ -757,19 +697,7 @@ function forest(preset) {
 
   return {
     group: g,
-    spots: {
-      center: { x: 0, z: 3, rot: 0 },
-      left: { x: -3, z: 3.4, rot: 1.0 },
-      right: { x: 3, z: 3.4, rot: -1.0 },
-      back: { x: 3, z: -6, rot: -0.3 },
-      fire: { x: -1.6, z: -2.2, rot: -1.4 },
-      cabin: { x: 6.5, z: -11, rot: -0.4 },
-      logL: { x: -7.4, z: -3.5, rot: 0.9, seat: 0.9 },
-      logR: { x: -1.6, z: -0.7, rot: -0.9, seat: 0.9 },
-    },
-    seats: ["logL", "logR"],
-    wide: { pos: [2, 6.5, 24], target: [0, 4.5, -8] },
-    surface: [-6.6, 0.9, -3.6],
+    ...LAYOUTS.forest,
     fog: { color: night ? "#0d1530" : "#dfe8f6", near: 30, far: 120 },
     update(t) {
       aurora.material.uniforms.uTime.value = t;

@@ -548,10 +548,10 @@ export function createKairosServer(context: ToolContext): McpServer {
     {
       title: "Look at a Blocky sheet",
       description:
-        "For films made with the Blocky template: a picture of every character (cast: front, three-quarter, side, back), every pose, every face, every prop at its real size (props), or a place from four angles in day, evening and night (places), or, in Blocky Story films, every effect at its peak (effects: it also checks the story's effects), drawn with this film's own engine. It also lists the problems its checks found: a prop without a real size in blocky/sizes.js or at the wrong size, a pose that pushes a joint past its limit or pulls a part off the body, a door, table or seat at the wrong size. Look at the props sheet after adding a prop, the cast sheet after adding a character, the poses sheet after adding a pose.",
+        "For films made with the Blocky template: a picture of every character (cast: front, three-quarter, side, back), every pose, every face, every prop at its real size (props), or a place from four angles in day, evening and night (places), or, in Blocky Story films, every effect at its peak (effects: it also checks the story's effects) or the walks, runs, sitting down and standing up (moves: it also checks the story's walks, and that feet don't slide), drawn with this film's own engine. It also lists the problems its checks found: a prop without a real size in blocky/sizes.js or at the wrong size, a pose that pushes a joint past its limit or pulls a part off the body, a door, table or seat at the wrong size. Look at the props sheet after adding a prop, the cast sheet after adding a character, the poses sheet after adding a pose.",
       inputSchema: {
         film: filmArg,
-        sheet: z.enum(["cast", "poses", "faces", "props", "places", "effects"]),
+        sheet: z.enum(["cast", "poses", "faces", "props", "places", "effects", "moves"]),
         place: z
           .enum(["home", "bedroom", "school", "town", "park", "forest"])
           .optional()

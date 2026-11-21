@@ -626,6 +626,10 @@ export function makeCharacter(spec) {
     chestWorld(target = new THREE.Vector3()) {
       return chest.getWorldPosition(target);
     },
+    /** Where an ankle is (0 = left, 1 = right), in world space (the Moves sheet checks that feet don't slide). */
+    ankleWorld(side, target = new THREE.Vector3()) {
+      return ankles[side].getWorldPosition(target);
+    },
     /**
      * Sets every joint from a pose (see poses.js), each within its range. Returns what the pose asked past a
      * joint's limit (the figure stops there).

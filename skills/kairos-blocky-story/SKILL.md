@@ -1,6 +1,6 @@
 ---
 name: kairos-blocky-story
-description: Directing Blocky Story films in Kairos - narrated stories where the narrator never stops, told in quick shots of blocky toy characters with effects (particles, floating words, camera punches, bouncy motion) and their sounds. Use whenever a Kairos film was made with the Blocky Story template (its CLAUDE.md says "Blocky Story", it has story.js, a blocky/ folder with fx.js), or the user asks for a lively blocky story video.
+description: Directing Blocky Story films in Kairos - narrated stories where the narrator never stops, told in quick shots of blocky toy characters who walk, sit, stand up and turn to each other, with effects (particles, floating words, camera punches, bouncy motion) and their sounds. Use whenever a Kairos film was made with the Blocky Story template (its CLAUDE.md says "Blocky Story", it has story.js, a blocky/ folder with fx.js), or the user asks for a lively blocky story video.
 ---
 
 # Blocky Story films
@@ -91,6 +91,33 @@ from, the narrator talks **95-100% of the time** and never pauses for more than 
 7. **Open strong:** the first shot should hook in under 2 s (a striking face, a strange object, a question), and the
    last shot should land the story (the reaction, the twist, everyone laughing).
 
+## Moving: nobody stands frozen
+
+Characters who only stand on their spots and make faces look like cardboard. Move them when the story moves:
+
+- **Someone arrives:** `go: { zee: { from: "off-left", to: "center", at: "burst" } }` (she runs in on "burst" with
+  `pace: "run"`), or from the door: `from: "door"`.
+- **Someone leaves:** `go: { zee: "off-right" }`, or `to: "door"` indoors.
+- **Someone goes up to someone:** `go: { milo: "ruby" }`: he walks round to her front, she turns to face him. Then
+  `hug`, `talk`, `point` land face to face.
+- **Someone sits down or gets up:** `go: { milo: "sofa" }` (he walks to it, turns his back to it and sits), and
+  later a standing pose (`pose: { milo: "cheer" }`) makes him stand up first.
+- **Someone turns to someone:** `look: { milo: "zee" }`.
+- **Sneaking and running:** `pace: "sneak"` for a secret, `pace: "tiptoe"` past someone sleeping, `pace: "run"`
+  for panic or joy.
+
+**How much:** about one shot in three has someone moving, and every scene starts with people getting into place
+or ends with someone leaving. Walks take time (a room's width is several seconds at a walk): keep them to the
+next spot or the next person, put long ones in wide or full shots, and run when it's urgent. A walk can go on
+into the next shot of the same place.
+
+**The camera follows** a walker between spots, holds still for entrances and exits so people really walk in and
+out of the picture, and `move: "pan"` turns it to follow from one place. Close shots of a walker look busy: use
+`full` or `medium` while someone walks, and cut to close-ups once they arrive.
+
+**Life while standing comes by itself:** listeners look at whoever is talking and at anyone walking, people shift
+their weight, and talking hands gesture on the narration's `*key words*`.
+
 ## Effects: make each moment land
 
 Effects (`fx` in a shot) are what make these videos feel alive. Each one brings its sound, which goes on the
@@ -179,8 +206,10 @@ timeline's Effects lane by itself. Put an effect **on the word** that calls for 
 - **Jointed figures:** poses can bend elbows, wrists, knees and ankles, turn at the waist and move the head on its
   neck. A new pose in `poses.js` uses those keys; every joint stops at its limit.
 - **Sheets:** `kairos_sheet` draws every character (`cast`), pose (`poses`), face (`faces`), prop at real size
-  (`props`) or a place from four angles in each light (`places`), and lists the problems its checks found. Look at
-  the matching sheet after adding a prop, a character, a pose or changing a place, and fix every problem.
+  (`props`), a place from four angles in each light (`places`), every effect (`effects`) or the gaits, sitting
+  down and standing up (`moves`), and lists the problems its checks found. Look at the matching sheet after adding
+  a prop, a character, a pose, effects or walks, or changing a place, and fix every problem. The moves sheet checks
+  every walk of the story: a spot the place has, a seat to sit on, a way around the furniture, time enough.
 
 ## Check your work
 
@@ -188,6 +217,7 @@ timeline's Effects lane by itself. Put an effect **on the word** that calls for 
   - one in the middle of every new place;
   - every insert;
   - every shot with three or more people;
+  - every walk: as it starts, halfway, and as it arrives (faces visible, nobody walking through anyone);
   - the first and last shot.
 - **What to check:**
   - **faces:** visible, not cut by the frame or hidden by the caption;

@@ -1,8 +1,9 @@
 // Sheets: every character, pose, face, prop and place on one picture, with checks. They show at a glance what a
 // film will look like, and catch mistakes before they reach a film: an object at the wrong size, a joint pushed
 // past its limit, a part that comes off the body, a door too small for the figures.
-// The effects sheet shows every effect at its peak, and checks the story's effects.
-// sheet.html?sheet=cast|poses|faces|props|places|effects&place=home&who=milo (see sheet.html).
+// The effects sheet shows every effect at its peak, and checks the story's effects. The moves sheet shows the gaits
+// and sitting down and standing up, checks that feet don't slide, and checks the story's walks.
+// sheet.html?sheet=cast|poses|faces|props|places|effects|moves&place=home&who=milo (see sheet.html).
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { BLOCKY_CAST } from "./cast.js";
@@ -19,8 +20,18 @@ import {
   normalizeFx,
   planEffects,
 } from "./fx.js";
+import { composePose, personState, planMotion, poseFor } from "./motion.js";
 import { DEFAULT_LIGHT, getPlace } from "./places.js";
-import { POSE_NAMES, poseAt } from "./poses.js";
+import {
+  GAIT_NAMES,
+  GAITS,
+  gaitPose,
+  POSE_NAMES,
+  poseAt,
+  SEAT_REACH,
+  seatBack,
+  sitDownPose,
+} from "./poses.js";
 import { PROP_NAMES, PROPS, table } from "./props.js";
 import {
   fitSize,
@@ -33,9 +44,28 @@ import {
   UNITS_PER_METER,
   WORLD,
 } from "./sizes.js";
-import { plainWord, sayWords } from "./timing.js";
+import { plainWord, planStory, sayWords } from "./timing.js";
+import { loadVoices } from "./voice.js";
 
-export const SHEETS = ["cast", "poses", "faces", "props", "places", "effects"];
+export const SHEETS = ["cast", "poses", "faces", "props", "places", "effects", "moves"];
+
+/** How far a foot on the ground may slide, in units (2 cm). */
+const SLIDE_LIMIT = meters(0.02);
+
+/** A small room for the moves sheet: a seat to walk to, sit on and get up from. */
+const MOVES_ROOM = {
+  spots: {
+    start: { x: 0, z: 3.4, rot: Math.PI },
+    seat: { x: 0, z: -1.2, rot: 0, seat: SEAT_HEIGHT },
+    side: { x: 5, z: 0.6, rot: -1.1 },
+  },
+  seats: ["seat"],
+  beds: [],
+  blocks: [{ name: "the seat", x: 0, z: -1.55, w: 2.2, d: 2 }],
+  bounds: { minX: -20, maxX: 20, minZ: -20, maxZ: 20 },
+  wide: { pos: [0, 6, 14], target: [0, 2, 0] },
+};
+const MOVES_WORDS = "one two three four five six seven eight nine ten eleven twelve";
 
 /** Each effect on the effects sheet: its shot's `fx`, the moment shown, and the face that goes with it. */
 const EFFECT_SAMPLES = [
@@ -133,6 +163,9 @@ export function createSheet({ story, params }) {
   const ids = Object.keys(cast);
   const who = cast[params.get("who")] ? params.get("who") : ids[0];
   const placeName = params.get("place") ?? "home";
+  // The moves sheet checks the story's walks with the film's voices and shape.
+  let voiceLines = [];
+  let filmAspect = 16 / 9;
   /** Problems found, in plain words (the same problem found several times is counted). */
   const checks = [];
   const found = new Map();
@@ -601,6 +634,187 @@ export function createSheet({ story, params }) {
     a.root.scale.setScalar(a.size);
   }
 
+  /** The most a foot on the ground slides through two cycles of a gait (units). */
+  function footSlide(a, pace) {
+    const g = GAITS[pace];
+    let worst = 0;
+    const planted = [null, null];
+    for (let i = 0; i <= 120; i++) {
+      const phase = i / 60;
+      a.root.position.set(0, 0, phase * g.cycle * a.size);
+      a.root.rotation.set(0, 0, 0);
+      a.apply(gaitPose(pace, phase));
+      a.root.updateMatrixWorld(true);
+      [0, 0.5].forEach((offset, side) => {
+        const c = (((phase + offset) % 1) + 1) % 1;
+        if (c > 0.02 && c < g.stance - 0.02) {
+          const at = a.ankleWorld(side, new THREE.Vector3());
+          if (!planted[side]) planted[side] = at;
+          else worst = Math.max(worst, at.distanceTo(planted[side]));
+        } else {
+          planted[side] = null;
+        }
+      });
+    }
+    return worst;
+  }
+
+  /** The most the feet slide while sitting down (units). */
+  function sitSlide(a) {
+    let worst = 0;
+    let first = null;
+    const drop = (SEAT_HEIGHT - 1.5 * a.size) / a.size;
+    for (let i = 0; i <= 40; i++) {
+      const k = i / 40;
+      a.root.position.set(0, 0, -SEAT_REACH * a.size * seatBack(k));
+      a.root.rotation.set(0, 0, 0);
+      a.apply(sitDownPose(k, drop));
+      a.root.updateMatrixWorld(true);
+      const at = a.ankleWorld(0, new THREE.Vector3());
+      if (!first) first = at;
+      else worst = Math.max(worst, at.distanceTo(first));
+    }
+    return worst;
+  }
+
+  /** The story's walks, planned the way the film plans them: the problems found. */
+  function storyProblems() {
+    const shots = story?.SHOTS ?? [];
+    const plan = planStory(shots, voiceLines);
+    const places = [];
+    for (const entry of plan.entries) places.push(entry.shot.place ?? places.at(-1) ?? "home");
+    return planMotion(plan.entries, {
+      aspect: filmAspect,
+      sizeOf: (id) => cast[id]?.size ?? 1,
+      isCharacter: (id) => Boolean(cast[id]),
+      placeOf: (_entry, i) => places[i],
+    }).problems;
+  }
+
+  function movesSheet() {
+    add(studio);
+    scene.background = new THREE.Color("#c9ced8");
+    const a = actor(who);
+    a.root.visible = true;
+    // Marks on the floor every 25 cm: a foot on the ground stays on its mark.
+    const marks = new THREE.Group();
+    for (let k = -16; k <= 24; k++) {
+      const mark = new THREE.Mesh(
+        new THREE.BoxGeometry(2.6, 0.012, 0.05),
+        new THREE.MeshStandardMaterial({ color: "#8a90a0", roughness: 0.9 }),
+      );
+      mark.position.set(0, 0.006, k * meters(0.25));
+      marks.add(mark);
+    }
+    add(marks);
+    const seat = new THREE.Mesh(
+      new THREE.BoxGeometry(2.2, SEAT_HEIGHT, 2),
+      new THREE.MeshStandardMaterial({ color: "#8b5a35", roughness: 0.6 }),
+    );
+    seat.castShadow = true;
+    seat.receiveShadow = true;
+    seat.position.set(0, SEAT_HEIGHT / 2, -1.55);
+
+    for (const problem of storyProblems()) report(problem);
+
+    const list = cells(GAIT_NAMES.length * 6 + 12, 6);
+    let c = 0;
+    // The gaits, side on with the camera still: six moments of a cycle.
+    for (const pace of GAIT_NAMES) {
+      const g = GAITS[pace];
+      const slide = footSlide(a, pace);
+      const problem = slide > SLIDE_LIMIT;
+      if (problem) {
+        report(
+          `${pace}: a foot on the ground slides ${((slide / UNITS_PER_METER) * 100).toFixed(1)} cm.`,
+        );
+      }
+      for (let k = 0; k < 6; k++) {
+        const cell = list[c++];
+        const phase = k / 6;
+        a.root.position.set(0, 0, phase * g.cycle * a.size);
+        a.root.rotation.set(0, 0, 0);
+        a.apply({ ...poseAt("idle", 0, 0), ...gaitPose(pace, phase) });
+        a.face(pace === "sneak" ? "suspicious" : pace === "run" ? "grin" : "neutral", {
+          blink: false,
+          talk: 0,
+        });
+        frameStanding(
+          camera,
+          cell.w / (cell.h - LABEL_H),
+          new THREE.Vector3(0, 0, 0.5 * g.cycle * a.size),
+          5.8 * a.size,
+          Math.PI / 2 - 0.25,
+          1.25,
+        );
+        draw(cell);
+        label(cell, `${pace} · ${k + 1}/6`, problem);
+      }
+    }
+    // Walking to a seat (turning to it, then around to sit), then standing up and walking off.
+    const sitting = sitSlide(a);
+    const sitProblem = sitting > SLIDE_LIMIT;
+    if (sitProblem) {
+      report(`sitting down: a foot slides ${((sitting / UNITS_PER_METER) * 100).toFixed(1)} cm.`);
+    }
+    add(seat);
+    const shots = [
+      {
+        place: "room",
+        who: [who],
+        at: { [who]: "start" },
+        go: { [who]: "seat" },
+        say: MOVES_WORDS,
+      },
+      { who: [who], go: { [who]: "side" }, say: MOVES_WORDS },
+    ];
+    const plan = planStory(shots, []);
+    const motion = planMotion(plan.entries, {
+      sizeOf: () => a.size,
+      layouts: () => MOVES_ROOM,
+      placeOf: () => "room",
+    });
+    const rows = [
+      ["to the seat", motion.moves[0], 0],
+      ["up and away", motion.moves.find((m) => m.kind === "go" && m.entry === 1), 1],
+    ];
+    for (const [name, move, entryIndex] of rows) {
+      for (let k = 0; k < 6; k++) {
+        const cell = list[c++];
+        if (!move) {
+          label(cell, `${name}: no move`, true);
+          continue;
+        }
+        const t = move.t0 + ((move.t1 - move.t0) * k) / 5;
+        const st = personState(motion, entryIndex, who, Math.min(t, move.t1 - 1e-3), MOVES_ROOM);
+        a.root.position.set(st.x, st.y ?? 0, st.z);
+        a.root.rotation.set(0, st.rot, 0);
+        const entry = plan.entries[entryIndex];
+        const pose = composePose(st, poseAt(poseFor(entry, who, st.posture), t, 0), {
+          idle: () => poseAt("idle", t, 0),
+          size: a.size,
+          t,
+          poseTime: t,
+        });
+        a.apply(pose);
+        a.face("neutral", { blink: false, talk: 0 });
+        frameStanding(
+          camera,
+          cell.w / (cell.h - LABEL_H),
+          new THREE.Vector3(1.8, 0, 1),
+          9 * a.size,
+          0.75,
+          1.1,
+          0.5,
+        );
+        draw(cell);
+        const what = st.act?.kind === "gait" ? "walk" : (st.act?.kind ?? st.posture);
+        label(cell, `${name} · ${what}`, name === "to the seat" && sitProblem);
+      }
+    }
+    content.remove(seat);
+  }
+
   function drawLabels() {
     ctx.clearRect(0, 0, W, H);
     for (const paint of overlays) paint();
@@ -634,6 +848,7 @@ export function createSheet({ story, params }) {
     else if (sheet === "faces") facesSheet();
     else if (sheet === "props") propsSheet();
     else if (sheet === "effects") effectsSheet();
+    else if (sheet === "moves") movesSheet();
     else placesSheet();
     drawLabels();
     checks.length = 0;
@@ -642,8 +857,22 @@ export function createSheet({ story, params }) {
 
   // Drawn once, then again when asked (the picture doesn't change with time).
   render();
+  // The moves sheet waits for the film's voices and shape, then draws again.
+  const ready =
+    sheet === "moves"
+      ? Promise.all([
+          loadVoices(),
+          fetch("kairos.json", { cache: "no-store" })
+            .then((response) => (response.ok ? response.json() : null))
+            .catch(() => null),
+        ]).then(([lines, config]) => {
+          voiceLines = lines;
+          if (config?.width > 0 && config?.height > 0) filmAspect = config.width / config.height;
+          render();
+        })
+      : Promise.resolve();
   return {
-    ready: Promise.resolve(),
+    ready,
     render,
     /** The problems found, in plain words (also in `window.KAIROS_CHECKS`). */
     checks,

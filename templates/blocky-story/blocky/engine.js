@@ -6,15 +6,24 @@ import { drawCaptions } from "./captions.js";
 import { BLOCKY_CAST } from "./cast.js";
 import { makeCharacter } from "./characters.js";
 import { createEffects } from "./effects.js";
-import { actorState, cameraState, drawEffects, effectSounds, planEffects } from "./fx.js";
+import {
+  actorState,
+  cameraState,
+  drawEffects,
+  effectSounds,
+  moveEffects,
+  planEffects,
+} from "./fx.js";
+import { layoutOf } from "./layouts.js";
+import { composePose, headDrop, personState, planMotion, poseFor, wrapAngle } from "./motion.js";
 import { drawOverlays } from "./overlays.js";
 import { getPlace, LIGHTS } from "./places.js";
 import { poseAt, TRAVEL } from "./poses.js";
 import { PROPS } from "./props.js";
-import { frameShot } from "./shots.js";
+import { frameShot, SHOT_TYPES, viewBlocked } from "./shots.js";
 import { fitSize, SIZES } from "./sizes.js";
 import { planStory } from "./timing.js";
-import { clamp, hash, wobble } from "./util.js";
+import { clamp, hash, lerp, smooth, wobble } from "./util.js";
 import { loadVoices } from "./voice.js";
 
 const SKY = {
@@ -85,19 +94,6 @@ export function makeSky() {
   };
 }
 
-/** Where each character stands when the shot doesn't say, by how many there are. */
-const STANDING = [
-  [],
-  ["center"],
-  ["left", "right"],
-  ["left", "center", "right"],
-  ["left", "center", "right", "back"],
-  ["left", "center", "right", "back", "front"],
-];
-
-const isSitting = (pose) => pose?.startsWith("sit");
-const isLying = (pose) => pose === "lie" || pose === "sleep";
-
 /** Focus blur by shot type: close shots blur the background more. */
 const APERTURE = {
   wide: 0.00012,
@@ -159,13 +155,27 @@ export function createEngine({ width: W, height: H, story }) {
   let stream = [];
   let events = [];
   let sounds = [];
+  /** Where everyone is and how they move (motion.js). */
+  let motion = { entries: [], moves: [], problems: [] };
+  /** How far each close shot's camera turns to see past someone in the way (worked out once per shot). */
+  let viewTurns = new Map();
 
   function build(lines) {
     const plan = planStory(shots, lines);
     duration = plan.duration;
     stream = plan.words;
     timeline = plan.entries;
-    events = planEffects(timeline);
+    // Where everyone is, their walks, and the dust and patter of runs.
+    const placesOf = [];
+    for (const entry of timeline) placesOf.push(entry.shot.place ?? placesOf.at(-1) ?? "home");
+    motion = planMotion(timeline, {
+      aspect: W / H,
+      sizeOf: (id) => cast[id]?.size ?? 1,
+      isCharacter: (id) => Boolean(cast[id]),
+      placeOf: (_entry, i) => placesOf[i],
+    });
+    events = [...planEffects(timeline), ...moveEffects(motion.moves, timeline)];
+    viewTurns = new Map();
     sounds = effectSounds(events);
     // Scene markers for the Kairos timeline: one per run of shots in the same place.
     scenes = [];
@@ -194,6 +204,10 @@ export function createEngine({ width: W, height: H, story }) {
       if (!spec) return null;
       a = makeCharacter(spec);
       a.phase = (hash(id) % 1000) / 1000;
+      // Where the eyes are when standing, for a size-1 figure (the camera follows walkers at this height).
+      a.apply({});
+      a.root.updateMatrixWorld(true);
+      a.headHeight = a.headWorld(new THREE.Vector3()).y / a.size;
       a.root.visible = false;
       scene.add(a.root);
       actors.set(id, a);
@@ -212,6 +226,17 @@ export function createEngine({ width: W, height: H, story }) {
       props.set(key, p);
     }
     return p;
+  }
+
+  /** Who says the word at `time` (a character id, or null), who spoke before them, and how far the heads turned. */
+  function speakerAt(time) {
+    const i = stream.findLastIndex((w) => w.start <= time);
+    if (i < 0) return { id: null, before: null, k: 1 };
+    const id = stream[i].speaker ?? null;
+    let j = i;
+    while (j > 0 && (stream[j - 1].speaker ?? null) === id) j--;
+    const before = j > 0 ? (stream[j - 1].speaker ?? null) : null;
+    return { id, before, k: smooth((time - stream[j].start + 0.1) / 0.4) };
   }
 
   let shownPlace = null;
@@ -257,50 +282,57 @@ export function createEngine({ width: W, height: H, story }) {
       p.visible = false;
       p.removeFromParent();
     }
-    const who = (shot.who ?? []).filter((id) => actor(id));
-    const poseOf = (id) => shot.pose?.[id] ?? (talksIn(id) ? "talk" : "idle");
-    // Standing characters without a spot: one in the center, two face each other, more stand in an arc.
-    const free = who.filter(
-      (id) => !shot.at?.[id] && !isSitting(poseOf(id)) && !isLying(poseOf(id)),
-    );
-    const center = place.spots.center;
-    const arc = (j) => {
-      const dx = (j - (free.length - 1) / 2) * 2.9;
-      return {
-        x: center.x + dx,
-        z: center.z - Math.abs(dx) * 0.28,
-        rot: center.rot - dx * 0.07,
-        y: center.y,
-      };
+    // Where everyone is now (motion.js: spots, walks, sitting down and standing up).
+    const layout = layoutOf(place.name);
+    const states = new Map();
+    for (const id of shot.who ?? []) {
+      if (!actor(id) || states.has(id)) continue;
+      const state = personState(motion, index, id, t, layout);
+      if (state) states.set(id, state);
+    }
+    const who = [...states.keys()];
+    // Gestures on the shot's key words, and a nod at the end of a sentence (talking poses).
+    const cueFor = (id, phase) => {
+      const mine = entry.words.filter(
+        (w) => w.speaker === id || ((!w.speaker || !cast[w.speaker]) && talksIn(id)),
+      );
+      if (!mine.length) return undefined;
+      const shift = phase * 3 - start;
+      const keys = mine.filter((w) => w.key);
+      const beats = (keys.length ? keys : mine.filter((_, i) => i % 4 === 1)).map(
+        (w) => w.start + shift,
+      );
+      const nods = mine.filter((w) => /[.!?…]["')\]]*$/.test(w.text)).map((w) => w.end + shift);
+      return { beats, nods };
     };
-    let seat = 0;
-    let bedIndex = 0;
     for (const id of who) {
       const a = actor(id);
-      const poseName = poseOf(id);
-      let spotName = shot.at?.[id];
-      if (!spotName && isSitting(poseName)) spotName = place.seats?.[seat++];
-      if (!spotName && isLying(poseName)) spotName = place.beds?.[bedIndex++];
-      let spot = place.spots[spotName];
-      if (!spot) {
-        const j = free.indexOf(id);
-        spot =
-          free.length >= 3 && j >= 0 ? arc(j) : (place.spots[STANDING[free.length]?.[j]] ?? center);
-      }
-      const rot = spot.rot + (shot.turn?.[id] ?? 0);
-      a.root.position.set(spot.x, spot.y ?? 0, spot.z);
-      a.root.rotation.set(0, rot, 0);
-      const travel = (TRAVEL[poseName] ?? 0) * u;
-      if (travel)
-        a.root.position.add(tmp.set(Math.sin(rot), 0, Math.cos(rot)).multiplyScalar(travel));
-      const pose = poseAt(poseName, u + a.phase * 3, a.phase);
+      const st = states.get(id);
       const s = a.size;
-      if (spot.seat !== undefined && isSitting(poseName))
-        pose.bodyY = (pose.bodyY ?? 0) + (spot.seat - 1.5 * s) / s;
-      if (spot.bed !== undefined && isLying(poseName))
-        pose.bodyY = (pose.bodyY ?? 0) + spot.bed / s + 0.5;
+      const poseName = poseFor(entry, id, st.posture);
+      if (st.hidden) {
+        // Not in the picture yet (they come in later in the shot).
+        a.root.visible = false;
+        continue;
+      }
+      a.root.position.set(st.x, st.y, st.z);
+      a.root.rotation.set(0, st.rot, 0);
+      const uPose = u + a.phase * 3;
+      if (!st.act && !st.lastMove && TRAVEL[poseName]) {
+        // A gait pose without a walk goes straight ahead at its speed, its feet planted.
+        const travel = TRAVEL[poseName] * u * s;
+        a.root.position.x += Math.sin(st.rot) * travel;
+        a.root.position.z += Math.cos(st.rot) * travel;
+      }
+      const pose = composePose(st, poseAt(poseName, uPose, a.phase, cueFor(id, a.phase)), {
+        idle: () => poseAt("idle", uPose, a.phase),
+        size: s,
+        t,
+        poseTime: uPose,
+        phase: a.phase,
+      });
       a.pose = pose;
-      a.lying = isLying(poseName);
+      a.lying = st.posture === "lie" && !st.act;
       a.apply(pose);
       a.root.visible = true;
 
@@ -351,16 +383,97 @@ export function createEngine({ width: W, height: H, story }) {
     scene.updateMatrixWorld(true);
     const focusId = shot.focus && who.includes(shot.focus) ? shot.focus : who[0];
     const ordered = focusId ? [focusId, ...who.filter((id) => id !== focusId)] : [];
-    const subjects = ordered.map((id) => {
+    const end = start + seconds;
+    // Walks in this shot: the camera follows a walker, holds where someone comes in (or where they leave from),
+    // or pans (`move: "pan"`), always facing them the same way and without the bob of their steps.
+    const shotMoves = motion.moves.filter(
+      (m) => m.kind === "go" && who.includes(m.id) && m.t0 < end && m.t1 > start,
+    );
+    const moveFor = (id) => {
+      const mine = shotMoves.filter((m) => m.id === id);
+      return mine.find((m) => t >= m.t0 && t < m.t1) ?? mine.findLast((m) => m.t1 <= t) ?? mine[0];
+    };
+    const cameraMode = (move) =>
+      shot.move === "follow" || shot.move === "pan"
+        ? shot.move
+        : move.enters
+          ? "end"
+          : move.exits
+            ? "start"
+            : "follow";
+    const frameHead = (id, time) => {
       const a = actors.get(id);
-      return {
-        head: a.headWorld(new THREE.Vector3()),
-        chest: a.chestWorld(new THREE.Vector3()),
-        forward: new THREE.Vector3(Math.sin(a.root.rotation.y), 0, Math.cos(a.root.rotation.y)),
-        size: a.size,
-        lying: a.lying,
-      };
-    });
+      const st = personState(motion, index, id, time, layout) ?? states.get(id);
+      const drop = headDrop(st, a.size);
+      return new THREE.Vector3(st.x, (st.y ?? 0) + a.size * (a.headHeight + drop), st.z);
+    };
+    const subjectsAt = (time, panning = false) =>
+      ordered.map((id) => {
+        const a = actors.get(id);
+        const move = moveFor(id);
+        if (!move || a.lying) {
+          return {
+            head: a.headWorld(new THREE.Vector3()),
+            chest: a.chestWorld(new THREE.Vector3()),
+            forward: new THREE.Vector3(Math.sin(a.root.rotation.y), 0, Math.cos(a.root.rotation.y)),
+            size: a.size,
+            lying: a.lying,
+          };
+        }
+        const mode = cameraMode(move);
+        const at =
+          mode === "end"
+            ? move.t1 - 1e-3
+            : mode === "start" || (mode === "pan" && panning)
+              ? Math.max(move.t0, start)
+              : time;
+        const head = frameHead(id, at);
+        return {
+          head,
+          chest: head.clone().add(new THREE.Vector3(0, -1.6 * a.size, 0)),
+          forward: new THREE.Vector3(Math.sin(move.view), 0, Math.cos(move.view)),
+          size: a.size,
+          lying: false,
+        };
+      });
+    const subjects = subjectsAt(t);
+    // A close shot whose view someone else stands in: the camera turns around the focus to see past them. Worked
+    // out from where everyone stands as the shot starts, so every frame (and every render worker) agrees.
+    let extraTurn = viewTurns.get(index);
+    if (extraTurn === undefined) {
+      extraTurn = 0;
+      const kind = SHOT_TYPES[shot.shot] !== undefined ? shot.shot : "medium";
+      if ((kind === "close" || kind === "xclose") && ordered.length > 1) {
+        const still = ordered.map((id) => {
+          const st = personState(motion, index, id, start, layout) ?? states.get(id);
+          const rot = moveFor(id)?.view ?? st.rot;
+          return {
+            head: frameHead(id, start),
+            forward: new THREE.Vector3(Math.sin(rot), 0, Math.cos(rot)),
+            size: actors.get(id).size,
+            lying: st.posture === "lie",
+          };
+        });
+        for (const turn of [0, 0.5, -0.5, 0.95, -0.95]) {
+          const look = frameShot({
+            shot,
+            subjects: still,
+            place,
+            aspect: W / H,
+            u: 0,
+            seconds,
+            index,
+            object,
+            extraTurn: turn,
+          });
+          if (!viewBlocked(look.position, look.target, still.slice(1))) {
+            extraTurn = turn;
+            break;
+          }
+        }
+      }
+      viewTurns.set(index, extraTurn);
+    }
 
     // Effects on the characters: popping in, jumping, dashing, squash and stretch. The camera frames them as
     // they stand, so a jump goes up in the picture.
@@ -380,7 +493,33 @@ export function createEngine({ width: W, height: H, story }) {
     }
     scene.updateMatrixWorld(true);
 
-    const view = frameShot({ shot, subjects, place, aspect: W / H, u, seconds, index, object });
+    const view = frameShot({
+      shot,
+      subjects,
+      place,
+      aspect: W / H,
+      u,
+      seconds,
+      index,
+      object,
+      extraTurn,
+    });
+    if (shot.move === "pan" && shotMoves.length) {
+      // The camera stays where it framed the walk's start and turns to keep the walker in the picture.
+      const from = frameShot({
+        shot,
+        subjects: subjectsAt(t, true),
+        place,
+        aspect: W / H,
+        u,
+        seconds,
+        index,
+        object,
+        extraTurn,
+      });
+      view.position.copy(from.position);
+      view.focus = view.position.distanceTo(subjects[0]?.head ?? view.target);
+    }
     const punch = cameraState(events, index, t);
     view.fov *= punch.zoom;
     if (punch.shake > 0) {
@@ -398,19 +537,47 @@ export function createEngine({ width: W, height: H, story }) {
     fill.target.position.copy(view.target);
     fill.intensity = (settings.fill ?? 1) * (place.light === "day" ? 0.25 : 0.45);
 
-    // In closer shots the characters look toward the camera (heads only, partly).
+    // Heads: people look at whoever talks (turning from the one before), everyone looks at someone walking,
+    // `look` says who looks at whom, and in closer shots the others look toward the camera.
     const type = shot.shot ?? (who.length ? "medium" : "wide");
-    if (["close", "xclose", "medium", "low"].includes(type) && shot.look !== "away") {
-      for (const id of ordered) {
-        const a = actors.get(id);
-        const head = a.headWorld(tmp);
-        const toCam = camera.position.clone().sub(head);
-        const angle = Math.atan2(toCam.x, toCam.z) - a.root.rotation.y;
-        const wrapped = Math.atan2(Math.sin(angle), Math.cos(angle));
-        a.apply({ ...a.pose, headY: (a.pose.headY ?? 0) + clamp(wrapped * 0.55, -0.7, 0.7) });
+    const toCamera = ["close", "xclose", "medium", "low"].includes(type) && shot.look !== "away";
+    const looks = shot.look && typeof shot.look === "object" ? shot.look : {};
+    const talking = speakerAt(t);
+    const walker = who.find((id) => states.get(id)?.move?.kind === "go");
+    let turned = false;
+    for (const id of ordered) {
+      const a = actors.get(id);
+      const st = states.get(id);
+      if (!a.root.visible || a.lying || st.move?.kind === "go") continue;
+      const head = a.headWorld(new THREE.Vector3());
+      const angleTo = (other) => {
+        const b = other !== id ? actors.get(other) : null;
+        if (!b?.root.visible || !who.includes(other)) return null;
+        const there = b.headWorld(new THREE.Vector3());
+        return wrapAngle(Math.atan2(there.x - head.x, there.z - head.z) - a.root.rotation.y);
+      };
+      let angle = null;
+      if (typeof looks[id] === "string") angle = angleTo(looks[id]);
+      else if (walker && walker !== id) angle = angleTo(walker);
+      else if (talking.id && talking.id !== id) {
+        const now = angleTo(talking.id);
+        const before = talking.before ? (angleTo(talking.before) ?? 0) : 0;
+        angle = now === null ? null : lerp(before, now, talking.k);
       }
-      scene.updateMatrixWorld(true);
+      if (angle !== null) {
+        angle = clamp(angle * 0.9, -1.1, 1.1);
+      } else if (toCamera) {
+        const toCam = camera.position.clone().sub(head);
+        angle = clamp(
+          wrapAngle(Math.atan2(toCam.x, toCam.z) - a.root.rotation.y) * 0.55,
+          -0.7,
+          0.7,
+        );
+      } else continue;
+      a.apply({ ...a.pose, headY: (a.pose.headY ?? 0) + angle });
+      turned = true;
     }
+    if (turned) scene.updateMatrixWorld(true);
 
     effects.render({
       t,
@@ -435,16 +602,19 @@ export function createEngine({ width: W, height: H, story }) {
       return { x, y, r };
     };
     // The ground around someone's feet, on screen (magic rings, dust).
-    const ringAt = (id, radius, n) => {
-      const a = actors.get(id);
-      if (!a || radius <= 0) return null;
+    const ringAt = (on, radius, n) => {
+      // Around someone, or around a point on the ground (where a run started).
+      const a = typeof on === "string" ? actors.get(on) : null;
+      const center = a ? a.root.position : on;
+      const size = a ? a.size : 1;
+      if (!center || radius <= 0) return null;
       const points = [];
       for (let i = 0; i < n; i++) {
         const angle = (i / n) * Math.PI * 2;
         const p = new THREE.Vector3(
-          a.root.position.x + Math.cos(angle) * radius * 2.2 * a.size,
-          (a.root.position.y || 0) + 0.05,
-          a.root.position.z + Math.sin(angle) * radius * 2.2 * a.size,
+          center.x + Math.cos(angle) * radius * 2.2 * size,
+          (center.y || 0) + 0.05,
+          center.z + Math.sin(angle) * radius * 2.2 * size,
         ).project(camera);
         if (p.z > 1) return null;
         points.push([((p.x + 1) / 2) * W, ((1 - p.y) / 2) * H]);
@@ -489,6 +659,10 @@ export function createEngine({ width: W, height: H, story }) {
     /** The effects, timed (for sheets and tests). */
     get effects() {
       return events;
+    },
+    /** Where everyone is and how they move, with the problems found (for the Moves sheet and tests). */
+    get motion() {
+      return motion;
     },
     get scenes() {
       return scenes.map(({ name, start, end }) => ({ name, start, end }));
