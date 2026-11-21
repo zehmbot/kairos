@@ -368,9 +368,16 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
       { title: "Cinema check", shape: "tall" },
       { size: { width: 360, height: 640 } },
     );
-    for (const name of ["cast", "poses", "props", "places", "effects", "moves"]) {
+    // Every sheet, and the Places sheet for every place (each in day, evening and night, with its physics checked).
+    const pages = [
+      ...["cast", "poses", "props", "effects", "moves"].map((name) => `sheet=${name}`),
+      ...["home", "bedroom", "school", "town", "park", "forest"].map(
+        (place) => `sheet=places&place=${place}`,
+      ),
+    ];
+    for (const name of pages) {
       const { checks } = await camera.captureFrame({
-        url: `http://127.0.0.1:${port}/${id}/sheet.html?sheet=${name}`,
+        url: `http://127.0.0.1:${port}/${id}/sheet.html?${name}`,
         width: 1920,
         height: 1080,
         t: 0,

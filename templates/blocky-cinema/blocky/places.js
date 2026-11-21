@@ -60,6 +60,7 @@ export const LIGHTS = {
     env: 0.27,
     exposure: 1.65,
     indoorExposure: 1.1,
+    outdoorExposure: 1.2,
     windowSky: "#bfe3ff",
   },
   evening: {
@@ -72,6 +73,7 @@ export const LIGHTS = {
     env: 0.18,
     exposure: 1.7,
     indoorExposure: 1.05,
+    outdoorExposure: 1.15,
     windowSky: "#ff9e6b",
   },
   night: {
@@ -84,14 +86,15 @@ export const LIGHTS = {
     env: 0.085,
     exposure: 2.0,
     indoorExposure: 1.0,
+    outdoorExposure: 1.1,
     windowSky: "#1d2b5a",
   },
 };
 
 /** The main light (sun or moon) with soft shadows around `center`. */
-function sunLight(g, preset, center = [0, 0, 0], range = 20, scale = 1) {
+function sunLight(g, preset, center = [0, 0, 0], range = 20, scale = 1, boost = 1) {
   const L = LIGHTS[preset];
-  const sun = new THREE.DirectionalLight(L.sun, L.sunI * scale * SCALE);
+  const sun = new THREE.DirectionalLight(L.sun, L.sunI * scale * boost * SCALE);
   sun.position.set(center[0] + L.sunPos[0], center[1] + L.sunPos[1], center[2] + L.sunPos[2]);
   sun.target.position.set(...center);
   sun.castShadow = true;
@@ -108,10 +111,13 @@ function sunLight(g, preset, center = [0, 0, 0], range = 20, scale = 1) {
   sun.shadow.normalBias = 0.03;
   sun.shadow.radius = 3;
   g.add(sun, sun.target);
-  const hemi = new THREE.HemisphereLight(L.sky, L.ground, L.hemiI * SCALE);
+  const hemi = new THREE.HemisphereLight(L.sky, L.ground, L.hemiI * boost * SCALE);
   g.add(hemi);
   return sun;
 }
+
+/** Outdoors the exposure comes down near normal: the sun and sky get this much brighter to match. */
+const outdoorBoost = (preset) => LIGHTS[preset].exposure / LIGHTS[preset].outdoorExposure;
 
 /**
  * A lamp that lights a pool around it and casts soft shadows (above the draft look): a room's warm practical light.
@@ -121,12 +127,12 @@ function lampSpot(
   g,
   [x, y, z],
   toward,
-  { color = "#ffb36b", intensity = 120, angle = 1.25, distance = 48 } = {},
+  { color = "#ffb36b", intensity = 120, angle = 1.25, distance = 48, shadow = true } = {},
 ) {
   const light = new THREE.SpotLight(color, intensity, distance, angle, 0.9, 1.3);
   light.position.set(x, y, z);
   light.target.position.set(x + toward[0], y + toward[1], z + toward[2]);
-  light.castShadow = look !== "draft";
+  light.castShadow = shadow && look !== "draft";
   light.shadow.mapSize.set(shadowSize() / 2, shadowSize() / 2);
   light.shadow.bias = -0.0008;
   light.shadow.normalBias = 0.05;
@@ -134,6 +140,20 @@ function lampSpot(
   light.shadow.camera.near = 0.5;
   light.shadow.camera.far = distance;
   g.add(light, light.target);
+  return light;
+}
+
+/** A fire's light: warm, all around, with soft shadows above the draft look (it flickers in the place's update). */
+function campfireLight(g, x, y, z, intensity, distance = 34) {
+  const light = new THREE.PointLight("#ff8a3a", intensity * SCALE, distance, 1.5);
+  light.position.set(x, y, z);
+  light.castShadow = look !== "draft";
+  light.shadow.mapSize.set(shadowSize() / 4, shadowSize() / 4);
+  light.shadow.bias = -0.002;
+  light.shadow.radius = 6;
+  light.shadow.camera.near = 0.3;
+  light.shadow.camera.far = distance;
+  g.add(light);
   return light;
 }
 
@@ -309,13 +329,21 @@ function bedroom(preset) {
   const toys = block(1.6, 1.6, 1.6, "#3b5dc9", 7, 0, 3, { radius: 0.2 });
   g.add(bedroomBed, stand, lamp, win, desk, deskChair, poster1, poster2, toys);
 
-  sunLight(g, preset, [0, 0, -3], 16, night ? 0.45 : 0.85);
-  if (preset !== "day") lampLight(g, -1.8, 4, -8.6, night ? 45 : 22);
-  lampLight(g, 2, 9.5, 2, night ? 5 : 12, "#fff2dc", 36);
+  // The window's light (no shadow: the engine's key light casts them), the bedside lamp's warm pool with soft
+  // shadows in the evening and at night, a faint glow from the hall. No ceiling light.
+  const daylight = sunLight(g, preset, [0, 0, -3], 16, night ? 0.3 : 0.6);
+  daylight.castShadow = false;
+  if (preset !== "day") {
+    lampSpot(g, [-1.8, 3.4, -9.1], [1.8, -2.6, 4], { intensity: night ? 110 : 70 });
+    lampLight(g, -1.8, 3.5, -8.9, night ? 10 : 6, "#ffc27a", 10);
+  }
+  lampLight(g, 10, 7, 8, night ? 2 : 4, "#fff2dc", 22);
 
   return {
     group: g,
     ...LAYOUTS.bedroom,
+    indoor: true,
+    exposure: LIGHTS[preset].indoorExposure,
     fog: null,
   };
 }
@@ -336,7 +364,8 @@ function school(preset) {
     },
     { repeat: [6, 24] },
   );
-  const floor = ground(w, length, tiles, { roughness: 0.35 });
+  // A matte floor: a shiny one mirrors the ceiling panels and glows white.
+  const floor = ground(w, length, tiles, { roughness: 0.75 });
   floor.position.z = z0 + length / 2;
   g.add(floor);
   const wallMaterial = paint("#e3e6ea", { roughness: 0.9 });
@@ -397,30 +426,33 @@ function school(preset) {
   sign.rotation.y = Math.PI / 2;
   g.add(doors, doors2, sign);
 
-  const hemi = new THREE.HemisphereLight("#ffffff", "#9aa0ae", 0.75 * SCALE);
-  const key = new THREE.DirectionalLight("#ffffff", 1.5 * SCALE);
-  key.position.set(4, 20, 8);
-  key.target.position.set(0, 0, -6);
-  key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
-  Object.assign(key.shadow.camera, {
-    left: -16,
-    right: 16,
-    top: 16,
-    bottom: -16,
-    near: 1,
-    far: 60,
-  });
-  key.shadow.bias = -0.0004;
-  key.shadow.normalBias = 0.03;
-  g.add(hemi, key, key.target);
-  lampLight(g, 0, 10, -12, preset === "night" ? 20 : 30, "#eaf2ff", 40);
+  // The ceiling panels light the hall: cool-white pools down its length (the three where stories happen cast soft
+  // shadows), a soft fill from the floor and walls, and daylight from the far doors.
+  const hemi = new THREE.HemisphereLight("#ffffff", "#9aa0ae", 0.35 * SCALE);
+  g.add(hemi);
+  for (const z of [-19, -12, -5, 2, 9, 16]) {
+    lampSpot(g, [0, 10.7, z], [0, -10, 0.01], {
+      color: "#eef4ff",
+      intensity: preset === "night" ? 26 : 30,
+      angle: 1.15,
+      distance: 30,
+      shadow: z >= -5 && z <= 9,
+    });
+  }
+  if (preset !== "night") {
+    const doorway = new THREE.DirectionalLight("#fff6e8", 0.5 * SCALE);
+    doorway.position.set(0, 8, -60);
+    doorway.target.position.set(0, 0, 0);
+    g.add(doorway, doorway.target);
+  }
 
   return {
     group: g,
     ...LAYOUTS.school,
     fog: { color: "#dfe3ea", near: 40, far: 90 },
-    exposure: 1.5,
+    indoor: true,
+    // A white hall: a little under the other rooms, so its floor and walls don't blow out.
+    exposure: LIGHTS[preset].indoorExposure * 0.85,
     env: 0.2,
   };
 }
@@ -501,10 +533,19 @@ function town(preset) {
   parked2.rotation.y = Math.PI;
   g.add(parked, parked2);
 
-  sunLight(g, preset, [0, 0, 0], 24);
+  // The sun (or moon) is the key light with its shadows; once it's dark, the street lamps near the middle cast warm
+  // pools with soft shadows.
+  sunLight(g, preset, [0, 0, 0], 24, 1, outdoorBoost(preset));
   if (lit) {
-    lampLight(g, -1.3, 7, -8, preset === "night" ? 60 : 25, "#ffd9a0", 30);
-    lampLight(g, -16.3, 7, -8, preset === "night" ? 60 : 25, "#ffd9a0", 30);
+    for (const x of [-1.3, 13.7, -16.3]) {
+      lampSpot(g, [x, 7.1, -8], [0.2, -7, 2.2], {
+        color: "#ffd9a0",
+        intensity: preset === "night" ? 170 : 70,
+        angle: 1.05,
+        distance: 34,
+        shadow: x === -1.3,
+      });
+    }
   }
 
   return {
@@ -574,7 +615,7 @@ function park(preset) {
     g.add(hill);
   }
 
-  sunLight(g, preset, [0, 0, -4], 24);
+  sunLight(g, preset, [0, 0, -4], 24, 1, outdoorBoost(preset));
 
   return {
     group: g,
@@ -736,8 +777,10 @@ function forest(preset) {
   snowfall.frustumCulled = false;
   g.add(snowfall);
 
-  sunLight(g, preset, [0, 0, -3], 22, night ? 1.1 : 1);
-  const fireLight = lampLight(g, -4.5, 2.5, -2.5, night ? 55 : 20, "#ff8a3a", 28);
+  // At night the campfire is the key light, flickering, with soft shadows; the moon is a cool rim. By day the sun
+  // leads at a normal exposure.
+  sunLight(g, preset, [0, 0, -3], 22, night ? 0.8 : 1, outdoorBoost(preset));
+  const fireLight = campfireLight(g, -4.5, 2.6, -2.5, night ? 95 : 30);
   if (night) lampLight(g, 6.5, 3.5, -12.5, 25, "#ffb45e", 20);
 
   return {
@@ -792,7 +835,9 @@ export function getPlace(name, light) {
     place.name = placeName;
     place.light = preset;
     place.update ??= () => {};
-    place.exposure ??= LIGHTS[preset].exposure;
+    place.exposure ??= place.indoor
+      ? LIGHTS[preset].indoorExposure
+      : LIGHTS[preset].outdoorExposure;
     place.env ??= LIGHTS[preset].env;
     place.group.visible = false;
     cache.set(key, place);

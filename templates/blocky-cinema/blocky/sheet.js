@@ -22,8 +22,8 @@ import {
   normalizeFx,
   planEffects,
 } from "./fx.js";
-import { layoutOf } from "./layouts.js";
-import { composePose, GRAVITY, personState, planMotion, poseFor } from "./motion.js";
+import { layoutOf, solidsOf } from "./layouts.js";
+import { composePose, GRAVITY, insideBlock, personState, planMotion, poseFor } from "./motion.js";
 import { loadPhysics } from "./physics.js";
 import { DEFAULT_LIGHT, getPlace } from "./places.js";
 import {
@@ -510,7 +510,126 @@ export function createSheet({ story, params }) {
   }
 
   /** Doors, tables and seats against the size chart and the figures. */
+  /**
+   * The place's physics against what's built (layouts.js `solids`): every piece of furniture where people go is
+   * covered by physics shapes (most of its points inside one), and every shape stands on something built (no
+   * invisible walls).
+   */
+  function checkPhysics(place) {
+    const layout = layoutOf(place.name);
+    const solids = solidsOf(layout);
+    if (!solids.length) return;
+    place.group.updateMatrixWorld(true);
+    const bounds = layout.bounds ?? { minX: -40, maxX: 40, minZ: -40, maxZ: 40 };
+    const walls = layout.walls;
+    const insideSolid = (p, grow) =>
+      solids.some((b) => {
+        const c = Math.cos(b.rot ?? 0);
+        const sn = Math.sin(b.rot ?? 0);
+        const dx = p.x - b.x;
+        const dz = p.z - b.z;
+        return (
+          Math.abs(dx * c - dz * sn) <= b.w / 2 + grow &&
+          Math.abs(dx * sn + dz * c) <= b.d / 2 + grow &&
+          Math.abs(p.y - b.y) <= b.h / 2 + grow
+        );
+      });
+    const nameAt = (x, z) =>
+      (layout.blocks ?? []).find((b) => insideBlock(b, { x, z }, 0.6))?.name ??
+      `a piece at x ${x.toFixed(1)}, z ${z.toFixed(1)}`;
+    // The pieces: what stands in the place, near where people go (not the floor, walls, ceiling or rugs, not
+    // what hangs on the walls, not the tiny decorations).
+    const pieces = [];
+    /** Everything built (an instanced piece counts one by one), for "the shape stands on something". */
+    const built = [];
+    const candidates = [];
+    for (const piece of place.group.children) {
+      if (piece.isLight || piece.isPoints) continue;
+      if (piece.isInstancedMesh) {
+        if (!piece.geometry.boundingBox) piece.geometry.computeBoundingBox();
+        const matrix = new THREE.Matrix4();
+        for (let i = 0; i < piece.count; i++) {
+          piece.getMatrixAt(i, matrix);
+          const box = piece.geometry.boundingBox
+            .clone()
+            .applyMatrix4(matrix)
+            .applyMatrix4(piece.matrixWorld);
+          candidates.push({ piece, box, instance: i });
+        }
+        continue;
+      }
+      const box = new THREE.Box3().setFromObject(piece);
+      if (!box.isEmpty()) candidates.push({ piece, box });
+    }
+    for (const { piece, box, instance } of candidates) {
+      const size = box.getSize(new THREE.Vector3());
+      if (Math.max(size.x, size.z) > 30 || size.y < 0.3) continue;
+      built.push(box);
+      if (box.min.y > 2.5 || Math.max(size.x, size.z) < 0.6) continue;
+      if (box.max.x < bounds.minX - 2 || box.min.x > bounds.maxX + 2) continue;
+      if (box.max.z < bounds.minZ - 2 || box.min.z > bounds.maxZ + 2) continue;
+      // Flat on a wall (a door, a skirting board).
+      if (walls && Math.min(size.x, size.z) < 0.6) {
+        const nearWall =
+          box.min.x < walls.minX + 0.8 ||
+          box.max.x > walls.maxX - 0.8 ||
+          box.min.z < walls.minZ + 0.8 ||
+          box.max.z > walls.maxZ - 0.8;
+        if (nearWall) continue;
+      }
+      pieces.push({ piece, box, instance });
+    }
+    for (const { piece, box, instance } of pieces) {
+      // Points of the piece's own meshes (or of its one instance), in the world.
+      const points = [];
+      const one = new THREE.Matrix4();
+      if (instance !== undefined) piece.getMatrixAt(instance, one);
+      piece.traverse((m) => {
+        // Glowing parts (lamp shades, screens) don't need to collide.
+        const glowing =
+          (m.material?.emissive?.getHex?.() ?? 0) > 0 && m.material.emissiveIntensity > 0.5;
+        if (!m.isMesh || glowing) return;
+        const position = m.geometry.attributes.position;
+        const step = Math.max(1, Math.floor(position.count / 60));
+        const toWorld = m.matrixWorld.clone().multiply(one);
+        for (let i = 0; i < position.count; i += step) {
+          points.push(new THREE.Vector3().fromBufferAttribute(position, i).applyMatrix4(toWorld));
+        }
+      });
+      if (!points.length) continue;
+      const covered = points.filter((p) => insideSolid(p, 0.35)).length / points.length;
+      if (covered < 0.6) {
+        const center = box.getCenter(new THREE.Vector3());
+        report(
+          `${placeName}: ${nameAt(center.x, center.z)} has no physics shape (${Math.round(covered * 100)}% of it is covered): add it to the place's solids in blocky/layouts.js.`,
+        );
+        bad.add(0);
+      }
+    }
+    // Every shape stands on something built.
+    for (const b of solids) {
+      const r = Math.hypot(b.w, b.d) / 2;
+      const box = new THREE.Box3(
+        new THREE.Vector3(b.x - r, b.y - b.h / 2, b.z - r),
+        new THREE.Vector3(b.x + r, b.y + b.h / 2, b.z + r),
+      );
+      const real = built.some((other) => other.intersectsBox(box));
+      const outside =
+        b.x + r < bounds.minX - 2 ||
+        b.x - r > bounds.maxX + 2 ||
+        b.z + r < bounds.minZ - 2 ||
+        b.z - r > bounds.maxZ + 2;
+      if (!real && !outside && Math.max(b.w, b.d) <= 30) {
+        report(
+          `${placeName}: the physics shape at x ${b.x}, z ${b.z} has nothing built there (an invisible wall): remove it from blocky/layouts.js.`,
+        );
+        bad.add(0);
+      }
+    }
+  }
+
   function checkPlace(place) {
+    checkPhysics(place);
     place.group.traverse((object) => {
       const kind = object.userData.kind;
       if (!kind) return;

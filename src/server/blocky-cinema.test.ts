@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { beforeAll, describe, expect, it } from "vitest";
 import { BLOCKY_CAST } from "../../templates/blocky-cinema/blocky/cast.js";
 import { figureAt } from "../../templates/blocky-cinema/blocky/figure.js";
-import { layoutOf } from "../../templates/blocky-cinema/blocky/layouts.js";
+import { LAYOUTS, layoutOf, solidsOf } from "../../templates/blocky-cinema/blocky/layouts.js";
 import {
   freeSpot,
   GRAVITY,
@@ -20,6 +20,7 @@ import {
   simulate,
   thingSpots,
 } from "../../templates/blocky-cinema/blocky/simulation.js";
+import { UNITS_PER_METER } from "../../templates/blocky-cinema/blocky/sizes.js";
 import { planStory } from "../../templates/blocky-cinema/blocky/timing.js";
 import { hash } from "../../templates/blocky-cinema/blocky/util.js";
 import * as story from "../../templates/blocky-cinema/story.js";
@@ -326,3 +327,185 @@ describe("Blocky Cinema: moves and actions", () => {
     ]);
   });
 });
+
+type Solid = { x: number; y: number; z: number; w: number; h: number; d: number; rot?: number };
+
+/** The tour: a short scene in each place, with a walk, a pick-up and a throw, a run through crates, a punch. */
+const TOUR = {
+  THINGS: {
+    ball: { prop: "ball", place: "bedroom", at: { x: 1.2, z: -1.2 } },
+    cup: { prop: "cup", place: "bedroom", at: { x: 9.6, z: -5.2, y: 2.2 } },
+    crates: { prop: "box", place: "school", at: { x: 0.6, z: -2.8 }, stack: 2 },
+    parcel: { prop: "gift", place: "town", at: { x: 2.4, z: 6.4, y: 0.3 } },
+    present: { prop: "gift", place: "park", at: { x: 2, z: 0.4 } },
+    crate: { prop: "box", place: "forest", at: { x: 1.6, z: 0.6 } },
+  },
+  SHOTS: [
+    {
+      place: "bedroom",
+      light: "evening",
+      shot: "full",
+      who: ["milo", "zee"],
+      at: { milo: "left", zee: "right" },
+      go: { milo: "ball" },
+      act: { milo: { pickUp: "ball" } },
+      say: "Milo found his old ball",
+    },
+    {
+      shot: "medium",
+      who: ["milo", "zee"],
+      act: { milo: { throw: "zee", at: "catch." } },
+      say: "and yelled: catch.",
+    },
+    {
+      place: "school",
+      light: "day",
+      shot: "full",
+      who: ["theo", "nadia"],
+      at: { nadia: "right" },
+      go: { theo: { from: "back", to: "center", pace: "run" } },
+      say: "Theo ran late to class, right through the crates.",
+    },
+    {
+      place: "town",
+      light: "evening",
+      shot: "wide",
+      who: ["ruby"],
+      go: { ruby: { from: "off-left", to: "center", pace: "run" } },
+      say: "Ruby raced home before dark.",
+    },
+    {
+      place: "park",
+      light: "day",
+      shot: "full",
+      who: ["zee"],
+      at: { zee: "center" },
+      go: { zee: { to: "right", pace: "sprint" } },
+      say: "Zee sprinted to the swings and back again.",
+    },
+    {
+      place: "forest",
+      light: "night",
+      shot: "medium",
+      who: ["theo", "milo"],
+      at: { milo: "left", theo: "right" },
+      go: { theo: "milo" },
+      say: "By the fire, Theo came closer,",
+    },
+    {
+      shot: "medium",
+      who: ["theo", "milo"],
+      act: { theo: { punch: "milo", at: "shoulder." } },
+      say: "and tapped him on the shoulder.",
+    },
+  ],
+};
+
+describe("Blocky Cinema: every place", () => {
+  it("has physics shapes inside its walls, and a height on every piece of furniture", () => {
+    for (const [name, layout] of Object.entries(LAYOUTS) as [
+      string,
+      {
+        walls?: { minX: number; maxX: number; minZ: number; maxZ: number };
+        blocks: { name: string; h?: number }[];
+      },
+    ][]) {
+      expect(solidsOf(layout).length, name).toBeGreaterThan(0);
+      for (const block of layout.blocks)
+        expect(block.h, `${name}: ${block.name}`).toBeGreaterThan(0);
+      const walls = layout.walls;
+      if (!walls) continue;
+      for (const b of solidsOf(layout) as Solid[]) {
+        expect(b.x - b.w / 2, name).toBeGreaterThanOrEqual(walls.minX - 0.01);
+        expect(b.x + b.w / 2, name).toBeLessThanOrEqual(walls.maxX + 0.01);
+        expect(b.z - b.d / 2, name).toBeGreaterThanOrEqual(walls.minZ - 0.01);
+        expect(b.z + b.d / 2, name).toBeLessThanOrEqual(walls.maxZ + 0.01);
+      }
+    }
+  });
+
+  it("lets a box dropped on any piece of furniture come to rest on it, never inside it", () => {
+    const meters = (u: number) => u / UNITS_PER_METER;
+    const create = createWorld as (o: { hz: number }) => {
+      fixedBox: (b: Record<string, number>) => void;
+      body: (b: Record<string, unknown>) => number;
+      step: () => void;
+      read: (h: number) => number[];
+      free: () => void;
+    };
+    for (const [name, layout] of Object.entries(LAYOUTS)) {
+      const solids = solidsOf(layout) as Solid[];
+      // Furniture people meet (not the long rows of houses or the pavements).
+      for (const target of solids.filter((b) => Math.max(b.w, b.d) < 30)) {
+        const world = create({ hz: 120 });
+        world.fixedBox({ x: 0, y: -0.5, z: 0, w: 400, h: 1, d: 400 });
+        for (const b of solids) {
+          world.fixedBox({
+            x: meters(b.x),
+            y: meters(b.y),
+            z: meters(b.z),
+            w: meters(b.w),
+            h: meters(b.h),
+            d: meters(b.d),
+            rotY: b.rot ?? 0,
+          });
+        }
+        // Above everything over that spot (a trunk's top is inside its crown).
+        const over = (b: Solid) => {
+          const c = Math.cos(b.rot ?? 0);
+          const sn = Math.sin(b.rot ?? 0);
+          const dx = target.x - b.x;
+          const dz = target.z - b.z;
+          return Math.abs(dx * c - dz * sn) <= b.w / 2 && Math.abs(dx * sn + dz * c) <= b.d / 2;
+        };
+        const top = Math.max(...solids.filter(over).map(b2top));
+        const box = world.body({
+          shape: { box: [0.3, 0.3, 0.3] },
+          at: { x: meters(target.x), y: meters(top) + 0.4, z: meters(target.z) },
+          density: 200,
+        });
+        for (let i = 0; i < 240; i++) world.step();
+        const [x = 0, y = 0, z = 0] = world.read(box);
+        world.free();
+        const at = { x: x * UNITS_PER_METER, y: y * UNITS_PER_METER, z: z * UNITS_PER_METER };
+        // Its middle isn't inside any piece of furniture (shrunk a little: resting on one touches it).
+        const inside = solids.find((b) => {
+          const c = Math.cos(b.rot ?? 0);
+          const sn = Math.sin(b.rot ?? 0);
+          const dx = at.x - b.x;
+          const dz = at.z - b.z;
+          return (
+            Math.abs(dx * c - dz * sn) < b.w / 2 - 0.1 &&
+            Math.abs(dx * sn + dz * c) < b.d / 2 - 0.1 &&
+            Math.abs(at.y - b.y) < b.h / 2 - 0.1
+          );
+        });
+        expect(
+          inside,
+          `${name}: a box dropped on the piece at ${target.x}, ${target.z}`,
+        ).toBeUndefined();
+        expect(at.y, `${name}: ${target.x}, ${target.z}`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("plays the tour of every place without problems", () => {
+    const planned = plan(TOUR.SHOTS as Shot[], TOUR.THINGS);
+    expect(planned.motion.problems).toEqual([]);
+    const sim = physics(planned, TOUR.THINGS);
+    expect(sim.problems).toEqual([]);
+    expect(sim.hits.map((h) => h.id)).toEqual(["zee"]);
+    // The cup rests on the desk, the parcel on the pavement: things on furniture stay on it.
+    const end = planned.timeline.duration;
+    const cup = sampleTrack(sim.tracks.get("cup") as Track, end).position;
+    expect(cup.y).toBeGreaterThan(2.2);
+    const parcel = sampleTrack(sim.tracks.get("parcel") as Track, end).position;
+    expect(parcel.y).toBeGreaterThan(0.3);
+    // Theo's run knocked the crates along the hall.
+    const crate = sampleTrack(sim.tracks.get("crates#0") as Track, end).position;
+    expect(Math.hypot(crate.x - 0.6, crate.z + 2.8)).toBeGreaterThan(1);
+  });
+});
+
+/** The top of a physics shape (units). */
+const b2top = (b: Solid) => b.y + b.h / 2;

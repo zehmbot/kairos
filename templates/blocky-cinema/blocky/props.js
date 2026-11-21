@@ -482,8 +482,10 @@ export function cabin(lit) {
     },
     { repeat: [2, 2] },
   );
+  // Walls about 2.6 m high: a real 2.1 m door fits under the roof.
+  const wall = 7.6;
   const g = group(
-    block(10, 6, 8, null, 0, 0, 0, { material: paint("#ffffff", { map: logs }), radius: 0.2 }),
+    block(10, wall, 8, null, 0, 0, 0, { material: paint("#ffffff", { map: logs }), radius: 0.2 }),
   );
   const roof = mesh(
     cachedGeometry("cabinRoof", () => {
@@ -498,15 +500,14 @@ export function cabin(lit) {
     }),
     paint("#eef3ff", { roughness: 0.95 }),
   );
-  roof.position.y = 6;
+  roof.position.y = wall;
   g.add(roof);
   const pane = mesh(roundedBox(2.2, 2, 0.2, 0.05), lit ? glow("#ffb45e", 1.5) : paint("#2a3040"), {
     cast: false,
   });
-  pane.position.set(-2.4, 3.4, 4.05);
+  pane.position.set(-2.4, 4.2, 4.05);
   g.add(pane);
   const frontDoor = door("#4a2f20");
-  frontDoor.scale.setScalar(0.8);
   frontDoor.position.set(2, 0, 4.05);
   g.add(frontDoor);
   return g;

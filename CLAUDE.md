@@ -141,8 +141,8 @@ next to the old one until it replaces it. Its engine is a copy of Blocky's, reor
   - **The Moves sheet:** it shows the gaits and the sit and stand transitions, and checks the story's walks and
     that feet don't slide.
 
-**Blocky Cinema** (`templates/blocky-cinema/`, being tried out) is a copy of Blocky Story's engine with physics,
-acting and cinematic light. Blocky Story is unchanged.
+**Blocky Cinema** (`templates/blocky-cinema/`, being tried out; its guide the `kairos-blocky-cinema` skill) is a
+copy of Blocky Story's engine with physics, acting and cinematic light. Blocky Story is unchanged.
 
 - **Physics** (`blocky/physics.js`, the only file that imports Rapier's deterministic build, served by the film
   server at `RAPIER_PATH`; `blocky/simulation.js`):
@@ -162,13 +162,21 @@ acting and cinematic light. Blocky Story is unchanged.
     where they lie.
 - **Never inside anything:** walks never end inside furniture (`freeSpot`), standing up makes room, and the
   planner reports people standing inside each other.
+- **Every place has physics:** `layouts.js` gives each place `solids` (boxes measured from the built pieces:
+  furniture, cars, lamp posts, tree trunks and crowns, the cabin), `walls` for rooms, and a height `h` on every
+  footprint (for `over`). The Places sheet checks them against what's built: a piece of furniture where people go
+  with most of its points outside every solid, or a solid with nothing built there (an invisible wall), is a
+  problem.
 - **The camera:** it frames from the plan, and tests each shot's view at five moments against the place's meshes
   (furniture between it and anyone, covering the middle of the picture, or close to the camera anywhere in it),
   turning or rising to the clearest view. A camera that would stand behind a wall or inside furniture moves in
   along its line with a wider lens (`fitInRoom`).
 - **The picture:**
   - **Lights:** a key, fill and rim light around each shot's camera, motivated lamps (spot lights with soft
-    shadows), contact shadows under feet, exposure near normal.
+    shadows: `lampSpot`; the forest's `campfireLight`), contact shadows under feet. Each place's light has a reason:
+    the bedside lamp, the school's ceiling panels, the street lamps after dark, the campfire at night. Exposure is
+    near normal (`indoorExposure`, `outdoorExposure`); outdoors the sun and sky are brighter to match
+    (`outdoorBoost`).
   - **Effects:** multisampled effects (smooth edges), GTAO ambient occlusion with seeded noise, and a colour
     grade.
   - **Faces:** they crossfade.

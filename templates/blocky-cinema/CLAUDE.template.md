@@ -18,17 +18,21 @@ time a file here is saved.
    in order, so all the shots' `say` together are the whole narration. Normally `story.js` is the only file you
    change.
 4. **Make people move** (`go`) when the story moves: someone walks in, crosses the room, goes up to someone,
-   sits down, gets up, runs off. About one shot in three has someone moving; nobody should stand frozen in one
-   spot for the whole film.
-5. **Add effects** (`fx`) where the words call for them: a punch-in on the key word, notes when someone sings,
+   sits down, gets up, runs off, jumps over the coffee table. About one shot in three has someone moving; nobody
+   should stand frozen in one spot for the whole film.
+5. **Stage the action** (`act`, `THINGS`) where the story has it: someone picks something up and throws it,
+   punches, knocks someone down, drops something; things to crash through or fight with. Each action lands on a
+   word of the narration (`at`), and the walk before it brings people within reach.
+6. **Add effects** (`fx`) where the words call for them: a punch-in on the key word, notes when someone sings,
    magic when someone appears, a counting label for a number, a shake on an impact. About one shot in two has
    one; never the same effect on two shots in a row. Each effect brings its sound by itself.
-6. Look at frames with `kairos_frame` (a few per place, every effect word, every walk, every new face or pose),
-   the effects sheet (`kairos_sheet` with `effects`) and the moves sheet (`moves`: it checks every walk), and fix
-   what looks wrong.
-7. Set the length with `kairos_film_settings` (`duration` = the story's length: `kairos_frame` says it).
-8. **Voices:** when the brief says "Voices: make them with the film", make the narration (steps under "Voices"
-   below). The voice leads: shots cut on its real words by themselves.
+7. **Check:** the moves sheet (`kairos_sheet` with `moves`: it plans every walk, jump and action and runs the
+   physics) and the effects sheet (`effects`) list problems: fix every one. Then look at frames with
+   `kairos_frame`: a few per place, every action on its word, every walk and jump, every effect word, every new
+   face or pose.
+8. Set the length with `kairos_film_settings` (`duration` = the story's length: `kairos_frame` says it).
+9. **Voices:** when the brief says "Voices: make them with the film", make the narration (steps under "Voices"
+   below). The voice leads: shots cut on its real words, and actions land on them, by themselves.
 
 **Characters:**
 
@@ -39,12 +43,14 @@ time a file here is saved.
 **Main character, place and mood:** follow the brief. With "Let Claude choose", pick the place that fits the
 story.
 
-The `kairos-blocky-story` skill has the full style guide (narration, pacing, shot choice, faces, effects). Use it.
+The `kairos-blocky-cinema` skill has the full style guide (narration, pacing, shot choice, staging actions,
+things, faces, effects, checks). Use it.
 
 ## story.js
 
 ```js
 export const CAST = {}; // new characters for this film (the Blocky cast is always there)
+export const THINGS = {}; // things that move by physics (see Things)
 export const SETTINGS = {}; // captions and the finishing look
 export const SHOTS = [
   /* played one after the other; their `say` together is the whole narration */
@@ -67,7 +73,8 @@ export const SHOTS = [
   pose: { milo: "sit" },    // see poses
   face: { milo: "shocked" },// see faces
   talk: "milo",             // whose mouth moves (without voices; with voices, the line's speaker's)
-  hold: { milo: "phone" },  // something in the right hand (see props)
+  act: { milo: { pickUp: "pillow" } }, // an action: punch, pickUp, throw, drop (see Acting)
+  hold: { milo: "phone" },  // something in the right hand (see props; a thing to throw is picked up with act)
   prop: "letter",           // an object on the place's table or surface (use with shot: "insert")
   say: "and then *nobody* laughed.", // the next words of the narration (*key words* stay yellow)
   fx: [{ punch: true, at: "nobody" }], // effects (below), each on a word or at the start of the shot
@@ -92,7 +99,9 @@ export const SHOTS = [
 - **`at`**: the word the walk starts on (like effects). Left out: the start of the shot.
 - **`via`**: spots to go by, in order.
 - **`over`**: a low piece of furniture the run jumps over (`over: "coffee table"`, with `pace: "run"` or
-  `"sprint"`): a crouch, a real arc, the knees tucked over it, a landing taken in the knees.
+  `"sprint"`): a crouch, a real arc, the knees tucked over it, a landing taken in the knees. Up to about 2.2 units
+  high for an adult: the coffee table, the bed, the toy box, a log, the sandbox (furniture names are in
+  `blocky/layouts.js`, with their heights `h`).
 
 What the engine does by itself:
 
@@ -111,8 +120,8 @@ What the engine does by itself:
 - **Alive while standing:** listeners look at whoever talks and at anyone walking; people shift their weight;
   talking hands gesture on the narration's `*key words*` and the head nods at the end of a sentence.
 
-Keep walks short: a walk takes about a second for every 3 units (a room is about 25 units across); a run is three
-times faster. A walk can go on into the next shot of the same place; the moves sheet says when one doesn't fit.
+Keep walks short: a walk takes about a second for every 3 units (a room is about 25 units across); a run is almost
+three times faster (8.4 units a second), a sprint nearly four (11.5). A walk can go on into the next shot of the same place; the moves sheet says when one doesn't fit.
 Walks never end inside furniture (an end point there moves to the nearest free place), and someone standing up
 from a seat never stands up into anyone (whoever is in the way steps back first).
 
@@ -133,10 +142,31 @@ from a seat never stands up into anyone (whoever is in the way steps back first)
 ### Things (`THINGS` in story.js)
 
 Things that move by physics, by name: `boxes: { prop: "box", place: "home", at: { x: 7.9, z: -5.3 }, stack: 3 }`.
-`prop` is one of the props with a physical shape (box, pillow, ball, gift, book, cup); `at` is where it stands
-(`y` to put it higher); `stack` piles several; `turn` turns it (radians). They fall, tumble, get pushed by
-whoever runs into them, get picked up and thrown. The moves sheet runs the physics and says when something goes
-wrong: a walk into furniture, a throw that misses, things that never settle.
+
+- **`prop`:** one of the props with a physical shape: box, pillow, ball, gift, book, cup (`BODIES` in
+  `blocky/sizes.js`).
+- **`at`:** where it stands, in the place's units: `x` to the right and `z` toward the front of the wide shot. The
+  place's spots in `blocky/layouts.js` give coordinates to start from. `y` puts it higher: on furniture, the
+  furniture's height (its block's `h`: the desk 2.2, the coffee table 1.35).
+- **`stack`** piles several; **`turn`** turns it (radians).
+
+What physics does by itself: things rest on the floor and the furniture, tumble when someone runs into them, fall
+when dropped, fly when thrown, and stay where they land in the next shots of that place. Every place has its walls
+and furniture in the physics (`solids` in `blocky/layouts.js`). The moves sheet runs the physics and says when
+something goes wrong: a walk into furniture, a throw that misses, things that never settle.
+
+### The camera, the light and the looks
+
+- **The camera** frames each shot by itself: it tests the view and turns or rises when furniture would block
+  someone or cover the picture, and where the shot would put it behind a wall or inside furniture, it moves in
+  with a wider lens. Ask for the shot you want (`shot`, `angle`, `move`); if a frame still hides someone, try
+  another `angle` or move people.
+- **The light** has a reason in every place: lamps with soft shadows indoors in the evening and at night, the
+  school's ceiling panels, the sun or moon outside, the street lamps once it's dark, the campfire in the forest at
+  night.
+- **Looks:** the preview uses a lighter look (standard), frames and renders the richest (cinematic), and a
+  computer drawing without a graphics card the lightest (draft). Only the finish changes, never what happens.
+  `SETTINGS.look` (`"draft"`, `"standard"`, `"cinematic"`) forces one; leave it unset.
 
 ### Feelings
 
@@ -197,7 +227,7 @@ heart.
 - **Spots:**
   - **Every place:** `center`, `left`, `right`, `back`.
   - **Extra spots:**
-    - **home:** `front`, `door`, `window`, `sofa`, `sofaL`, `sofaR`;
+    - **home:** `front`, `door`, `window`, `sofa`, `sofaL`, `sofaR`, `tableL`, `tableR`;
     - **bedroom:** `window`, `bed` (lying), `bedSit`, `desk`;
     - **school:** `front`, `lockerL`, `lockerR`;
     - **town:** `road`, `far`;
@@ -215,7 +245,7 @@ heart.
   - **sitting:** sit, sitTalk, sitSad;
   - **lying:** lie, sleep, faint.
 - **Faces:** neutral, happy, grin, laugh, sad, crying, shocked, scared, angry, furious (red face), smug, sleepy,
-  dizzy, love, embarrassed, thinking, suspicious. Eyes blink by themselves.
+  dizzy, love, embarrassed, thinking, suspicious, pain, confused, tired. Eyes blink by themselves.
 - **Icons** (`icons`, by a head): ?, !, idea. (Music, hearts, sparkles, Zzz, sweat and anger are effects now.)
 - **Props:** letter, phone, cake, gift, book, ball, key, cup, photo, trophy, megaphone, battery, mouse. Each
   shows at its real size (`blocky/sizes.js`): a battery is 5 cm, a mouse 11 cm, in a hand or on a table.
@@ -250,7 +280,11 @@ heart.
 - **figures and faces:** `characters.js`, `faces.js`;
 - **poses and places:** `poses.js` (with the gaits, sitting down and standing up), `places.js`, `layouts.js`
   (each place's spots, furniture footprints and walls);
-- **moving:** `motion.js` (where everyone is in each shot, and the walks);
+- **moving:** `motion.js` (where everyone is in each shot: the walks, jumps and actions, planned once);
+- **acting:** `animation.js` (the poses of jumps, punches, falls, getting up, carrying, throwing, reactions),
+  `figure.js` (anyone's whole body at any moment), `rig.js` (the joints as numbers, arms aimed by IK);
+- **physics:** `physics.js` (Rapier's deterministic build) and `simulation.js` (each run of shots in a place is
+  one world, stepped 120 times a second when the page loads; every frame reads it back, in any order);
 - **objects:** `props.js`;
 - **the camera:** `shots.js`;
 - **captions and extras:** `captions.js`, `overlays.js`;
@@ -276,9 +310,11 @@ limit (`JOINTS` in `characters.js`); an elbow or a knee bends one way only.
 adding a prop (is it the right size?), `cast` after adding or changing a character, `poses` after adding a pose
 (every part attached, no joint past its limit), `places` after changing a place, `effects` after adding effects
 (it shows each effect, and checks the story's: a known effect, on a word the shot says, with a known sound),
-`moves` after adding walks (it shows the gaits, sitting down and standing up, and checks the story's walks: a
-known spot, a seat to sit on, a way around the furniture, time enough in the shot, feet that don't slide). Fix
-every problem it lists.
+`moves` after adding walks, jumps, actions or things (it shows the gaits, sitting down and standing up, the
+actions, and checks the story's: a known spot, a seat to sit on, a way around the furniture, time enough in the
+shot, feet that don't slide, someone within reach, a jump with a run-up, nobody inside anyone, and the physics: a
+throw that hits, things that settle). `places` also checks the place's physics against what's built (every piece of
+furniture has a physics shape, and no shape stands where nothing is built). Fix every problem it lists.
 
 Change it only when the story needs something it doesn't have (a new place, a pose, a prop, an effect). Keep
 `renderOut(t)` a pure function of `t`: no timers, clocks or unseeded random numbers. Our characters and world
@@ -323,6 +359,7 @@ When the Kairos tools are connected (Kairos → Settings → Claude Code), use t
   their shot lengths and frame sheets. Look at them before building or restyling the film.
 - `kairos_assets` lists the user's asset library (images, videos, sounds, fonts); `kairos_use_asset` copies one into
   this film and gives its path (a sound becomes a sound track).
-- `kairos_sheet` draws the cast, poses, faces, props, a place or the effects, with the problems it found.
+- `kairos_sheet` draws the cast, poses, faces, props, a place, the effects or the moves, with the problems it
+  found.
 - `kairos_voices` casts the speakers by type (free); `kairos_script` writes what they say and when, and makes the
   voices with fish.audio (uses the user's credits; unchanged lines are reused); `kairos_words` gives word timings.

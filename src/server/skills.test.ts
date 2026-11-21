@@ -199,6 +199,7 @@ describe("the skills Kairos ships", () => {
       "kairos",
       "kairos-3d",
       "kairos-blocky",
+      "kairos-blocky-cinema",
       "kairos-blocky-story",
       "kairos-camera",
       "kairos-captions",
