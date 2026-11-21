@@ -181,9 +181,8 @@ export interface ClaudeTools {
   /** Adds the Kairos tools to Claude Code (for all projects). */
   connect(): Promise<ClaudeStatus>;
   disconnect(): Promise<ClaudeStatus>;
-  /** Opens a terminal window in `dir` with Claude running. */
-  /** Opens a terminal with Claude in `dir`; `continue` goes on with the folder's last conversation. */
-  openHere(dir: string, options?: { continue?: boolean }): Promise<void>;
+  /** Opens a terminal with Claude in `dir`; `resume` goes on with that conversation (its session id). */
+  openHere(dir: string, options?: { resume?: string | null }): Promise<void>;
 }
 
 export interface ClaudeToolsOptions {
@@ -257,7 +256,7 @@ export function claudeTools(options: ClaudeToolsOptions): ClaudeTools {
         dir,
         claude,
         has,
-        options.continue ? ["--continue"] : [],
+        options.resume ? ["--resume", options.resume] : [],
       );
       if (!launch) {
         throw new ClaudeCliError(

@@ -46,6 +46,7 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
     nextId: 1,
     fps,
     total,
+    playing: false,
     clockStart: 0,
     clockFrame: 0,
   });
@@ -101,6 +102,16 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
   const pause = useCallback(() => setPlaying(false), []);
   /** The frame showing right now (also between renders). */
   const currentFrame = useCallback(() => live.current.frame, []);
+  /**
+   * The frame the clock is at. While playing it keeps going even when no frame is drawn (a hidden tab draws
+   * none), so the sound follows it and plays on smoothly; the picture catches up when you come back.
+   */
+  const clockFrame = useCallback(() => {
+    const s = live.current;
+    if (!s.playing) return s.frame;
+    const elapsed = Math.max(0, Math.floor(((performance.now() - s.clockStart) / 1000) * s.fps));
+    return (s.clockFrame + elapsed) % s.total;
+  }, []);
 
   /** The iframe finished loading a (new) page: forget the old one and say hello. */
   const onLoad = useCallback(() => {
@@ -146,14 +157,14 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
 
   // The play loop: works out which frame is due and asks for it. Playback loops at the end.
   useEffect(() => {
-    if (!playing) return;
     const s = live.current;
+    s.playing = playing;
+    if (!playing) return;
     s.clockStart = performance.now();
     s.clockFrame = s.frame;
     let handle = 0;
-    const tick = (now: number) => {
-      const elapsed = Math.max(0, Math.floor(((now - s.clockStart) / 1000) * s.fps));
-      const next = (s.clockFrame + elapsed) % s.total;
+    const tick = () => {
+      const next = clockFrame();
       if (next !== s.frame) {
         s.frame = next;
         setFrame(next);
@@ -162,8 +173,18 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
       handle = requestAnimationFrame(tick);
     };
     handle = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(handle);
-  }, [playing, requestFrame]);
+    return () => {
+      cancelAnimationFrame(handle);
+      // Paused where the clock is, which is ahead of the picture after a while in a hidden tab.
+      const now = clockFrame();
+      s.playing = false;
+      if (now !== s.frame) {
+        s.frame = now;
+        setFrame(now);
+        requestFrame(now);
+      }
+    };
+  }, [playing, requestFrame, clockFrame]);
 
   // The film got shorter (kairos.json changed): stay inside it.
   useEffect(() => {
@@ -186,5 +207,6 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
     seek,
     step,
     currentFrame,
+    clockFrame,
   };
 }

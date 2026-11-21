@@ -8,34 +8,37 @@ import { glyph, heartPath, musicNote, outlined } from "./overlays.js";
 import { effectTime, plainWord } from "./timing.js";
 import { clamp, easeOut, hash, lerp, rng } from "./util.js";
 
+/** How loud an effect's sound is, unless the effect says (`volume`). */
+export const FX_VOLUME = 0.65;
+
 /**
- * Every effect: how long it lasts ("shot" = to the end of the shot), its sound and how loud.
+ * Every effect: how long it lasts ("shot" = to the end of the shot) and its sound.
  * Who or what it is about is the value of its key: `{ notes: "gus" }`, `{ float: "Augustus" }`, `{ shake: true }`.
  */
 export const FX = {
   // Particles, by someone (the shot's focus when the value is `true`).
-  notes: { length: "shot", sound: "chime", volume: 0.35 },
-  sparkles: { length: "shot", sound: "sparkle", volume: 0.4 },
-  hearts: { length: "shot", sound: "heart", volume: 0.45 },
+  notes: { length: "shot", sound: "chime" },
+  sparkles: { length: "shot", sound: "sparkle" },
+  hearts: { length: "shot", sound: "heart" },
   tears: { length: "shot", sound: null },
   sweat: { length: "shot", sound: null },
-  anger: { length: "shot", sound: "thud", volume: 0.35 },
+  anger: { length: "shot", sound: "thud" },
   zzz: { length: "shot", sound: null },
-  dust: { length: 0.9, sound: "puff", volume: 0.45 },
-  magic: { length: 1.3, sound: "magic", volume: 0.6 },
-  confetti: { length: 2.4, sound: "party", volume: 0.6 },
+  dust: { length: 0.9, sound: "puff" },
+  magic: { length: 1.3, sound: "magic" },
+  confetti: { length: 2.4, sound: "party" },
   // Words in the scene.
-  label: { length: "shot", sound: "ding", volume: 0.45 },
-  float: { length: 2.2, sound: "pop", volume: 0.5 },
-  big: { length: "shot", sound: "boom", volume: 0.6 },
+  label: { length: "shot", sound: "ding" },
+  float: { length: 2.2, sound: "pop" },
+  big: { length: "shot", sound: "boom" },
   // Camera.
-  punch: { length: "shot", sound: "swish", volume: 0.55 },
-  shake: { length: 0.55, sound: "thud", volume: 0.75 },
-  flash: { length: 0.4, sound: "flash", volume: 0.5 },
+  punch: { length: "shot", sound: "swish" },
+  shake: { length: 0.55, sound: "thud" },
+  flash: { length: 0.4, sound: "flash" },
   // Motion.
-  bounce: { length: 0.55, sound: "pop", volume: 0.6 },
-  jump: { length: 0.95, sound: "boing", volume: 0.55 },
-  dash: { length: 0.45, sound: "whoosh", volume: 0.6 },
+  bounce: { length: 0.55, sound: "pop" },
+  jump: { length: 0.95, sound: "boing" },
+  dash: { length: 0.45, sound: "whoosh" },
 };
 export const FX_NAMES = Object.keys(FX);
 /** The sounds effects use (Kairos makes them). A whip brings a whoosh. */
@@ -119,7 +122,7 @@ export function planEffects(entries) {
         on,
         text,
         sound: fx.type === "label" && fx.count ? "count" : sound,
-        volume: Number(fx.volume) || spec.volume || 0.5,
+        volume: Number(fx.volume) || FX_VOLUME,
         options: fx,
       });
     }
@@ -133,7 +136,7 @@ export function planEffects(entries) {
         on: focus,
         text: "",
         sound: "whoosh",
-        volume: 0.55,
+        volume: FX_VOLUME,
         options: {},
       });
     }

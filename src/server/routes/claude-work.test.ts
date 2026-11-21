@@ -40,6 +40,8 @@ beforeEach(async () => {
   process.env.FAKE_CLAUDE_LOG = join(claudeDir, "log.jsonl");
   installed = true;
   root = await mkdtemp(join(tmpdir(), "kairos-claude-work-"));
+  // Where Claude Code keeps conversations (the fake one too), never the real ~/.claude.
+  process.env.KAIROS_CLAUDE_DIR = join(root, "claude");
   studio = await Studio.open({ home: join(root, "home"), templatesDir });
   await studio.setWorkspace(join(root, "ws"));
   events = [];
@@ -65,6 +67,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  delete process.env.KAIROS_CLAUDE_DIR;
   activity.close();
   studio.close();
   await app.close();
@@ -139,6 +142,7 @@ describe("Claude makes the film in the background", () => {
     expect(JOB_ALLOWED).not.toContain("Read");
     expect(run.args).not.toContain("--no-session-persistence");
     expect(run.args).not.toContain("--continue");
+    expect(run.args).not.toContain("--resume");
   });
 
   it("doesn't start without the choice, or without a brief", async () => {
@@ -183,9 +187,24 @@ describe("asking Claude from the film page", () => {
       ["ask", "Make the cat orange", "I made the cat orange."],
       ["make", undefined, "I made a short story in the park with Milo."],
     ]);
+    // By its id: `--continue` skips conversations that ran in the background.
     const run = await lastRun();
-    expect(run.args).toContain("--continue");
+    expect(run.args[run.args.indexOf("--resume") + 1]).toBe("fake-session");
+    expect(run.args).not.toContain("--continue");
     expect(run.prompt).toContain("> Make the cat orange");
+  });
+
+  it("starts a new conversation when Claude Code no longer has the film's", async () => {
+    await newFilm(true);
+    await finished();
+    await rm(join(root, "claude", "projects"), { recursive: true, force: true });
+    await app.inject({
+      method: "POST",
+      url: "/api/films/intro/claude",
+      payload: { kind: "ask", text: "Make the cat orange" },
+    });
+    await finished();
+    expect((await lastRun()).args).not.toContain("--resume");
   });
 
   it("runs one at a time, can be stopped, and says problems in plain words", async () => {

@@ -6,12 +6,14 @@
  * - Make the film or an ask (a `--permission-mode` run): reads the guide, writes `story.js` (it really writes
  *   `made-by-claude.txt` in the folder), then answers in words (`FAKE_CLAUDE_TEXT`).
  * `FAKE_CLAUDE_MODE`: ok (default), slow, login, crash. `FAKE_CLAUDE_DELAY`: a pause (ms) before answering.
+ * Like Claude Code, it keeps the conversation (`fake-session`) in `projects/<folder>/` of `KAIROS_CLAUDE_DIR`.
  */
 import { chmod, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const PROGRAM = `
-import { appendFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 const mode = process.env.FAKE_CLAUDE_MODE ?? "ok";
 // Settings asks for the version and whether the Kairos tools are added.
 if (process.argv.includes("--version")) {
@@ -26,6 +28,11 @@ if (process.env.FAKE_CLAUDE_LOG) {
 }
 const say = (event) => process.stdout.write(JSON.stringify(event) + "\\n");
 say({ type: "system", subtype: "init", session_id: "fake-session" });
+if (process.env.KAIROS_CLAUDE_DIR) {
+  const folder = join(process.env.KAIROS_CLAUDE_DIR, "projects", process.cwd().replace(/[^a-zA-Z0-9]/g, "-"));
+  mkdirSync(folder, { recursive: true });
+  appendFileSync(join(folder, "fake-session.jsonl"), JSON.stringify({ type: "user", sessionId: "fake-session" }) + "\\n");
+}
 if (mode === "crash") {
   process.stderr.write("Something broke inside\\n");
   process.exit(1);

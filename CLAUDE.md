@@ -178,7 +178,7 @@ ramps), used by the preview (`duckGain`, every 50 ms) and the render (`duckExpre
 **Sound effects** (`src/server/sounds.ts`): Kairos makes its own (whoosh, swish, pop, boing, ding, count, thud,
 boom, sparkle, magic, puff, flash, chime, party, heart) from code: filtered noise and pitched tones, seeded, 44.1 kHz
 WAV, peaks at 0.8. `GET /api/sounds` lists them, `GET /api/sounds/:name` plays one, and a film gets its copy in
-`audio/fx/` when it uses one. Effect tracks have `sfx: true` and sit on the timeline's **Effects** lane:
+`audio/fx/` when it uses one. Effect sounds start at 65% (a volume you set is kept: `tuned`). Effect tracks have `sfx: true` and sit on the timeline's **Effects** lane:
 
 - **A film that places sounds** (Blocky Story) sends them with `ready`; the film page puts them to
   `PUT /api/films/:id/fx`, and a render syncs them from its first page before mixing. `src/server/fx.ts`
@@ -312,8 +312,9 @@ sends **ask** runs (your words; "Fix my notes"; "Make it from the brief"). Both 
 narration writer does): `claude -p --output-format stream-json` in the film folder, the Kairos tools from a temp
 `--mcp-config`, `--tools Read,Glob,Grep,Edit,Write,Skill,TodoWrite`, `--allowedTools Skill,TodoWrite,mcp__kairos__*`
 and `--permission-mode acceptEdits`: reads and edits stay inside the film folder (anything else needs a permission
-no one can give in print mode), no shell, no web. Sessions are kept, so an ask runs with `--continue`, and Open
-Claude here starts `claude --continue` once Kairos has run Claude in the folder. One run per film (the narration
+no one can give in print mode), no shell, no web. Sessions are kept, so an ask goes on with the film's
+conversation and Open Claude here opens it, by its id (`--resume <session>`, while Claude Code still has it:
+`savedSession`), because `--continue` skips conversations that ran in the background. One run per film (the narration
 writer included), 30 minutes for make, 15 for an ask; Stop ends the process tree. `.kairos/claude.json` keeps the
 session and the last 20 runs (your words, Claude's answer, the outcome).
 

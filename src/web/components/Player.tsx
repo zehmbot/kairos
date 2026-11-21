@@ -106,13 +106,14 @@ export function Player({
   const player = useFilmPlayer({ src, fps, duration });
   useEffect(() => onStoryLength?.(player.length), [onStoryLength, player.length]);
   useEffect(() => onSounds?.(player.sounds), [onSounds, player.sounds]);
-  const { frame, total, toggle, step, seek, pause, currentFrame } = player;
+  const { frame, total, toggle, step, seek, pause, currentFrame, clockFrame } = player;
   const stageRef = useRef<HTMLDivElement>(null);
   const stage = useElementSize(stageRef);
   const sound = useSoundSettings();
   const { muted, update: updateSound } = sound;
   const hasSound = audio.length > 0;
-  const now = useCallback(() => timeOf(currentFrame(), fps), [currentFrame, fps]);
+  // The sound and the videos follow the clock, which runs on in a hidden tab (no frames drawn there).
+  const now = useCallback(() => timeOf(clockFrame(), fps), [clockFrame, fps]);
   useFilmAudio(audio, player.playing, now, sound);
 
   // The page is built at the film's real size and scaled down to fit the stage.

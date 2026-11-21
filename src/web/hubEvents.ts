@@ -11,6 +11,7 @@ import { queryKeys } from "./api.ts";
 
 type Listener = (event: HubEvent) => void;
 const listeners = new Set<Listener>();
+const reconnectListeners = new Set<() => void>();
 
 /**
  * Opens the hub's live event stream (mount once, in App). Film and workspace changes refresh the
@@ -28,7 +29,10 @@ export function useHubEventStream(): void {
     };
     // After a reconnect (the hub restarted), things may have changed while we weren't listening.
     source.onopen = () => {
-      if (dropped) queryClient.invalidateQueries();
+      if (dropped) {
+        queryClient.invalidateQueries();
+        for (const listener of reconnectListeners) listener();
+      }
       dropped = false;
     };
     source.onmessage = (message) => {
@@ -92,6 +96,22 @@ export function withJob(jobs: readonly RenderJob[], job: RenderJob): RenderJob[]
   return jobs.some((entry) => entry.id === job.id)
     ? jobs.map((entry) => (entry.id === job.id ? job : entry))
     : [job, ...jobs];
+}
+
+/** Calls `listener` each time the hub is back after the stream dropped (events may have been missed). */
+export function useHubReconnect(listener: () => void): void {
+  const latest = useRef(listener);
+  useEffect(() => {
+    latest.current = listener;
+  });
+
+  useEffect(() => {
+    const forward = () => latest.current();
+    reconnectListeners.add(forward);
+    return () => {
+      reconnectListeners.delete(forward);
+    };
+  }, []);
 }
 
 /** Calls `listener` for every hub event while the component is mounted. */

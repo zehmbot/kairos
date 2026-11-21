@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { ClaudeStatus } from "../../shared/types.ts";
 import { ClaudeCliError, type ClaudeTools } from "../claude-cli.ts";
-import { readHistory } from "../claude-jobs.ts";
+import { readHistory, savedSession } from "../claude-jobs.ts";
 import { readFilm } from "../films.ts";
 import type { Studio } from "../studio.ts";
 import { sendError } from "./errors.ts";
@@ -50,9 +50,10 @@ export function claudeRoutes(
     if (!film) return sendError(reply, 404, "not-found", "This film doesn't exist (any more).");
     return handle(reply, async () => {
       await beforeOpen?.(film.path);
-      // Kairos ran Claude here before (it made the film): go on with that conversation.
+      // Kairos ran Claude here before (it made the film): go on with that conversation, if Claude Code still has
+      // it. By its id: `claude --continue` skips conversations that ran in the background.
       const { history } = await readHistory(film.path);
-      await claude.openHere(film.path, { continue: Boolean(history.session) });
+      await claude.openHere(film.path, { resume: await savedSession(history.session) });
       return undefined;
     });
   });

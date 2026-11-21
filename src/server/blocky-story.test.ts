@@ -3,6 +3,7 @@ import {
   effectSounds,
   FX_NAMES,
   FX_SOUNDS,
+  FX_VOLUME,
   normalizeFx,
   planEffects,
 } from "../../templates/blocky-story/blocky/fx.js";
@@ -17,7 +18,7 @@ import {
 import { DUCK, duckExpression, duckGain, talkSpans, voiceSpans } from "../shared/duck.ts";
 import { AudioTrackSchema } from "../shared/types.ts";
 import { joinArgs, mixFilter } from "./ffmpeg.ts";
-import { noteEffectEdits, withEffectSounds } from "./fx.ts";
+import { EFFECT_VOLUME, noteEffectEdits, withEffectSounds } from "./fx.ts";
 import { SOUND_NAMES, SOUNDS, soundLength, soundSamples, soundWav } from "./sounds.ts";
 
 /** A voice line with one word every 0.4 s. */
@@ -126,6 +127,14 @@ describe("Blocky Story effects", () => {
       "whoosh",
     ]);
     expect(new Set(sounds.map((s: { key: string }) => s.key)).size).toBe(4);
+    // All at 65%, unless an effect says.
+    expect(FX_VOLUME).toBe(0.65);
+    expect(EFFECT_VOLUME).toBe(0.65);
+    expect(sounds.map((s: { volume: number }) => s.volume)).toEqual([0.65, 0.65, 0.65, 0.65]);
+    const soft = effectSounds(
+      planEffects(planStory([{ say: "hi", fx: [{ dust: true, volume: 0.3 }] }], []).entries),
+    );
+    expect(soft.map((s: { volume: number }) => s.volume)).toEqual([0.3]);
     expect(effectSounds(planEffects(planStory(shots, []).entries))).toEqual(sounds);
     // Every effect's sound is one Kairos makes.
     expect([...FX_SOUNDS].sort()).toEqual([...SOUND_NAMES].sort());
@@ -193,7 +202,31 @@ describe("effect sounds on the timeline", () => {
     const after = [track("audio/fx/pop.wav", 1.6, { sfx: true, key: "a" })];
     const { tracks, removed } = noteEffectEdits(before, after);
     expect(tracks[0]).toMatchObject({ start: 1.6, moved: true });
+    expect(tracks[0]?.tuned).toBeUndefined();
     expect(removed).toEqual(["b"]);
+  });
+
+  it("keeps a volume you set, and follows the film's otherwise", () => {
+    const before = [
+      track("audio/fx/pop.wav", 1, { sfx: true, key: "a", volume: 0.6 }),
+      track("audio/fx/thud.wav", 2, { sfx: true, key: "b", volume: 0.6 }),
+    ];
+    const { tracks } = noteEffectEdits(before, [
+      before[0] as never,
+      { ...before[1], volume: 1.2 } as never,
+    ]);
+    expect(tracks[1]).toMatchObject({ volume: 1.2, tuned: true });
+    expect(tracks[1]?.moved).toBeUndefined();
+    const next = withEffectSounds(
+      tracks,
+      [
+        { key: "a", sound: "pop", t: 1, volume: 0.65 },
+        { key: "b", sound: "thud", t: 2, volume: 0.65 },
+      ],
+      [],
+      fileOf,
+    );
+    expect(next.map((t) => t.volume)).toEqual([0.65, 1.2]);
   });
 });
 

@@ -17,7 +17,13 @@ import {
 } from "../../shared/types.ts";
 import { assetFile, copyAssetToFilm } from "../assets.ts";
 import { changeFilm, type Film, FilmConfigError, readFilm } from "../films.ts";
-import { effectsLane, FilmSoundsSchema, noteEffectEdits, syncEffectSounds } from "../fx.ts";
+import {
+  EFFECT_VOLUME,
+  effectsLane,
+  FilmSoundsSchema,
+  noteEffectEdits,
+  syncEffectSounds,
+} from "../fx.ts";
 import { makeScript, syncScriptWithTimeline } from "../script.ts";
 import { SOUND_NAMES, SOUNDS, soundInFilm, soundWav } from "../sounds.ts";
 import type { Studio } from "../studio.ts";
@@ -350,7 +356,7 @@ export function soundRoutes(app: FastifyInstance, studio: Studio): void {
       const track = AudioTrackSchema.parse({
         file,
         start: Math.round(start * 1000) / 1000,
-        volume: 0.6,
+        volume: EFFECT_VOLUME,
         lane: effectsLane(film.config.audio),
         sfx: true,
       });

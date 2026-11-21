@@ -91,12 +91,13 @@ describe("opening Claude in a terminal", () => {
       file: "cmd.exe",
       args: ["/d", "/c", "start", "Claude Code", "/D", dir, claude],
     });
-    // Going on with the folder's conversation.
-    expect(terminalLaunch("win32", dir, claude, () => true, ["--continue"])?.args).toEqual([
+    // Going on with the film's conversation.
+    expect(terminalLaunch("win32", dir, claude, () => true, ["--resume", "abc"])?.args).toEqual([
       "-d",
       dir,
       claude,
-      "--continue",
+      "--resume",
+      "abc",
     ]);
   });
 
@@ -110,8 +111,8 @@ describe("opening Claude in a terminal", () => {
     expect(launch?.file).toBe("osascript");
     expect(launch?.args[1]).toContain('quoted form of "/Users/me/films/say \\"hi\\""');
     expect(launch?.args[1]).toContain('quoted form of "/usr/local/bin/claude"');
-    const going = terminalLaunch("darwin", "/f", "/c", () => true, ["--continue"]);
-    expect(going?.args[1]).toContain('quoted form of "/c" & " " & quoted form of "--continue"');
+    const going = terminalLaunch("darwin", "/f", "/c", () => true, ["--resume", "abc"]);
+    expect(going?.args[1]).toContain('quoted form of "/c" & " " & quoted form of "--resume"');
   });
 
   it("finds a terminal on Linux, or gives up", () => {

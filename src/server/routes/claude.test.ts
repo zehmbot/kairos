@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +21,7 @@ let app: FastifyInstance;
 let installed: boolean;
 let connected: boolean;
 let openedIn: string[];
+let resumed: (string | null | undefined)[];
 let captureError: string | null;
 let skillsTurnedOn: number;
 let skillsFail: boolean;
@@ -45,9 +46,10 @@ class FakeClaude implements ClaudeTools {
     connected = false;
     return this.status();
   }
-  async openHere(dir: string) {
+  async openHere(dir: string, options?: { resume?: string | null }) {
     this.#need();
     openedIn.push(dir);
+    resumed.push(options?.resume);
   }
 }
 
@@ -72,6 +74,9 @@ beforeEach(async () => {
   installed = true;
   connected = false;
   openedIn = [];
+  resumed = [];
+  // Where Claude Code keeps conversations, never the real ~/.claude.
+  process.env.KAIROS_CLAUDE_DIR = join(root, "claude");
   captureError = null;
   skillsTurnedOn = 0;
   skillsFail = false;
@@ -84,6 +89,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  delete process.env.KAIROS_CLAUDE_DIR;
   studio.close();
   await app.close();
   await rm(root, { recursive: true, force: true });
@@ -124,9 +130,26 @@ describe("Claude routes", () => {
     const response = await app.inject({ method: "POST", url: "/api/films/intro/open-claude" });
     expect(response.statusCode).toBe(204);
     expect(openedIn).toEqual([join(root, "ws", "films", "intro")]);
+    expect(resumed).toEqual([null]);
     expect(
       (await app.inject({ method: "POST", url: "/api/films/nope/open-claude" })).statusCode,
     ).toBe(404);
+  });
+
+  it("goes on with the conversation Kairos had there, while Claude Code still has it", async () => {
+    const film = join(root, "ws", "films", "intro");
+    await mkdir(join(film, ".kairos"), { recursive: true });
+    await writeFile(
+      join(film, ".kairos", "claude.json"),
+      JSON.stringify({ session: "abc-123", turns: [] }),
+    );
+    await app.inject({ method: "POST", url: "/api/films/intro/open-claude" });
+    const projects = join(root, "claude", "projects", "C--films-intro");
+    await mkdir(projects, { recursive: true });
+    await writeFile(join(projects, "abc-123.jsonl"), "{}\n");
+    await app.inject({ method: "POST", url: "/api/films/intro/open-claude" });
+    // Gone: a new conversation. There: by its id.
+    expect(resumed).toEqual([null, "abc-123"]);
   });
 });
 

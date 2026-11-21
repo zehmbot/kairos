@@ -75,7 +75,7 @@ export const SHOTS = [
 
 Each effect is `{ name: value }`: the value is who it is about (an id in `who`; `true` = the shot's focus) or its
 words. Add `at: "word"` to make it happen on that word of the shot's `say`, `sound: false` for no sound,
-`sound: "boing"` for another one.
+`sound: "boing"` for another one. Sounds play at 65% (`volume: 0.4` for a softer one).
 
 | Effect     | Value  | What it does                                                                            | Sound        |
 | ---------- | ------ | --------------------------------------------------------------------------------------- | ------------ |

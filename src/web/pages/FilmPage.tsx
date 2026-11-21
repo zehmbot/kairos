@@ -56,7 +56,7 @@ import { SoundPanel } from "../components/SoundPanel.tsx";
 import { Timeline } from "../components/Timeline.tsx";
 import { VoicePanel } from "../components/VoicePanel.tsx";
 import { groupFiles, type Purpose, purposesFor } from "../filmAdd.ts";
-import { useHubEvent } from "../hubEvents.ts";
+import { useHubEvent, useHubReconnect } from "../hubEvents.ts";
 import { filmFileUrl } from "../player/audioSync.ts";
 import { noteCovers } from "../player/marks.ts";
 import { formatLength, frameCount, timeOf } from "../player/time.ts";
@@ -198,9 +198,40 @@ export function FilmPage() {
   const renderJob = filmRender(renders.data, id, clock);
 
   // Live reload: any saved file in this film reloads the preview.
-  useHubEvent((event) => {
-    if (event.type === "films-changed" && event.ids.includes(id)) setReloadKey((key) => key + 1);
+  const seen = useRef<{ id: string; changedAt: number | null; fromEvent: boolean }>({
+    id,
+    changedAt: null,
+    fromEvent: false,
   });
+  useHubEvent((event) => {
+    if (event.type === "films-changed" && event.ids.includes(id)) {
+      setReloadKey((key) => key + 1);
+      seen.current.fromEvent = true;
+    }
+  });
+  // The hub was away (restarted, the computer slept): a reload made meanwhile found no film server.
+  useHubReconnect(() => {
+    setReloadKey((key) => key + 1);
+    seen.current.fromEvent = true;
+  });
+  // A tab in the background can miss those messages (Chrome drops or freezes its connection while Claude works
+  // for minutes). The film is read again when you come back (and after a reconnect): if its last change moved on,
+  // the preview catches up. Not twice for a change a message already reloaded.
+  const changedAt = film.data?.updatedAt ?? null;
+  const fetchedAt = film.dataUpdatedAt;
+  useEffect(() => {
+    if (changedAt === null || fetchedAt === 0) return;
+    const last = seen.current;
+    if (
+      last.id === id &&
+      last.changedAt !== null &&
+      changedAt > last.changedAt &&
+      !last.fromEvent
+    ) {
+      setReloadKey((key) => key + 1);
+    }
+    seen.current = { id, changedAt, fromEvent: false };
+  }, [id, changedAt, fetchedAt]);
 
   if (film.isPending) {
     return (

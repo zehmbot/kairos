@@ -2,7 +2,8 @@
  * Effect sounds on the timeline. A film that places sound effects (Blocky Story: `window.KAIROS_SOUNDS`, one per
  * effect, with a key) gets them as tracks on the timeline's Effects lane (`sfx: true`, with their `key`):
  * - a new effect gets its sound;
- * - an effect that moved in the story moves its sound, unless you moved that sound yourself (`moved`);
+ * - an effect that moved in the story moves its sound, unless you moved that sound yourself (`moved`), and its
+ *   volume follows the film's, unless you set it yourself (`tuned`);
  * - an effect that is gone takes its sound away;
  * - a sound you deleted stays deleted (`sfxRemoved` in kairos.json), and sounds you added (no key) are never
  *   touched.
@@ -15,12 +16,15 @@ import { changeFilm, readFilmConfig } from "./films.ts";
 import { SOUND_NAMES, soundInFilm } from "./sounds.ts";
 import { oneAtATime } from "./uploads.ts";
 
+/** How loud an effect sound starts. */
+export const EFFECT_VOLUME = 0.65;
+
 /** One sound a film asks for. */
 export const FilmSoundSchema = z.object({
   key: z.string().min(1).max(120),
   sound: z.string().min(1).max(40),
   t: z.number().min(0).max(36000),
-  volume: z.number().min(0).max(2).default(0.6),
+  volume: z.number().min(0).max(2).default(EFFECT_VOLUME),
 });
 export type FilmSound = z.infer<typeof FilmSoundSchema>;
 export const FilmSoundsSchema = z.array(FilmSoundSchema).max(2000);
@@ -56,12 +60,12 @@ export function withEffectSounds(
     const want = wanted.get(track.key);
     if (!want) continue;
     wanted.delete(track.key);
-    const file = fileOf(want.sound);
-    next.push(
-      track.moved
-        ? { ...track, file }
-        : { ...track, file, start: round(want.t), volume: want.volume },
-    );
+    next.push({
+      ...track,
+      file: fileOf(want.sound),
+      start: track.moved ? track.start : round(want.t),
+      volume: track.tuned ? track.volume : want.volume,
+    });
   }
   for (const want of wanted.values()) {
     if (gone.has(want.key)) continue;
@@ -108,8 +112,8 @@ export function syncEffectSounds(filmDir: string, asked: readonly FilmSound[]): 
 }
 
 /**
- * You changed the timeline: an effect sound the film placed that you moved keeps its new place, and one you deleted
- * is remembered, so it doesn't come back. Returns the tracks to save and the keys to remember.
+ * You changed the timeline: an effect sound the film placed that you moved keeps its new place, one whose volume
+ * you set keeps it, and one you deleted is remembered, so it doesn't come back. Returns the tracks to save and the keys to remember.
  */
 export function noteEffectEdits(
   before: readonly AudioTrack[],
@@ -121,10 +125,14 @@ export function noteEffectEdits(
     if (!track.sfx || !track.key) return track;
     kept.add(track.key);
     const was = old.get(track.key);
-    if (was && !track.moved && Math.abs(was.start - track.start) > 0.004) {
-      return { ...track, moved: true };
-    }
-    return track;
+    if (!was) return track;
+    const moved = track.moved || Math.abs(was.start - track.start) > 0.004;
+    const tuned = track.tuned || Math.abs(was.volume - track.volume) > 0.001;
+    return {
+      ...track,
+      ...(moved ? { moved: true } : {}),
+      ...(tuned ? { tuned: true } : {}),
+    };
   });
   const removed = [...old.keys()].filter((key) => !kept.has(key));
   return { tracks, removed };

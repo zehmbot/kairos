@@ -4,13 +4,15 @@
  *
  * What Claude may do: read the film's files (its folder only), edit and write them (`acceptEdits` covers only the
  * working folder; anything else needs a permission no one can give in print mode), use its skills and the Kairos
- * tools. No shell commands, no web. Sessions are kept, so an ask continues the film's conversation
- * (`--continue`), and so does Open Claude here.
+ * tools. No shell commands, no web. Sessions are kept, so an ask goes on with the film's conversation
+ * (`--resume <session>`), and so does Open Claude here. It is resumed by its id: `--continue` skips
+ * conversations that ran in the background.
  *
  * `.kairos/claude.json` keeps the last runs (what you asked, what Claude answered).
  */
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   type ClaudeAsk,
@@ -23,6 +25,7 @@ import { writeFileAtomic } from "./atomic-write.ts";
 import { MCP_NAME } from "./claude-cli.ts";
 import { type ClaudeRun, type KairosMcp, plainClaudeProblem, runClaude } from "./claude-run.ts";
 import { streamStep } from "./claude-steps.ts";
+import { claudeHome } from "./skills.ts";
 
 export const MAKE_LIMIT_MS = 30 * 60 * 1000;
 export const ASK_LIMIT_MS = 15 * 60 * 1000;
@@ -35,8 +38,8 @@ export const JOB_TOOLS = ["Read", "Glob", "Grep", "Edit", "Write", "Skill", "Tod
 /** Tools that run without asking. Edits are allowed by `acceptEdits`, inside the folder only. */
 export const JOB_ALLOWED = ["Skill", "TodoWrite", `mcp__${MCP_NAME}__*`];
 
-/** The command line after the program. */
-export function jobArgs(mcpConfigPath: string, continueConversation: boolean): string[] {
+/** The command line after the program. `resume` goes on with that conversation. */
+export function jobArgs(mcpConfigPath: string, resume: string | null = null): string[] {
   return [
     "-p",
     "--output-format",
@@ -51,8 +54,25 @@ export function jobArgs(mcpConfigPath: string, continueConversation: boolean): s
     JOB_ALLOWED.join(","),
     "--permission-mode",
     "acceptEdits",
-    ...(continueConversation ? ["--continue"] : []),
+    ...(resume ? ["--resume", resume] : []),
   ];
+}
+
+/**
+ * The film's conversation when Claude Code still has it, so `--resume` can open it (else null: a new one starts).
+ * Claude Code keeps each one in `projects/<folder>/<session>.jsonl` in its own folder.
+ */
+export async function savedSession(
+  session: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string | null> {
+  if (!session || !/^[\w-]{1,100}$/.test(session)) return null;
+  const projects = join(claudeHome(env), "projects");
+  const folders = await readdir(projects, { withFileTypes: true }).catch(() => []);
+  const saved = folders.some(
+    (folder) => folder.isDirectory() && existsSync(join(projects, folder.name, `${session}.jsonl`)),
+  );
+  return saved ? session : null;
 }
 
 const BACKGROUND = [
@@ -214,6 +234,7 @@ export class ClaudeJobs {
       );
     }
     const { history } = await readHistory(film.dir);
+    const resume = ask.kind === "ask" ? await savedSession(history.session) : null;
     if (this.#jobs.has(film.id))
       throw new ClaudeJobError("Claude is already working on this film.");
     const turn: ClaudeTurn = {
@@ -236,7 +257,7 @@ export class ClaudeJobs {
       run: runClaude({
         claude,
         dir: film.dir,
-        args: (mcp) => jobArgs(mcp, ask.kind === "ask" && Boolean(history.session)),
+        args: (mcp) => jobArgs(mcp, resume),
         prompt: jobPrompt(ask),
         mcp: this.#options.mcp,
         limitMs,

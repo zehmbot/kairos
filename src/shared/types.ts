@@ -51,6 +51,8 @@ export const AudioTrackSchema = z.object({
   key: z.string().max(120).optional(),
   /** You moved this effect: it keeps its place when the story changes. */
   moved: z.boolean().optional(),
+  /** You set this effect's volume: it keeps it when the story changes. */
+  tuned: z.boolean().optional(),
   /** Plays again and again until the film ends (music). */
   loop: z.boolean().optional(),
   /** Gets quieter while voices talk (music under the narration). */
@@ -60,7 +62,7 @@ export type AudioTrack = z.infer<typeof AudioTrackSchema>;
 
 /** A track as written in kairos.json: the defaults (`from: 0`, `muted: false`) are left out. */
 export function compactTrack(track: AudioTrack): z.input<typeof AudioTrackSchema> {
-  const { from, muted, length, lane, sfx, key, moved, loop, duck, ...rest } = track;
+  const { from, muted, length, lane, sfx, key, moved, tuned, loop, duck, ...rest } = track;
   return {
     ...rest,
     ...(from > 0 ? { from } : {}),
@@ -70,6 +72,7 @@ export function compactTrack(track: AudioTrack): z.input<typeof AudioTrackSchema
     ...(sfx ? { sfx } : {}),
     ...(key !== undefined ? { key } : {}),
     ...(moved ? { moved } : {}),
+    ...(tuned ? { tuned } : {}),
     ...(loop ? { loop } : {}),
     ...(duck ? { duck } : {}),
   };

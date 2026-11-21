@@ -24,9 +24,17 @@ const MAX_BYTES = 20 * 1024 * 1024;
 /** A skill can't be changed. The message is shown to the user as-is. */
 export class SkillError extends Error {}
 
-/** Claude Code's personal skills folder (`KAIROS_CLAUDE_DIR` moves `~/.claude`, for tests). */
+/**
+ * Claude Code's own folder: `~/.claude`, or the one `CLAUDE_CONFIG_DIR` names. `KAIROS_CLAUDE_DIR` moves it for
+ * Kairos only (tests).
+ */
+export function claudeHome(env: NodeJS.ProcessEnv = process.env, home = homedir()): string {
+  return env.KAIROS_CLAUDE_DIR || env.CLAUDE_CONFIG_DIR || join(home, ".claude");
+}
+
+/** Claude Code's personal skills folder. */
 export function claudeSkillsDir(env: NodeJS.ProcessEnv = process.env, home = homedir()): string {
-  return join(env.KAIROS_CLAUDE_DIR || join(home, ".claude"), "skills");
+  return join(claudeHome(env, home), "skills");
 }
 
 /**
