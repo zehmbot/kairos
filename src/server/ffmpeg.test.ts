@@ -1,14 +1,19 @@
+import type { ChildProcess } from "node:child_process";
+import { createServer, type Socket } from "node:net";
 import { describe, expect, it } from "vitest";
 import {
   chunkArgs,
   concatLine,
   encoderArgs,
+  FfmpegStuck,
   ffmpegCandidates,
   ffprobeNextTo,
   findFfmpeg,
   joinArgs,
   mixFilter,
   probeExport,
+  progressWatch,
+  runFfmpeg,
 } from "./ffmpeg.ts";
 
 describe("finding ffmpeg", () => {
@@ -103,22 +108,26 @@ describe("mixing sound", () => {
   ];
 
   it("places each track and mixes them without turning them down", () => {
-    expect(mixFilter(tracks)).toBe(
+    expect(mixFilter(tracks, 5)).toBe(
       "[1:a]aresample=48000,volume=0.5[a0];" +
         "[2:a]aresample=48000,adelay=delays=1200:all=1,volume=1[a1];" +
-        "[a0][a1]amix=inputs=2:normalize=0:dropout_transition=0,apad[aout]",
+        "[a0][a1]amix=inputs=2:normalize=0:dropout_transition=0," +
+        "asetpts=N/SR/TB,apad=whole_dur=5[aout]",
     );
-    expect(mixFilter(tracks.slice(1))).toBe(
-      "[1:a]aresample=48000,adelay=delays=1200:all=1,volume=1[a0];[a0]apad[aout]",
+    expect(mixFilter(tracks.slice(1), 26.5)).toBe(
+      "[1:a]aresample=48000,adelay=delays=1200:all=1,volume=1[a0];" +
+        "[a0]asetpts=N/SR/TB,apad=whole_dur=26.5[aout]",
     );
   });
 
   it("trims a track: where in the file it starts and how long it plays", () => {
-    expect(mixFilter([{ path: "a.wav", start: 2, volume: 1, from: 1.5, length: 3 }])).toBe(
-      "[1:a]atrim=start=1.5:duration=3,asetpts=PTS-STARTPTS,aresample=48000,adelay=delays=2000:all=1,volume=1[a0];[a0]apad[aout]",
+    expect(mixFilter([{ path: "a.wav", start: 2, volume: 1, from: 1.5, length: 3 }], 8)).toBe(
+      "[1:a]atrim=start=1.5:duration=3,asetpts=PTS-STARTPTS,aresample=48000,adelay=delays=2000:all=1,volume=1[a0];" +
+        "[a0]asetpts=N/SR/TB,apad=whole_dur=8[aout]",
     );
-    expect(mixFilter([{ path: "a.wav", start: 0, volume: 1, length: 2 }])).toBe(
-      "[1:a]atrim=start=0:duration=2,asetpts=PTS-STARTPTS,aresample=48000,volume=1[a0];[a0]apad[aout]",
+    expect(mixFilter([{ path: "a.wav", start: 0, volume: 1, length: 2 }], 8)).toBe(
+      "[1:a]atrim=start=0:duration=2,asetpts=PTS-STARTPTS,aresample=48000,volume=1[a0];" +
+        "[a0]asetpts=N/SR/TB,apad=whole_dur=8[aout]",
     );
   });
 
@@ -130,4 +139,65 @@ describe("mixing sound", () => {
     // Without sound, nothing is encoded again.
     expect(joinArgs("list.txt", "out.mp4", { tracks: [], duration: 5 })).not.toContain("aac");
   });
+});
+
+describe("watching ffmpeg", () => {
+  it("knows how long the output hasn't gone forward", () => {
+    const watch = progressWatch(0);
+    watch.feed("frame=10\nout_time_us=N/A\n", 500);
+    expect(watch.stuckFor(1000)).toBe(1000);
+    // A line can come in two pieces.
+    watch.feed("out_time_us=2600", 1000);
+    watch.feed("0000\nprogress=continue\n", 1200);
+    expect(watch.stuckFor(1500)).toBe(300);
+    // Standing still, or creeping by less than 0.1 s (what the stuck join did), isn't going forward.
+    watch.feed("out_time_us=26000000\nout_time_us=26000021\nout_time_us=26050000\n", 9000);
+    expect(watch.stuckFor(10_000)).toBe(8800);
+    watch.feed("out_time_us=26500000\n", 10_000);
+    expect(watch.stuckFor(10_000)).toBe(0);
+  });
+
+  const ffmpeg = findFfmpeg();
+  it.runIf(ffmpeg)(
+    "stops an ffmpeg whose output doesn't go forward",
+    async () => {
+      // ffmpeg reads from a connection that never sends anything, so it waits forever.
+      const sockets: Socket[] = [];
+      const server = createServer((socket) => {
+        // Stopping ffmpeg resets the connection.
+        socket.on("error", () => undefined);
+        sockets.push(socket);
+      });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      let child: ChildProcess | null = null;
+      const startedAt = Date.now();
+      try {
+        const run = runFfmpeg(
+          ffmpeg ?? "",
+          ["-hide_banner", "-loglevel", "error", "-f", "s16le", "-ar", "8000", "-ac", "1"].concat([
+            "-i",
+            `tcp://127.0.0.1:${port}`,
+            "-f",
+            "null",
+            "-",
+          ]),
+          {
+            stallMs: 1500,
+            started: (started) => {
+              child = started;
+            },
+          },
+        );
+        await expect(run).rejects.toBeInstanceOf(FfmpegStuck);
+        expect(child).not.toBeNull();
+        expect(Date.now() - startedAt).toBeLessThan(10_000);
+      } finally {
+        for (const socket of sockets) socket.destroy();
+        server.close();
+      }
+    },
+    20_000,
+  );
 });

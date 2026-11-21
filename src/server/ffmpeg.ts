@@ -3,7 +3,7 @@
  * encoders really work (a listed GPU encoder may have no GPU behind it), and builds the command lines.
  * The command builders are pure functions, so they can be tested without running anything.
  */
-import { execFile, spawn } from "node:child_process";
+import { type ChildProcess, execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { posix, win32 } from "node:path";
 import type { ExportInfo, RenderEncoder, RenderQuality } from "../shared/types.ts";
@@ -150,11 +150,18 @@ export interface SoundTrack {
   duck?: string;
 }
 
+const num = (n: number) => String(Math.round(n * 1000) / 1000);
+
 /**
  * The audio filter that places each track (input 1, 2, ...) at its start and volume, mixes them without
- * turning them down (`normalize=0`) and pads with silence, so the sound is never shorter than the film.
+ * turning them down (`normalize=0`) and pads with silence to the film's `duration`, so the sound is never
+ * shorter than the film.
+ *
+ * After the mix, the sound's clock is counted again from its samples (`asetpts=N/SR/TB`), and the silence stops
+ * at the film's length (`whole_dur`): ffmpeg 9 sometimes loses the mix's timestamps, and an endless `apad` then
+ * never reached the output's `-t`, so the join ran forever.
  */
-export function mixFilter(tracks: readonly SoundTrack[]): string {
+export function mixFilter(tracks: readonly SoundTrack[], duration: number): string {
   const parts = tracks.map((track, i) => {
     const delay = Math.round(track.start * 1000);
     // A trimmed track: cut the file first, then start its clock at 0 again.
@@ -177,10 +184,11 @@ export function mixFilter(tracks: readonly SoundTrack[]): string {
     return `[${i + 1}:a]${steps.join(",")}[a${i}]`;
   });
   const labels = tracks.map((_, i) => `[a${i}]`).join("");
+  const end = `asetpts=N/SR/TB,apad=whole_dur=${num(duration)}[aout]`;
   const mix =
     tracks.length === 1
-      ? `${labels}apad[aout]`
-      : `${labels}amix=inputs=${tracks.length}:normalize=0:dropout_transition=0,apad[aout]`;
+      ? `${labels}${end}`
+      : `${labels}amix=inputs=${tracks.length}:normalize=0:dropout_transition=0,${end}`;
   return [...parts, mix].join(";");
 }
 
@@ -200,8 +208,6 @@ export interface OverlayClip {
   /** Fade in and out, seconds. */
   fade: number;
 }
-
-const num = (n: number) => String(Math.round(n * 1000) / 1000);
 
 /** The ffmpeg inputs of the clips (each one trimmed to what shows), in drawing order. */
 export function clipInputs(clips: readonly OverlayClip[], fps: number): string[] {
@@ -288,7 +294,7 @@ export function joinArgs(
   if (tracks.length === 0 && clips.length === 0) return [...head, "-c", "copy", ...tail];
 
   const filters = [
-    ...(tracks.length ? [mixFilter(tracks)] : []),
+    ...(sound && tracks.length ? [mixFilter(tracks, sound.duration)] : []),
     ...(clips.length ? [clipFilter(clips, tracks.length + 1)] : []),
   ];
   const picture =
@@ -311,9 +317,12 @@ export function joinArgs(
   const duration = sound?.duration ?? video?.duration;
   return [
     ...head,
-    // A looping track repeats its file until the film ends (the output stops at the film's length).
+    // A looping track repeats its file until the film ends: its input stops at the film's length, so every
+    // input ends by itself.
     ...tracks.flatMap((track) =>
-      track.loop ? ["-stream_loop", "-1", "-i", track.path] : ["-i", track.path],
+      track.loop && sound
+        ? ["-stream_loop", "-1", "-t", num(sound.duration), "-i", track.path]
+        : ["-i", track.path],
     ),
     ...(video ? clipInputs(clips, video.encoding.fps) : []),
     "-filter_complex",
@@ -374,20 +383,78 @@ function run(file: string, args: string[], timeout = 20_000): Promise<RunResult>
   });
 }
 
+/**
+ * Follows ffmpeg's `-progress` reports: `feed` takes what ffmpeg wrote, and `stuckFor` says how long (ms) its
+ * output time (`out_time_us`) hasn't gone forward by at least 0.1 s.
+ */
+export function progressWatch(start: number) {
+  let reached = Number.NEGATIVE_INFINITY;
+  let movedAt = start;
+  let rest = "";
+  return {
+    feed(text: string, now: number): void {
+      const lines = (rest + text).split("\n");
+      rest = lines.pop() ?? "";
+      for (const line of lines) {
+        const time = /^out_time_us=(\d+)/.exec(line.trim())?.[1];
+        if (time === undefined || Number(time) < reached + 100_000) continue;
+        reached = Number(time);
+        movedAt = now;
+      }
+    },
+    stuckFor: (now: number) => now - movedAt,
+  };
+}
+
+/** ffmpeg's output stopped going forward, so it was stopped. */
+export class FfmpegStuck extends Error {}
+
+export interface FfmpegWatch {
+  /** Gets the ffmpeg process as soon as it starts (so it can be stopped). */
+  started?: (child: ChildProcess) => void;
+  /** Stops ffmpeg when its output hasn't gone forward for this long (ms), and rejects with FfmpegStuck. */
+  stallMs?: number;
+}
+
 /** Runs ffmpeg to the end. Rejects with ffmpeg's own last words when it fails. */
-export function runFfmpeg(ffmpeg: string, args: string[]): Promise<void> {
+export function runFfmpeg(ffmpeg: string, args: string[], watch: FfmpegWatch = {}): Promise<void> {
+  const { stallMs } = watch;
   return new Promise((resolve, reject) => {
-    const child = spawn(ffmpeg, args, { windowsHide: true, stdio: ["ignore", "ignore", "pipe"] });
+    const child = spawn(ffmpeg, stallMs ? ["-progress", "pipe:1", "-nostats", ...args] : args, {
+      windowsHide: true,
+      stdio: ["ignore", stallMs ? "pipe" : "ignore", "pipe"],
+    });
+    watch.started?.(child);
     let stderr = "";
-    child.stderr.on("data", (chunk: Buffer) => {
+    child.stderr?.on("data", (chunk: Buffer) => {
       stderr = (stderr + chunk.toString()).slice(-4000);
     });
-    child.on("error", reject);
-    child.on("close", (code) =>
-      code === 0
-        ? resolve()
-        : reject(new Error(`ffmpeg failed: ${stderr.trim() || `exit ${code}`}`)),
-    );
+    const progress = progressWatch(Date.now());
+    child.stdout?.setEncoding("utf8").on("data", (text: string) => progress.feed(text, Date.now()));
+    let stuck = false;
+    const timer = stallMs
+      ? setInterval(
+          () => {
+            if (progress.stuckFor(Date.now()) < stallMs) return;
+            stuck = true;
+            child.kill();
+          },
+          Math.min(1000, stallMs),
+        )
+      : undefined;
+    child.on("error", (error) => {
+      clearInterval(timer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearInterval(timer);
+      if (stuck) {
+        reject(
+          new FfmpegStuck(`ffmpeg made no progress for ${Math.round((stallMs ?? 0) / 1000)} s.`),
+        );
+      } else if (code === 0) resolve();
+      else reject(new Error(`ffmpeg failed: ${stderr.trim() || `exit ${code}`}`));
+    });
   });
 }
 

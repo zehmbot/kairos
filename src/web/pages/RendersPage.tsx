@@ -60,7 +60,7 @@ export function RendersPage() {
                   <PixelButton
                     variant="ghost"
                     data-size="small"
-                    disabled={cancel.isPending || job.state === "joining"}
+                    disabled={cancel.isPending}
                     onClick={() => cancel.mutate(job.id)}
                   >
                     Cancel

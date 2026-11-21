@@ -258,10 +258,18 @@ describe("music under the voice", () => {
       { path: "voice.mp3", start: 1, volume: 1 },
       { path: "music.mp3", start: 0, volume: 0.4, loop: true, duck: "1-0.7*t" },
     ];
-    const filter = mixFilter(tracks);
+    const filter = mixFilter(tracks, 12);
     expect(filter).toContain("[2:a]aresample=48000,volume=0.4,volume='1-0.7*t':eval=frame[a1]");
     const args = joinArgs("list.txt", "out.mp4", { tracks, duration: 12 });
     const music = args.indexOf("music.mp3");
-    expect(args.slice(music - 3, music + 1)).toEqual(["-stream_loop", "-1", "-i", "music.mp3"]);
+    // The looping input stops at the film's length, so the join always ends.
+    expect(args.slice(music - 5, music + 1)).toEqual([
+      "-stream_loop",
+      "-1",
+      "-t",
+      "12",
+      "-i",
+      "music.mp3",
+    ]);
   });
 });

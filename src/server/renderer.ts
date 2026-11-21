@@ -22,6 +22,7 @@ import { type BrowserInfo, launchHeadless, type OpenFilm, openFilm } from "./cam
 import {
   chunkArgs,
   concatLine,
+  FfmpegStuck,
   joinArgs,
   type OverlayClip,
   probeMedia,
@@ -69,6 +70,8 @@ const chunkFile = (chunk: Chunk) => `chunk-${String(chunk.index).padStart(5, "0"
 /** Keep this many ended jobs on the Renders page (failures need to stay readable). */
 const KEEP_ENDED = 20;
 const PROGRESS_EVERY_MS = 250;
+/** Putting the video together normally takes seconds: when its output doesn't go forward for this long, it's stuck. */
+const JOIN_STALL_MS = 60_000;
 
 export interface RendererOptions {
   studio: Pick<Studio, "filmsDir" | "previewPath" | "events">;
@@ -171,7 +174,9 @@ export class Renderer {
       return true;
     }
     const active = this.#active;
-    if (active?.job.id !== jobId || job.state !== "running") return false;
+    if (active?.job.id !== jobId || (job.state !== "running" && job.state !== "joining")) {
+      return false;
+    }
     active.cancelled = true;
     for (const child of active.children) child.kill();
     for (const browser of active.browsers) void browser.close().catch(() => undefined);
@@ -367,19 +372,41 @@ export class Renderer {
           });
         }
       }
-      await runFfmpeg(
-        ffmpeg,
-        joinArgs(
-          list,
-          joined,
-          { tracks, duration: config.duration },
-          {
-            clips,
-            encoding: { encoder: job.encoder, quality: job.quality, fps: config.fps },
-            duration: config.duration,
-          },
-        ),
+      const args = joinArgs(
+        list,
+        joined,
+        { tracks, duration: config.duration },
+        {
+          clips,
+          encoding: { encoder: job.encoder, quality: job.quality, fps: config.fps },
+          duration: config.duration,
+        },
       );
+      // Cancel stops the join too. A join that gets stuck is stopped and runs again, once.
+      for (let attempt = 1; ; attempt++) {
+        if (active.cancelled) {
+          this.#end(job, "cancelled", null);
+          return;
+        }
+        try {
+          await runFfmpeg(ffmpeg, args, {
+            stallMs: JOIN_STALL_MS,
+            started: (child) => {
+              active.children.add(child);
+              child.once("close", () => active.children.delete(child));
+              if (active.cancelled) child.kill();
+            },
+          });
+          break;
+        } catch (error) {
+          if (!(error instanceof FfmpegStuck) || active.cancelled) throw error;
+          if (attempt === 2) {
+            throw new RenderError(
+              "Putting the video together got stuck twice, so Kairos stopped it. Render again.",
+            );
+          }
+        }
+      }
       const version = await nextVersion(film.path, film.id);
       const name = videoName(film.id, version);
       await rename(joined, join(film.path, RENDERS_DIR, name));

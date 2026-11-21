@@ -181,7 +181,14 @@ missing files as the film's problem. The preview plays one `<audio>` element per
 (`src/web/player/useFilmAudio.ts`): the player's clock leads, tracks start at their `start` (at `from` in the
 file) and are moved back in step when they drift over 80 ms. The render mixes the tracks while joining the chunks
 (`mixFilter` in `src/server/ffmpeg.ts`: `atrim` for trimmed tracks, `adelay`, `volume`, `amix` with
-`normalize=0`, `apad`, cut with `-t` at the film's length, AAC 192k; muted tracks are left out).
+`normalize=0`, cut with `-t` at the film's length, AAC 192k; muted tracks are left out).
+
+- **The join always ends:** after `amix`, the clock is counted again from the samples (`asetpts=N/SR/TB`) and
+  the silence stops at the film's length (`apad=whole_dur`). ffmpeg 9 sometimes loses the mix's timestamps, and
+  an endless `apad` then never reached `-t`. A looping track's input stops at the film's length too (`-t`).
+- **Watching the join:** `runFfmpeg` watches its `-progress`. When the output hasn't gone forward for 60 s, the
+  join is stopped and runs again, once.
+- **Cancel** works in every step.
 
 **Music under the voice:** a track with `loop` and `duck` plays its file again and again (`-stream_loop -1` in the
 render, `% duration` in the preview) and gets quieter while voices talk: `src/shared/duck.ts` turns the voice clips
