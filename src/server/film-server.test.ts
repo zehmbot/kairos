@@ -3,7 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { BRIDGE_PATH, buildFilmServer, injectBridge, THREE_PATH } from "./film-server.ts";
+import {
+  BRIDGE_PATH,
+  buildFilmServer,
+  injectBridge,
+  RAPIER_PATH,
+  THREE_PATH,
+} from "./film-server.ts";
 
 const PORT = 7342;
 const HOST = `127.0.0.1:${PORT}`;
@@ -137,6 +143,18 @@ describe("three.js for 3D films", () => {
       "build/..%5c..%5cpackage.json",
     ]) {
       expect((await get(`${THREE_PATH}${path}`)).statusCode, path).toBe(404);
+    }
+  });
+});
+
+describe("Rapier for physics", () => {
+  it("serves the deterministic build, one file, as JavaScript", async () => {
+    const rapier = await get(RAPIER_PATH);
+    expect(rapier.statusCode).toBe(200);
+    expect(rapier.headers["content-type"]).toContain("javascript");
+    expect(rapier.body).toContain("WebAssembly");
+    for (const path of ["rapier.cjs", "package.json", "../package.json", "rapier_wasm3d.js"]) {
+      expect((await get(`/__kairos/lib/rapier/${path}`)).statusCode, path).toBe(404);
     }
   });
 });

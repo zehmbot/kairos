@@ -333,7 +333,8 @@ export function FilmPage() {
           // A new frame rate starts the player over (frame numbers mean other times now).
           key={`${film.data.id}@${config.fps}`}
           ref={playerRef}
-          src={`${filmOrigin}${previewPath}`}
+          // `kairos=preview`: the film may draw a lighter look while you watch (renders get its full look).
+          src={`${filmOrigin}${previewPath}?kairos=preview`}
           title={config.title}
           width={config.width}
           height={config.height}

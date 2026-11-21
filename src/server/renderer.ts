@@ -11,7 +11,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { once } from "node:events";
 import { mkdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
-import { cpus } from "node:os";
+import { cpus, freemem } from "node:os";
 import { dirname, join } from "node:path";
 import type { Browser, Page } from "puppeteer-core";
 import { clipBox, clipLength, drawOrder, isPicture } from "../shared/clips.ts";
@@ -56,9 +56,15 @@ export function planChunks(total: number, fps: number, seconds = 4): Chunk[] {
   return chunks;
 }
 
-/** About one worker per three CPU cores, between 1 and 4: each one also runs an encoder. */
-export const workerCount = (cores = cpus().length) =>
-  Math.max(1, Math.min(4, Math.floor(cores / 3)));
+/** Free memory each worker needs: a whole hidden browser drawing the film, and its encoder. */
+const WORKER_MEMORY = 1.5 * 1024 ** 3;
+
+/**
+ * About one worker per three CPU cores and one per 1.5 GB of free memory, between 1 and 4: each one runs its own
+ * hidden browser and encoder, so a computer with little memory gets fewer.
+ */
+export const workerCount = (cores = cpus().length, free = freemem()) =>
+  Math.max(1, Math.min(4, Math.floor(cores / 3), Math.floor(free / WORKER_MEMORY)));
 
 /** The encoder to use: the first working one (graphics cards come first), or the CPU one only. */
 export function pickEncoder(info: ExportInfo, gpu: boolean): RenderEncoder | null {

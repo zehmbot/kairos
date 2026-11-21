@@ -7,7 +7,7 @@
  * script to each film page as it serves it.
  */
 import { readFile } from "node:fs/promises";
-import { dirname, join, relative, sep } from "node:path";
+import { basename, dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
@@ -24,6 +24,13 @@ export const THREE_PATH = "/__kairos/lib/three/";
 const threeDir = dirname(dirname(fileURLToPath(import.meta.resolve("three"))));
 /** Only these parts of the three.js package are served. */
 const THREE_FOLDERS = ["build/", "examples/jsm/"];
+
+/**
+ * Rapier, the physics of Blocky Cinema: its deterministic build (the same results on every computer), one file
+ * with its WebAssembly inside. Films map the package's own name to it with their import map.
+ */
+export const RAPIER_PATH = "/__kairos/lib/rapier/rapier.mjs";
+const rapierFile = fileURLToPath(import.meta.resolve("@dimforge/rapier3d-deterministic-compat"));
 
 export interface FilmServerOptions {
   /** Current films folder (it changes when the user picks another workspace). */
@@ -73,6 +80,11 @@ export async function buildFilmServer(options: FilmServerOptions): Promise<Fasti
     if (!file || !THREE_FOLDERS.some((folder) => path.startsWith(folder))) return notFound(reply);
     return reply.sendFile(relative(threeDir, file).split(sep).join("/"), threeDir);
   });
+  app.get(RAPIER_PATH, (_request, reply) =>
+    reply
+      .type("text/javascript; charset=utf-8")
+      .sendFile(basename(rapierFile), dirname(rapierFile)),
+  );
 
   app.get("/", (_request, reply) =>
     reply

@@ -1,0 +1,60 @@
+{
+  "name": "Blocky Cinema",
+  "description": "Narrated stories with blocky toy characters, filmed like an animated movie: real physics, weight and contact, cinematic light and camera. Vertical, made for short-video stories.",
+  "defaults": {
+    "shape": "tall",
+    "fps": 30,
+    "duration": 30,
+    "narration": "packed"
+  },
+  "kinds": [
+    {
+      "id": "story",
+      "name": "Story",
+      "description": "A narrated story with cinematic light, physics and full-body acting.",
+      "fields": [
+        {
+          "id": "story",
+          "label": "Your story",
+          "type": "longtext",
+          "required": true,
+          "placeholder": "Last winter, my best friend said my name three times, and the whole town went quiet...",
+          "hint": "Write it the way a narrator tells it, from the first word to the last: the voice never stops, and every few words become a shot."
+        },
+        {
+          "id": "characters",
+          "label": "Characters",
+          "type": "choice",
+          "options": ["Keep the Blocky cast", "Make new characters for this story"],
+          "hint": "The Blocky cast is Milo, Ruby, Grandpa Bo, Mom, Dad and Zee. Keep them so your films feel like one series."
+        },
+        {
+          "id": "hero",
+          "label": "Who is the main character?",
+          "type": "text",
+          "placeholder": "Milo, or: a shy girl with a red cap",
+          "hint": "Optional."
+        },
+        {
+          "id": "place",
+          "label": "Where does it happen?",
+          "type": "choice",
+          "options": [
+            "Let Claude choose",
+            "Home",
+            "School",
+            "Town",
+            "Park",
+            "Snowy forest at night"
+          ]
+        },
+        {
+          "id": "mood",
+          "label": "Mood",
+          "type": "choice",
+          "options": ["Funny", "Heartwarming", "Spooky", "Dramatic"]
+        }
+      ]
+    }
+  ]
+}

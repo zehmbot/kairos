@@ -9,7 +9,7 @@ import { planShots } from "../../templates/blocky/blocky/timing.js";
 import { voiceLinesFrom } from "../../templates/blocky/blocky/voice.js";
 import { clipBox } from "../shared/clips.ts";
 import { FilmConfigSchema } from "../shared/types.ts";
-import { Camera, findBrowser } from "./camera.ts";
+import { Camera, findBrowser, launchHeadless, openFilm } from "./camera.ts";
 import { findFfmpeg } from "./ffmpeg.ts";
 import { buildFilmServer } from "./film-server.ts";
 import { createFilm } from "./films.ts";
@@ -359,6 +359,67 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
       expect.stringContaining('Shot 4: Milo can\'t go to "kitchen": home has center, left, right'),
     ]);
   }, 240_000);
+
+  it("draws Blocky Cinema's sheets without problems, and the same frames in any order in any browser", async () => {
+    const template = fileURLToPath(new URL("../../templates/blocky-cinema/", import.meta.url));
+    const id = await createFilm(
+      filmsDir,
+      template,
+      { title: "Cinema check", shape: "tall" },
+      { size: { width: 360, height: 640 } },
+    );
+    for (const name of ["cast", "poses", "props", "places", "effects", "moves"]) {
+      const { checks } = await camera.captureFrame({
+        url: `http://127.0.0.1:${port}/${id}/sheet.html?sheet=${name}`,
+        width: 1920,
+        height: 1080,
+        t: 0,
+        maxSide: 960,
+      });
+      expect({ name, checks }).toEqual({ name, checks: [] });
+    }
+    // Two render workers: separate browsers, the same frames drawn in different orders, one page each (as a
+    // worker draws its chunk). The physics, the falls and the camera's choices come out the same: the pictures match
+    // to within 2 levels out of 255 (the graphics card's own rounding at a few edges).
+    const times = [3.4, 10.5, 12.4, 19.3];
+    const drawIn = async (order: number[]) => {
+      const browserInfo = findBrowser();
+      if (!browserInfo) throw new Error("no browser");
+      const worker = await launchHeadless(browserInfo);
+      try {
+        const page = await worker.newPage();
+        const film = await openFilm(page, `http://127.0.0.1:${port}/${id}/`, 360, 640);
+        const pictures = new Map<number, number[]>();
+        for (const t of order) {
+          await film.draw(t);
+          // The 3D picture and the captions over it, as numbers.
+          const pixels = await page.evaluate(() => {
+            const out = document.createElement("canvas");
+            out.width = 360;
+            out.height = 640;
+            const ctx = out.getContext("2d") as CanvasRenderingContext2D;
+            for (const layer of document.querySelectorAll("canvas"))
+              ctx.drawImage(layer, 0, 0, 360, 640);
+            return Array.from(ctx.getImageData(0, 0, 360, 640).data);
+          });
+          pictures.set(t, pixels);
+        }
+        return pictures;
+      } finally {
+        await worker.close();
+      }
+    };
+    const forward = await drawIn(times);
+    const backward = await drawIn([...times].reverse());
+    for (const t of times) {
+      const a = forward.get(t) as number[];
+      const b = backward.get(t) as number[];
+      let most = 0;
+      for (let i = 0; i < a.length; i++) most = Math.max(most, Math.abs((a[i] ?? 0) - (b[i] ?? 0)));
+      expect({ t, most }).toEqual({ t, most: expect.any(Number) });
+      expect(most, `frame at ${t} s`).toBeLessThanOrEqual(2);
+    }
+  }, 300_000);
 
   it("explains when the film can't be drawn", async () => {
     await expect(

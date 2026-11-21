@@ -77,6 +77,7 @@ describe("templates", () => {
     expect(list.map((template) => [template.id, template.source])).toEqual([
       ["starter", "kairos"],
       ["blocky", "kairos"],
+      ["blocky-cinema", "kairos"],
       ["blocky-story", "kairos"],
       ["story", "yours"],
     ]);
@@ -91,7 +92,12 @@ describe("templates", () => {
       204,
     );
     const left = (await app.inject("/api/templates")).json() as TemplateSummary[];
-    expect(left.map((template) => template.id)).toEqual(["starter", "blocky", "blocky-story"]);
+    expect(left.map((template) => template.id)).toEqual([
+      "starter",
+      "blocky",
+      "blocky-cinema",
+      "blocky-story",
+    ]);
   });
 });
 

@@ -30,11 +30,15 @@ describe("planning", () => {
     expect(chunks.reduce((sum, chunk) => sum + chunk.to - chunk.from, 0)).toBe(150);
   });
 
-  it("uses about one worker per three cores, between 1 and 4", () => {
-    expect(workerCount(1)).toBe(1);
-    expect(workerCount(6)).toBe(2);
-    expect(workerCount(12)).toBe(4);
-    expect(workerCount(64)).toBe(4);
+  it("uses about one worker per three cores, between 1 and 4, and fewer with little memory", () => {
+    const plenty = 64 * 1024 ** 3;
+    expect(workerCount(1, plenty)).toBe(1);
+    expect(workerCount(6, plenty)).toBe(2);
+    expect(workerCount(12, plenty)).toBe(4);
+    expect(workerCount(64, plenty)).toBe(4);
+    // A computer with 3.5 GB free gets two workers; with almost nothing free, still one.
+    expect(workerCount(12, 3.5 * 1024 ** 3)).toBe(2);
+    expect(workerCount(12, 0.2 * 1024 ** 3)).toBe(1);
   });
 
   it("picks the graphics card when asked and one works", () => {

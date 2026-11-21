@@ -67,16 +67,17 @@ describe("listing templates", () => {
     expect(list[0]?.kinds[0]?.fields[0]?.id).toBe("idea");
     expect(list.slice(1).map((template) => template.id)).toEqual([
       "blocky",
+      "blocky-cinema",
       "blocky-story",
       "my-style",
       "zebra",
     ]);
-    expect(list[3]).toMatchObject({
+    expect(list[4]).toMatchObject({
       source: "yours",
       defaults: { shape: "tall", fps: 24, duration: 5 },
     });
     // A template without kinds still has one, with no questions.
-    expect(list[4]?.kinds).toEqual([{ id: "default", name: "Zebra", description: "", fields: [] }]);
+    expect(list[5]?.kinds).toEqual([{ id: "default", name: "Zebra", description: "", fields: [] }]);
   });
 
   it("explains a broken template.json instead of using it", async () => {
