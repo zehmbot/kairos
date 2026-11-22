@@ -61,7 +61,7 @@ export const SHOTS = [
 
 ```js
 {
-  place: "home",            // home, bedroom, school, town, park, forest (kept from the shot before when left out)
+  place: "home",            // home, bedroom, school, town, park, backyard, forest (kept from the shot before)
   light: "evening",         // day, evening, night (each place has its own default)
   shot: "close",            // wide, full, medium, close, xclose, ots, low, high, insert
   who: ["milo", "ruby"],    // who is in the shot; the first one is the focus
@@ -100,8 +100,8 @@ export const SHOTS = [
 - **`via`**: spots to go by, in order.
 - **`over`**: a low piece of furniture the run jumps over (`over: "coffee table"`, with `pace: "run"` or
   `"sprint"`): a crouch, a real arc, the knees tucked over it, a landing taken in the knees. Up to about 2.2 units
-  high for an adult: the coffee table, the bed, the toy box, a log, the sandbox (furniture names are in
-  `blocky/layouts.js`, with their heights `h`).
+  high for an adult: the coffee table, the bed, the toy box, a log, the sandbox, a flower bed, the pond (the
+  furniture's names and heights come from each place's `pieces` and `blocks` in `blocky/layouts.js`).
 
 What the engine does by itself:
 
@@ -146,8 +146,9 @@ Things that move by physics, by name: `boxes: { prop: "box", place: "home", at: 
 - **`prop`:** one of the props with a physical shape: box, pillow, ball, gift, book, cup (`BODIES` in
   `blocky/sizes.js`).
 - **`at`:** where it stands, in the place's units: `x` to the right and `z` toward the front of the wide shot. The
-  place's spots in `blocky/layouts.js` give coordinates to start from. `y` puts it higher: on furniture, the
-  furniture's height (its block's `h`: the desk 2.2, the coffee table 1.35).
+  place's spots and pieces in `blocky/layouts.js` give coordinates to start from. `y` puts it higher: on
+  furniture, the furniture's height (the desk 2.2, the coffee table 1.35, the picnic table 1.9); on a pavement,
+  porch or deck, its step (0.3, 0.45).
 - **`stack`** piles several; **`turn`** turns it (radians).
 
 What physics does by itself: things rest on the floor and the furniture, tumble when someone runs into them, fall
@@ -162,8 +163,8 @@ something goes wrong: a walk into furniture, a throw that misses, things that ne
   with a wider lens. Ask for the shot you want (`shot`, `angle`, `move`); if a frame still hides someone, try
   another `angle` or move people.
 - **The light** has a reason in every place: lamps with soft shadows indoors in the evening and at night, the
-  school's ceiling panels, the sun or moon outside, the street lamps once it's dark, the campfire in the forest at
-  night.
+  school's ceiling panels, the sun or moon outside (with drifting clouds, and a big moon at night), the street
+  lamps once it's dark, the backyard's door lamp and string lights, the campfire in the forest at night.
 - **Looks:** the preview uses a lighter look (standard), frames and renders the richest (cinematic), and a
   computer drawing without a graphics card the lightest (draft). Only the finish changes, never what happens.
   `SETTINGS.look` (`"draft"`, `"standard"`, `"cinematic"`) forces one; leave it unset.
@@ -230,8 +231,12 @@ heart.
     - **home:** `front`, `door`, `window`, `sofa`, `sofaL`, `sofaR`, `tableL`, `tableR`;
     - **bedroom:** `window`, `bed` (lying), `bedSit`, `desk`;
     - **school:** `front`, `lockerL`, `lockerR`;
-    - **town:** `road`, `far`;
-    - **park:** `slide`, `bench`;
+    - **town** (a street of houses: stories happen on the far pavement, in front of the house): `road`, `far`,
+      `gate` (inside the house's front gate), `porch` (at its front door), `driveway`, `across` (the other
+      pavement);
+    - **park:** `slide`, `bench`, `picnicL`, `picnicR` (the picnic table's benches), `pond`, `sandbox`;
+    - **backyard** (behind a house: a deck, a lawn, a wooden fence): `door` (the back door), `patio`, `grill`,
+      `tree`, `trampoline`, `gate`, `chair1`, `chair2` (garden chairs on the deck);
     - **forest:** `fire`, `cabin`, `logL`, `logR`.
   - **Without `at`:**
     - one person stands in the center;
@@ -278,8 +283,12 @@ heart.
 
 - **the cast:** `cast.js`;
 - **figures and faces:** `characters.js`, `faces.js`;
-- **poses and places:** `poses.js` (with the gaits, sitting down and standing up), `places.js`, `layouts.js`
-  (each place's spots, furniture footprints and walls);
+- **poses and places:** `poses.js` (with the gaits, sitting down and standing up), `places.js` (each place's
+  ground, light and pieces), `layouts.js` (each place's spots, walls and `pieces`: what stands there);
+- **the place kit:** `shapes.js` (what each kind of piece takes up: its physics boxes, its footprint, raised ground
+  like porches and decks), `kit.js` with `kit-house.js` and `kit-garden.js` (how houses, cars, lamps, fences,
+  trees, bushes, flower beds, decks and garden things look), `textures.js` (wood, siding, shingles, bricks, grass,
+  asphalt, concrete, sand... made by code), `sky.js` (the sky with clouds and the moon, and the far hills);
 - **moving:** `motion.js` (where everyone is in each shot: the walks, jumps and actions, planned once);
 - **acting:** `animation.js` (the poses of jumps, punches, falls, getting up, carrying, throwing, reactions),
   `figure.js` (anyone's whole body at any moment), `rig.js` (the joints as numbers, arms aimed by IK);
@@ -315,6 +324,10 @@ actions, and checks the story's: a known spot, a seat to sit on, a way around th
 shot, feet that don't slide, someone within reach, a jump with a run-up, nobody inside anyone, and the physics: a
 throw that hits, things that settle). `places` also checks the place's physics against what's built (every piece of
 furniture has a physics shape, and no shape stands where nothing is built). Fix every problem it lists.
+
+**Changing a place.** A place's furniture is its `pieces` in `blocky/layouts.js` (`{ kind, x, z, rot, ... }`):
+move one, add one (a tree, a bush, a bench, a car, a fence...) or take one away, and its physics and footprint
+follow by themselves. Then look at the Places sheet (`kairos_sheet` with `places` and the place), which checks it.
 
 Change it only when the story needs something it doesn't have (a new place, a pose, a prop, an effect). Keep
 `renderOut(t)` a pure function of `t`: no timers, clocks or unseeded random numbers. Our characters and world

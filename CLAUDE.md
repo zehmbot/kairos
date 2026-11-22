@@ -88,7 +88,8 @@ template starts from. It is never shown as a template card. The **Templates page
 templates' `template.json` (the template editor, `src/web/templateForm.ts`: question ids come from the question text
 and saved ids are kept, so earlier briefs still match); Kairos' templates can only be duplicated.
 
-**Blocky Cinema** (`templates/blocky-cinema/`, its guide the `kairos-blocky-cinema` skill) is a template with an
+**Blocky Cinema** (`templates/blocky-cinema/`, its guide the `kairos-blocky-cinema` skill; places: home, bedroom,
+school, town, park, backyard, forest) is a template with an
 engine: Claude writes the shot list in `story.js` (places, shot types, the cast, faces, poses, walks, actions,
 things, effects, captions) and `blocky/*.js` turns it into frames: three.js toy figures with drawn faces, six places
 with day/evening/night light, framing computed for any film size, word-by-word captions and icons on a 2D layer, and
@@ -101,7 +102,8 @@ cap and a range in `JOINTS`; `apply(pose)` clamps and reports what a pose asked 
 the problems their checks found (unsized or mis-sized props, joints past their limits, parts off the body, doors,
 tables and seats at the wrong size) in `window.KAIROS_CHECKS`. The film server adds the bridge to a film's other
 top-level pages, `GET /api/films/:id/sheet` draws one with the camera (problems in `x-kairos-checks`), the film
-page's Sheets tab shows them (`hasSheets`), and Claude uses `kairos_sheet`. **The voice leads:** `blocky/voice.js`
+page's Sheets tab shows them (`hasSheets`; its places come from the engine, `window.KAIROS_PLACES`, sent with
+`ready`), and Claude uses `kairos_sheet`. **The voice leads:** `blocky/voice.js`
 reads the film's voices while it loads (`kairos.json` clips, `voice/script.json`, `voice/lines.json`), and
 `blocky/timing.js` cuts the shots on the voice's real words (below). Captions show those words, and the speaker's
 mouth moves on them. The story's length goes to `window.KAIROS_LENGTH`: the bridge sends it with `ready`, the film
@@ -156,14 +158,25 @@ Its engine:
     where they lie.
 - **Never inside anything:** walks never end inside furniture (`freeSpot`), standing up makes room, and the
   planner reports people standing inside each other.
-- **Every place has physics:** `layouts.js` gives each place `solids` (boxes measured from the built pieces:
-  furniture, cars, lamp posts, tree trunks and crowns, the cabin), `walls` for rooms, and a height `h` on every
-  footprint (for `over`). The Places sheet checks them against what's built: a piece of furniture where people go
-  with most of its points outside every solid, or a solid with nothing built there (an invisible wall), is a
-  problem.
-- **The camera:** it frames from the plan, and tests each shot's view at five moments against the place's meshes
-  (furniture between it and anyone, covering the middle of the picture, or close to the camera anywhere in it),
-  turning or rising to the clearest view. A camera that would stand behind a wall or inside furniture moves in
+- **Places are pieces:** a layout's `pieces` (`{ kind, x, z, rot, ... }`) say what stands where. `shapes.js` turns
+  each kind into physics boxes (`solids`), footprints (`blocks`, with heights for `over`) and raised ground
+  (`raised`: porches, decks; `ground(x, z)` follows it), from the same specs (`houseSpec`, `treeSpec`...) that size
+  what `kit.js` builds (`kit-house.js`: houses, cars, lamps, mailboxes, bins, decks, string lights;
+  `kit-garden.js`: trees, bushes, flower beds, fences, the pond, park and garden things). The town, park and
+  backyard are built this way; the indoor places still list hand-measured `solids` next to their builders.
+- **Detail without the cost:** each built piece merges its meshes by material (`freeze` in `util.js`), so a
+  street of detailed houses draws in about as many calls as before. Textures are made by code (`textures.js`: a
+  color map and a bump map from one seed), and `kit-parts.js` keeps their scale in the world on any box or plane.
+- **The sky** (`sky.js`, `makeSky(look)`): a gradient, the sun's glow, clouds moving with `t`, stars and a big
+  moon at night; `backdrop()` rings outdoor places with hills and a tree line.
+- **The Places sheet** checks each place's physics against what's built: furniture where people go must be mostly
+  inside a physics box, and a box with nothing built there is an invisible wall. Long pieces (a fence down the
+  street) are checked run by run; scenery (`userData.scenery`) is skipped. Seats are measured from the ground they
+  stand on.
+- **The camera:** it frames from the plan, and tests each shot's view at five moments against the place's physics
+  boxes (`rayBox`: furniture between it and anyone, covering the middle of the picture, or close to the camera
+  anywhere in it; another person in front of the one the shot is about), turning or rising to the clearest view.
+  Testing boxes instead of meshes keeps it as fast in a detailed place as in a plain one. A camera that would stand behind a wall or inside furniture moves in
   along its line with a wider lens (`fitInRoom`).
 - **The picture:**
   - **Lights:** a key, fill and rim light around each shot's camera, motivated lamps (spot lights with soft

@@ -34,6 +34,7 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
   const [length, setLength] = useState<number | null>(null);
   // The effect sounds the film places, when it says (Blocky Cinema).
   const [sounds, setSounds] = useState<FilmSound[] | null>(null);
+  const [places, setPlaces] = useState<string[] | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [frameError, setFrameError] = useState<string | null>(null);
 
@@ -140,6 +141,7 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
         setScenes(message.scenes);
         setLength(message.length ?? null);
         setSounds(message.sounds ?? null);
+        setPlaces(message.places ?? null);
         requestFrame(s.pending ?? s.frame);
       } else if (message.type === "frame") {
         s.inflight = false;
@@ -201,6 +203,7 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
     scenes,
     length,
     sounds,
+    places,
     error: pageError ?? frameError,
     toggle,
     pause,

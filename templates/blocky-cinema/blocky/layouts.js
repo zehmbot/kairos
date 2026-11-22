@@ -7,8 +7,196 @@
 // - `solids`: the furniture as physics boxes { x, y, z, w, h, d, rot } (centers and full sizes, measured from the
 //   built place); without them, each block counts as a box of its height; `walls`: the room's walls;
 // - `bounds`: how far anyone can walk (walls, houses); `ground(x, z)`: raised ground (pavements);
-// - `wide`: the establishing shot; `surface`: where small objects sit for close-ups.
+// - `wide`: the establishing shot; `surface`: where small objects sit for close-ups;
+// - `pieces`: what stands there, built by kit.js ({ kind, x, z, rot, ... }); their physics boxes, footprints and
+//   raised ground (porches, decks) come from shapes.js and join `solids`, `blocks` and `ground` below.
+import { DECK_HEIGHT, houseSpec, piecesShapes, raisedAt } from "./shapes.js";
 import { BED_HEIGHT, SEAT_HEIGHT } from "./sizes.js";
+import { rng } from "./util.js";
+
+const r3 = (v) => Math.round(v * 1000) / 1000;
+
+/** Where a piece's own point (lx, lz) is in the place. */
+function onPiece(p, lx, lz) {
+  const r = p.rot ?? 0;
+  return {
+    x: r3(p.x + lx * Math.cos(r) + lz * Math.sin(r)),
+    z: r3(p.z - lx * Math.sin(r) + lz * Math.cos(r)),
+  };
+}
+
+/**
+ * A row of houses along the town's street: `side` -1 is the far side (fronts facing +z), 1 the near side. Each house
+ * gets a mailbox at the curb, a bin by its driveway, bushes by its door, and the row's picket fence opens at every
+ * front path and driveway.
+ */
+function streetRow({ side, xs, seeds, special = {} }) {
+  const z = side * 34;
+  const rot = side < 0 ? 0 : Math.PI;
+  const flip = side < 0 ? 1 : -1;
+  const pieces = [];
+  const gaps = [];
+  xs.forEach((x, i) => {
+    const house = { kind: "house", x, z, rot, seed: seeds[i], drive: 10.6, ...(special[x] ?? {}) };
+    const h = houseSpec(house);
+    pieces.push(house);
+    const doorX = x + flip * h.doorX;
+    gaps.push([doorX + 100, 3.2]);
+    pieces.push({
+      kind: "mailbox",
+      x: r3(doorX + 2.6),
+      z: side * 8.9,
+      y: 0.3,
+      rot,
+      seed: seeds[i],
+    });
+    if (h.garage) {
+      const gx = x + flip * h.garage.side * (h.w / 2 + h.garage.w / 2);
+      gaps.push([gx + 100, 9.4]);
+      pieces.push({ kind: "bin", x: r3(gx + 5.8), z: side * 15.4, rot, seed: seeds[i] });
+    }
+    const random = rng(`row${seeds[i]}`);
+    const reach = h.porch ? 7.6 : 3.8;
+    for (const lx of [h.doorX - reach, h.doorX + reach]) {
+      if (Math.abs(lx) > h.w / 2 - 1.8) continue;
+      const at = onPiece(house, lx, h.d / 2 + 1.7);
+      pieces.push({
+        kind: "bush",
+        ...at,
+        size: 1.5 + random() * 0.4,
+        seed: `${seeds[i]}${lx}`,
+        flowers: random() < 0.6 ? ["#e8344e", "#ffffff", "#e86a8a", "#f4c542"][i % 4] : null,
+      });
+    }
+  });
+  pieces.push({ kind: "fence", from: [-100, side * 13.6], to: [100, side * 13.6], gaps });
+  return pieces;
+}
+
+const TOWN_PIECES = [
+  ...streetRow({
+    side: -1,
+    xs: [-88, -44, 0, 44, 88],
+    seeds: ["f1", "f2", "hero", "f4", "f5"],
+    special: { 0: { name: "the house", floors: 2, garage: -1, porch: true, w: 28, chimney: true } },
+  }),
+  ...streetRow({
+    side: 1,
+    xs: [-66, -22, 22, 66],
+    seeds: ["n1", "n2", "n3", "n4"],
+    special: { "-22": { garage: 1 }, 22: { garage: -1 } },
+  }),
+  ...[-66, -22, 22, 66].map((x, k) => ({
+    kind: "tree",
+    x,
+    z: -19.5,
+    seed: `tf${k}`,
+    scale: 1.2 + (k % 2) * 0.15,
+  })),
+  ...[-44, 44].map((x, k) => ({ kind: "tree", x, z: 19.5, seed: `tn${k}`, scale: 1.25 })),
+  ...[-45, -15, 15, 45].map((x) => ({ kind: "lamp", x, z: -8.9, y: 0.3, rot: 0 })),
+  ...[-30, 30].map((x) => ({ kind: "lamp", x, z: 8.9, y: 0.3, rot: Math.PI })),
+  { kind: "hydrant", x: 12, z: -11.8, y: 0.3 },
+  { kind: "car", x: 16, z: -5.3, rot: 0, color: "#3b5dc9", name: "the blue car" },
+  { kind: "car", x: -30, z: 5.3, rot: Math.PI, color: "#e8344e", name: "the red car" },
+  { kind: "flowerBed", x: -7, z: -15.2, w: 8, d: 1.6, seed: "hero1" },
+  { kind: "flowerBed", x: 11, z: -15.2, w: 6, d: 1.6, seed: "hero2" },
+];
+
+/** The park's ring of trees (as before, with fuller trees). */
+const PARK_TREES = (() => {
+  const random = rng("park");
+  const out = [];
+  for (let k = 0; k < 16; k++) {
+    const a = (k / 16) * Math.PI * 2 + random() * 0.3;
+    const r = 26 + random() * 14;
+    const scale = 0.95 + random() * 0.35;
+    out.push({
+      kind: "tree",
+      x: r3(Math.cos(a) * r),
+      z: r3(Math.sin(a) * r - 6),
+      seed: `pt${k}`,
+      scale,
+    });
+  }
+  return out;
+})();
+
+const PICNIC = { kind: "picnicTable", x: -16, z: 12, rot: 0.25 };
+
+const PARK_PIECES = [
+  { kind: "slide", x: -9, z: -11, rot: 0.5 },
+  { kind: "swingSet", x: 9, z: -14, rot: -0.2 },
+  { kind: "bench", x: 9, z: -3, rot: -0.9 },
+  { kind: "sandbox", x: -14, z: 1, w: 8, d: 6 },
+  PICNIC,
+  { kind: "pond", x: 17, z: 9, r: 5, rot: 0.2 },
+  { kind: "flowerBed", x: -3, z: -17, w: 9, d: 1.8, seed: "p1" },
+  { kind: "flowerBed", x: 16, z: -6.5, w: 5, d: 1.6, rot: -0.6, seed: "p2" },
+  { kind: "bush", x: -15, z: -13, size: 1.8, seed: "pb1", flowers: "#e86a8a" },
+  { kind: "bush", x: -12.5, z: -16, size: 1.5, seed: "pb2" },
+  { kind: "bush", x: 15, z: -19, size: 1.7, seed: "pb3", flowers: "#ffffff" },
+  { kind: "bush", x: 20, z: -12, size: 1.6, seed: "pb4" },
+  { kind: "bush", x: -21, z: 4, size: 1.7, seed: "pb5", flowers: "#f4c542" },
+  { kind: "lamp", x: 3.6, z: -12, tall: 8.8, name: "a lamp post" },
+  { kind: "lamp", x: 8.5, z: 12.5, tall: 8.8, name: "a lamp post" },
+  { kind: "bin", x: 12.6, z: -6.2, rot: -0.9, seed: "pk", color: "#2f6b45" },
+  { kind: "rock", x: 11.5, z: 13.5, size: 1.4, seed: "r1" },
+  { kind: "rock", x: 23, z: 6, size: 1.1, seed: "r2" },
+  { kind: "rock", x: -22, z: -8, size: 1.6, seed: "r3" },
+  ...PARK_TREES,
+];
+
+/** The backyard: the back of a house with its deck, a lawn closed by a wooden fence, a tree and a trampoline. */
+const CHAIRS = [
+  { kind: "gardenChair", x: -9.5, z: -13.8, rot: 0.5, y: DECK_HEIGHT },
+  { kind: "gardenChair", x: -3.5, z: -13.8, rot: -0.5, y: DECK_HEIGHT },
+];
+
+const BACKYARD_PIECES = [
+  {
+    kind: "house",
+    x: 0,
+    z: -29,
+    rot: Math.PI,
+    seed: "backyard",
+    floors: 2,
+    garage: 0,
+    porch: false,
+    drive: 0,
+    w: 30,
+    name: "the house",
+  },
+  { kind: "deck", x: 0, z: -14, w: 26, d: 10 },
+  ...CHAIRS,
+  { kind: "patioTable", x: -6.5, z: -11.6, y: DECK_HEIGHT },
+  { kind: "grill", x: 8.5, z: -12.5, rot: -0.4, y: DECK_HEIGHT },
+  {
+    kind: "stringLights",
+    y: DECK_HEIGHT,
+    posts: [
+      [-12.6, -9.4],
+      [12.6, -9.4],
+    ],
+    anchors: [
+      [-12.6, -9.4, 8.45],
+      [0, -18.8, 9.6],
+      [12.6, -9.4, 8.45],
+      [-12.6, -9.4, 8.45],
+    ],
+  },
+  { kind: "fence", style: "privacy", from: [-22, -19], to: [-22, 17] },
+  { kind: "fence", style: "privacy", from: [22, -19], to: [22, 17] },
+  { kind: "fence", style: "privacy", from: [-22, 17], to: [22, 17], gaps: [[37, 3.6]] },
+  { kind: "tree", x: -13, z: 5, seed: "yard", scale: 1.4 },
+  { kind: "trampoline", x: 12.5, z: 6, r: 4.4 },
+  { kind: "flowerBed", x: -20.4, z: 0, rot: Math.PI / 2, w: 14, d: 1.8, seed: "y1" },
+  { kind: "bush", x: -19.4, z: 12.5, size: 1.8, seed: "yb1", flowers: "#e86a8a" },
+  { kind: "bush", x: 19.4, z: 12.5, size: 1.7, seed: "yb2", flowers: "#ffffff" },
+  { kind: "bush", x: 19.6, z: -4, size: 1.6, seed: "yb3" },
+  { kind: "house", x: -50, z: -6, rot: Math.PI / 2, seed: "nb1", name: "the neighbors' house" },
+  { kind: "house", x: 50, z: -8, rot: -Math.PI / 2, seed: "nb2", name: "the neighbors' house" },
+];
 
 export const LAYOUTS = {
   home: {
@@ -133,92 +321,34 @@ export const LAYOUTS = {
     surface: [0, 0.02, 4.5],
   },
   town: {
+    // A street at real size: a two-lane road, pavements a step up on both sides, front yards behind picket fences,
+    // and houses with porches and garages. Stories happen on the far pavement, in front of "the house" (x 0).
     spots: {
-      center: { x: 0, z: 6.4, rot: 0, y: 0.3 },
-      left: { x: -3, z: 6.6, rot: 1.0, y: 0.3 },
-      right: { x: 3, z: 6.6, rot: -1.0, y: 0.3 },
-      back: { x: -5, z: -6.4, rot: 0.2, y: 0.3 },
+      center: { x: 0, z: -10.6, rot: 0, y: 0.3 },
+      left: { x: -4, z: -10.4, rot: 1.0, y: 0.3 },
+      right: { x: 4, z: -10.4, rot: -1.0, y: 0.3 },
+      back: { x: -7, z: -18.5, rot: 0.3 },
       road: { x: 0, z: 0, rot: 0 },
-      far: { x: -9, z: -6.5, rot: 0.6, y: 0.3 },
+      far: { x: -14, z: -10.8, rot: 0.6, y: 0.3 },
+      gate: { x: 3.36, z: -14.8, rot: 0 },
+      porch: { x: 3.36, z: -21.6, rot: 0, y: DECK_HEIGHT },
+      driveway: { x: -19.5, z: -17.5, rot: 0.4 },
+      across: { x: 0, z: 10.6, rot: Math.PI, y: 0.3 },
     },
     seats: [],
     beds: [],
-    blocks: [
-      { name: "the blue car", x: 11, z: -2.4, w: 8.4, d: 4, h: 3.7 },
-      { name: "the red car", x: -16, z: 2.4, w: 8.4, d: 4, h: 3.7 },
-      // Street lamps every 15 units and a tree between every two houses (places.js puts them there).
-      ...[-3, -2, -1, 0, 1, 2, 3].map((k) => ({
-        name: "a street lamp",
-        x: k * 15 - 2.5,
-        z: -8,
-        w: 0.9,
-        d: 0.9,
-        h: 7.5,
-      })),
-      ...[-4, -3, -2, -1, 0, 1, 2, 3].map((k) => ({
-        name: "a tree",
-        x: k * 15 + 7.5,
-        z: -10.5,
-        w: 1.8,
-        d: 1.8,
-        h: 9,
-      })),
-    ],
+    blocks: [],
     solids: [
-      // The rows of houses (nobody walks between them: one long box each).
-      { x: 0, y: 3.5, z: -15, w: 170, h: 7, d: 8.4 },
-      { x: 5, y: 3.5, z: 44, w: 170, h: 7, d: 8.4 },
       // The pavements, a step up from the road.
-      { x: 0, y: 0.15, z: -6.5, w: 200, h: 0.3, d: 4 },
-      { x: 0, y: 0.15, z: 6.5, w: 200, h: 0.3, d: 4 },
-      // The parked cars: body and cabin.
-      { x: 11, y: 1.5, z: -2.4, w: 8, h: 1.6, d: 3.6 },
-      { x: 10.6, y: 2.95, z: -2.4, w: 4.6, h: 1.5, d: 3.3 },
-      { x: -16, y: 1.5, z: 2.4, w: 8, h: 1.6, d: 3.6 },
-      { x: -15.6, y: 2.95, z: 2.4, w: 4.6, h: 1.5, d: 3.3 },
-      // Trees and street lamps (trunk or pole, then crown or head), measured from the built town.
-      { x: -67.5, y: 2.31, z: -10.5, w: 0.92, h: 4.61, d: 0.92 },
-      { x: -67.86, y: 6.23, z: -10.56, w: 5.98, h: 4.9, d: 5.75 },
-      { x: -52.5, y: 2.05, z: -10.5, w: 0.82, h: 4.1, d: 0.82 },
-      { x: -52.88, y: 5.85, z: -10.13, w: 5.2, h: 3.07, d: 5.44 },
-      { x: -37.5, y: 2.51, z: -10.5, w: 1, h: 5.02, d: 1 },
-      { x: -37.99, y: 7.18, z: -9.88, w: 5.53, h: 4.52, d: 5.52 },
-      { x: -22.5, y: 2.22, z: -10.5, w: 0.89, h: 4.44, d: 0.89 },
-      { x: -23.08, y: 5.74, z: -10.79, w: 5.48, h: 3.78, d: 6.49 },
-      { x: -7.5, y: 2.23, z: -10.5, w: 0.89, h: 4.46, d: 0.89 },
-      { x: -7.71, y: 5.84, z: -10.36, w: 6.51, h: 4.25, d: 6.89 },
-      { x: 7.5, y: 2.6, z: -10.5, w: 1.04, h: 5.2, d: 1.04 },
-      { x: 7.72, y: 6.89, z: -11.18, w: 6.73, h: 4.88, d: 7.18 },
-      { x: 22.5, y: 2.3, z: -10.5, w: 0.92, h: 4.6, d: 0.92 },
-      { x: 21.7, y: 6.26, z: -10.88, w: 5.85, h: 3.55, d: 5.42 },
-      { x: 37.5, y: 2.29, z: -10.5, w: 0.92, h: 4.59, d: 0.92 },
-      { x: 38.09, y: 5.96, z: -11.08, w: 5.82, h: 4.8, d: 5.54 },
-      { x: 52.5, y: 2.27, z: -10.5, w: 0.91, h: 4.54, d: 0.91 },
-      { x: 52.82, y: 6.37, z: -9.99, w: 5.88, h: 4.27, d: 6.1 },
-      { x: 67.5, y: 2.27, z: -10.5, w: 0.91, h: 4.54, d: 0.91 },
-      { x: 67.49, y: 6.2, z: -10.57, w: 5.67, h: 4.45, d: 6.18 },
-      { x: 82.5, y: 2.56, z: -10.5, w: 1.03, h: 5.13, d: 1.03 },
-      { x: 82.37, y: 7, z: -10.23, w: 6.63, h: 4.56, d: 6.1 },
-      { x: -47.5, y: 4.05, z: -8, w: 0.3, h: 7.5, d: 0.3 },
-      { x: -46.75, y: 7.59, z: -8, w: 1.8, h: 0.52, d: 0.6 },
-      { x: -32.5, y: 4.05, z: -8, w: 0.3, h: 7.5, d: 0.3 },
-      { x: -31.75, y: 7.59, z: -8, w: 1.8, h: 0.52, d: 0.6 },
-      { x: -17.5, y: 4.05, z: -8, w: 0.3, h: 7.5, d: 0.3 },
-      { x: -16.75, y: 7.59, z: -8, w: 1.8, h: 0.52, d: 0.6 },
-      { x: -2.5, y: 4.05, z: -8, w: 0.3, h: 7.5, d: 0.3 },
-      { x: -1.75, y: 7.59, z: -8, w: 1.8, h: 0.52, d: 0.6 },
-      { x: 12.5, y: 4.05, z: -8, w: 0.3, h: 7.5, d: 0.3 },
-      { x: 13.25, y: 7.59, z: -8, w: 1.8, h: 0.52, d: 0.6 },
-      { x: 27.5, y: 4.05, z: -8, w: 0.3, h: 7.5, d: 0.3 },
-      { x: 28.25, y: 7.59, z: -8, w: 1.8, h: 0.52, d: 0.6 },
-      { x: 42.5, y: 4.05, z: -8, w: 0.3, h: 7.5, d: 0.3 },
-      { x: 43.25, y: 7.59, z: -8, w: 1.8, h: 0.52, d: 0.6 },
+      { x: 0, y: 0.15, z: -10.5, w: 400, h: 0.3, d: 5 },
+      { x: 0, y: 0.15, z: 10.5, w: 400, h: 0.3, d: 5 },
     ],
-    bounds: { minX: -60, maxX: 60, minZ: -11.5, maxZ: 40 },
+    pieces: TOWN_PIECES,
+    bounds: { minX: -60, maxX: 60, minZ: -23.6, maxZ: 13.2 },
     // The pavements on both sides of the road are a step up.
-    ground: (_x, z) => (Math.abs(z) >= 4.5 && Math.abs(z) <= 8.5 ? 0.3 : 0),
-    wide: { pos: [-3, 5.5, 20], target: [0, 4, -2] },
-    surface: [1, 0.32, 8],
+    ground: (_x, z) => (Math.abs(z) >= 8 && Math.abs(z) <= 13 ? 0.3 : 0),
+    wide: { pos: [0, 7, 11.4], target: [0, 4.6, -20] },
+    surface: [1.5, 0.32, -11.5],
   },
   park: {
     spots: {
@@ -226,75 +356,57 @@ export const LAYOUTS = {
       left: { x: -3, z: 2.4, rot: 1.0 },
       right: { x: 3, z: 2.4, rot: -1.0 },
       back: { x: -4, z: -6, rot: 0.4 },
-      slide: { x: -6.5, z: -6.5, rot: 0.6 },
+      slide: { x: -8.5, z: -5, rot: 0.6 },
       bench: { x: 8.4, z: -2.6, rot: -0.9, seat: SEAT_HEIGHT },
+      picnicL: { ...onPiece(PICNIC, 0, 2.6), rot: r3(PICNIC.rot + Math.PI), seat: SEAT_HEIGHT },
+      picnicR: { ...onPiece(PICNIC, 0, -2.6), rot: PICNIC.rot, seat: SEAT_HEIGHT },
+      pond: { x: 10.4, z: 7, rot: -0.6 },
+      sandbox: { x: -14, z: 5.4, rot: 0 },
     },
-    seats: ["bench"],
+    seats: ["bench", "picnicL", "picnicR"],
     beds: [],
-    blocks: [
-      { name: "the slide", x: -9, z: -11, w: 3.6, d: 8, rot: 0.5, h: 6.3 },
-      { name: "the swings", x: 9, z: -14, w: 8, d: 3, rot: -0.2, h: 7.3 },
-      { name: "the bench", x: 9, z: -3, w: 6.2, d: 2, rot: -0.9, h: 2.5 },
-      { name: "the sandbox", x: -10, z: -3, w: 8, d: 6, h: 0.4 },
-      // The trees of the ring that reach into the park (their crowns hang low).
-      { name: "a tree", x: 25.28, z: 8.75, w: 5.5, d: 5.06, h: 9.43 },
-      { name: "a tree", x: 20.32, z: 19.43, w: 5.14, d: 4.93, h: 10.04 },
-      { name: "a tree", x: -16.95, z: 24.14, w: 5.9, d: 6.3, h: 11.56 },
-      { name: "a tree", x: -28.47, z: 10.9, w: 4.99, d: 4.91, h: 9.55 },
-      { name: "a tree", x: -27.84, z: -1.65, w: 6.18, d: 5.78, h: 9.18 },
-      { name: "a tree", x: -30.06, z: -12.32, w: 5.1, d: 5.8, h: 8.96 },
-      { name: "a tree", x: -30.19, z: -23.64, w: 4.62, d: 4.42, h: 7.76 },
-    ],
-    solids: [
-      // The slide: its tower (platform and roof over the legs) and the ramp.
-      { x: -9, y: 3.15, z: -11, w: 3.8, h: 6.3, d: 3.8, rot: 0.5 },
-      { x: -6.7, y: 1.1, z: -6.79, w: 2, h: 2.2, d: 6.2, rot: 0.5 },
-      // The swings: the top bar and the legs at each end.
-      { x: 9, y: 7.15, z: -14, w: 8.6, h: 0.35, d: 0.35, rot: -0.2 },
-      { x: 12.92, y: 3.6, z: -13.21, w: 0.4, h: 7.2, d: 2.8, rot: -0.2 },
-      { x: 5.08, y: 3.6, z: -14.79, w: 0.4, h: 7.2, d: 2.8, rot: -0.2 },
-      // The bench: seat with its legs, and the back.
-      { x: 9, y: 0.33, z: -3, w: 6, h: 0.66, d: 1.8, rot: -0.9 },
-      { x: 9.63, y: 1.76, z: -3.5, w: 6, h: 1.4, d: 0.25, rot: -0.9 },
-      // The sandbox's edge.
-      { x: -10, y: 0.2, z: -3, w: 8, h: 0.4, d: 6 },
-      // The ring of trees (trunk, then crown), measured from the built park.
-      { x: 35.44, y: 2.3, z: 2.01, w: 0.92, h: 4.6, d: 0.92 },
-      { x: 35.62, y: 5.71, z: 2.27, w: 6.76, h: 3.89, d: 6.32 },
-      { x: 25.28, y: 2.49, z: 8.75, w: 1, h: 4.99, d: 1 },
-      { x: 25.24, y: 7.17, z: 8.32, w: 6.87, h: 4.52, d: 6.33 },
-      { x: 20.32, y: 2.93, z: 19.43, w: 1.17, h: 5.85, d: 1.17 },
-      { x: 19.72, y: 7.59, z: 19.54, w: 6.42, h: 4.89, d: 6.16 },
-      { x: 9.37, y: 2.97, z: 26.93, w: 1.19, h: 5.93, d: 1.19 },
-      { x: 9.24, y: 7.59, z: 26.77, w: 6.87, h: 4.79, d: 7.7 },
-      { x: -0.64, y: 2.87, z: 31.52, w: 1.15, h: 5.73, d: 1.15 },
-      { x: 0.01, y: 8.36, z: 31.05, w: 6.76, h: 4.84, d: 7.65 },
-      { x: -16.95, y: 3.11, z: 24.14, w: 1.24, h: 6.22, d: 1.24 },
-      { x: -17.85, y: 8.94, z: 23.88, w: 7.38, h: 5.25, d: 7.88 },
-      { x: -28.47, y: 2.76, z: 10.9, w: 1.1, h: 5.52, d: 1.1 },
-      { x: -28.77, y: 7.46, z: 11.25, w: 6.24, h: 4.19, d: 6.14 },
-      { x: -27.84, y: 2.59, z: -1.65, w: 1.03, h: 5.17, d: 1.03 },
-      { x: -27.88, y: 6.72, z: -1.37, w: 7.72, h: 4.91, d: 7.23 },
-      { x: -30.06, y: 2.53, z: -12.32, w: 1.01, h: 5.06, d: 1.01 },
-      { x: -29.96, y: 6.75, z: -12.17, w: 6.38, h: 4.41, d: 7.25 },
-      { x: -30.19, y: 2.26, z: -23.64, w: 0.91, h: 4.53, d: 0.91 },
-      { x: -29.99, y: 5.85, z: -23.39, w: 5.77, h: 3.82, d: 5.52 },
-      { x: -20.37, y: 2.61, z: -35.06, w: 1.04, h: 5.22, d: 1.04 },
-      { x: -20.05, y: 7.44, z: -35.21, w: 6.58, h: 5.38, d: 6.87 },
-      { x: -4.05, y: 2.71, z: -35.38, w: 1.08, h: 5.42, d: 1.08 },
-      { x: -3.48, y: 7.75, z: -35.41, w: 6.9, h: 5.08, d: 7.45 },
-      { x: 1.99, y: 2.33, z: -45.24, w: 0.93, h: 4.66, d: 0.93 },
-      { x: 2.15, y: 6.14, z: -45.57, w: 5.72, h: 3.56, d: 5.13 },
-      { x: 13.04, y: 3.08, z: -33.52, w: 1.23, h: 6.16, d: 1.23 },
-      { x: 12.62, y: 8.84, z: -34.02, w: 7.86, h: 4.87, d: 7.82 },
-      { x: 29.5, y: 2.99, z: -27.33, w: 1.2, h: 5.99, d: 1.2 },
-      { x: 29.36, y: 8.06, z: -27.38, w: 7.84, h: 5.87, d: 8.37 },
-      { x: 34.32, y: 2.66, z: -16.72, w: 1.06, h: 5.32, d: 1.06 },
-      { x: 34.74, y: 7.34, z: -16.61, w: 6.53, h: 5.03, d: 6.32 },
-    ],
+    blocks: [],
+    solids: [],
+    pieces: PARK_PIECES,
     bounds: { minX: -30, maxX: 30, minZ: -22, maxZ: 20 },
     wide: { pos: [4, 6.5, 24], target: [-1, 3, -6] },
     surface: [7.6, 1.52, -2.2],
+  },
+  backyard: {
+    spots: {
+      center: { x: 0, z: 3, rot: 0 },
+      left: { x: -4, z: 3.4, rot: 1.0 },
+      right: { x: 4, z: 3.4, rot: -1.0 },
+      back: { x: -2, z: -4, rot: 0.3 },
+      door: { x: 0, z: -17.4, rot: 0, y: DECK_HEIGHT },
+      patio: { x: 2.5, z: -12.5, rot: 0, y: DECK_HEIGHT },
+      grill: { x: 8.5, z: -10.2, rot: Math.PI, y: DECK_HEIGHT },
+      tree: { x: -9.4, z: 7.5, rot: -1.2 },
+      trampoline: { x: 12.5, z: 0.4, rot: 0 },
+      gate: { x: 15, z: 15.2, rot: Math.PI },
+      chair1: {
+        x: CHAIRS[0].x,
+        z: CHAIRS[0].z,
+        rot: CHAIRS[0].rot,
+        y: DECK_HEIGHT,
+        seat: SEAT_HEIGHT,
+      },
+      chair2: {
+        x: CHAIRS[1].x,
+        z: CHAIRS[1].z,
+        rot: CHAIRS[1].rot,
+        y: DECK_HEIGHT,
+        seat: SEAT_HEIGHT,
+      },
+    },
+    seats: ["chair1", "chair2"],
+    beds: [],
+    blocks: [],
+    solids: [],
+    pieces: BACKYARD_PIECES,
+    bounds: { minX: -21.2, maxX: 21.2, minZ: -18.6, maxZ: 16.3 },
+    wide: { pos: [3, 9, 15], target: [0, 3.5, -12] },
+    surface: [-6.5, 2.48, -11.6],
   },
   forest: {
     spots: {
@@ -357,6 +469,19 @@ export const LAYOUTS = {
     surface: [-6.6, 0.9, -3.6],
   },
 };
+
+// Each place's pieces become physics boxes, footprints and raised ground (porches, decks).
+for (const layout of Object.values(LAYOUTS)) {
+  if (!layout.pieces) continue;
+  const { solids, blocks, raised } = piecesShapes(layout.pieces);
+  layout.solids = [...(layout.solids ?? []), ...solids];
+  layout.blocks = [...(layout.blocks ?? []), ...blocks];
+  if (raised.length) {
+    const base = layout.ground;
+    layout.raised = raised;
+    layout.ground = (x, z) => Math.max(raisedAt(raised, x, z) ?? 0, base ? base(x, z) : 0);
+  }
+}
 
 /** A place's layout (home when the name is unknown). */
 export const layoutOf = (name) => LAYOUTS[name] ?? LAYOUTS.home;

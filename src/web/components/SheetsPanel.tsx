@@ -12,15 +12,19 @@ const SHEETS = [
   ["effects", "Effects"],
   ["moves", "Moves"],
 ] as const;
-const PLACES = ["home", "bedroom", "school", "town", "park", "forest"];
+/** The places when the film doesn't say which it has. */
+const PLACES = ["home", "bedroom", "school", "town", "park", "backyard", "forest"];
 
 /**
  * A Blocky film's sheets: every character, pose, face, object and place of its engine on one picture, with the
- * problems the checks found (sizes, joints). Drawn again when the film's files change.
+ * problems the checks found (sizes, joints). Drawn again when the film's files change. `places` are the ones the
+ * film's engine says it has (a place Claude adds shows up too).
  */
-export function SheetsPanel({ filmId }: { filmId: string }) {
+export function SheetsPanel({ filmId, places }: { filmId: string; places?: string[] | null }) {
   const [name, setName] = useState<(typeof SHEETS)[number][0]>("cast");
-  const [place, setPlace] = useState("home");
+  const [chosen, setPlace] = useState("home");
+  const list = places?.length ? places : PLACES;
+  const place = list.includes(chosen) ? chosen : (list[0] ?? "home");
   const sheet = useSheet(filmId, name, name === "places" ? place : undefined);
   const url = sheet.data?.url;
 
@@ -66,7 +70,7 @@ export function SheetsPanel({ filmId }: { filmId: string }) {
             value={place}
             onChange={(event) => setPlace(event.target.value)}
           >
-            {PLACES.map((entry) => (
+            {list.map((entry) => (
               <option key={entry} value={entry}>
                 {entry[0]?.toUpperCase()}
                 {entry.slice(1)}

@@ -33,6 +33,11 @@ export const FilmMessageSchema = z.discriminatedUnion("type", [
     length: z.number().positive().optional(),
     /** The effect sounds the film places (`window.KAIROS_SOUNDS`), when it says. */
     sounds: z.array(FilmSoundSchema).max(2000).optional(),
+    /** The places the film's engine can show (`window.KAIROS_PLACES`), when it says. */
+    places: z
+      .array(z.string().regex(/^[A-Za-z0-9_-]{1,40}$/))
+      .max(60)
+      .optional(),
   }),
   /** Answer to a `seek`: the frame is drawn (or `error` says why not). */
   z.object({

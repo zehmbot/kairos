@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { LAYOUTS } from "../../templates/blocky-cinema/blocky/layouts.js";
 import { planStory } from "../../templates/blocky-cinema/blocky/timing.js";
 import { voiceLinesFrom } from "../../templates/blocky-cinema/blocky/voice.js";
 import { clipBox } from "../shared/clips.ts";
@@ -359,9 +360,7 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
     // Every sheet, and the Places sheet for every place (each in day, evening and night, with its physics checked).
     const pages = [
       ...["cast", "poses", "props", "effects", "moves"].map((name) => `sheet=${name}`),
-      ...["home", "bedroom", "school", "town", "park", "forest"].map(
-        (place) => `sheet=places&place=${place}`,
-      ),
+      ...Object.keys(LAYOUTS).map((place) => `sheet=places&place=${place}`),
     ];
     for (const name of pages) {
       const { checks } = await camera.captureFrame({

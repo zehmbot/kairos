@@ -3,18 +3,16 @@
 // footprints, the `wide` establishing shot, a `surface` for close-ups of small objects), fog, and `update(t)` for
 // anything that moves.
 import * as THREE from "three";
+import { buildPieces } from "./kit.js";
 import { LAYOUTS } from "./layouts.js";
 import {
   bed,
-  bench,
   cabin,
   campfire,
-  car,
   chair,
   door,
   floorLamp,
   glow,
-  house,
   lockerTexture,
   nightstand,
   picture,
@@ -22,17 +20,15 @@ import {
   plant,
   rug,
   shelf,
-  slide,
   sofa,
-  streetLamp,
-  swingSet,
   table,
   tableLamp,
-  tree,
   tv,
   windowPane,
 } from "./props.js";
-import { block, canvasTexture, mesh, paint, rng, roundedBox, speckle } from "./util.js";
+import { backdrop, horizonOf } from "./sky.js";
+import { asphalt, concrete, grass, gravel } from "./textures.js";
+import { block, canvasTexture, freeze, mesh, paint, rng, roundedBox, speckle } from "./util.js";
 
 /** Light settings for each time of day. */
 // Lights have a reason (the sun, a window, a lamp) and the exposure stays near normal: shadows stay dark, lamps,
@@ -169,6 +165,13 @@ function ground(w, d, texture, { color = "#ffffff", roughness = 0.9 } = {}) {
   const m = mesh(new THREE.PlaneGeometry(w, d), paint(color, { map: texture, roughness }), {
     cast: false,
   });
+  m.rotation.x = -Math.PI / 2;
+  return m;
+}
+
+/** A flat ground of `material` (textures repeat with its maps). */
+function flat(w, d, material) {
+  const m = mesh(new THREE.PlaneGeometry(w, d), material, { cast: false });
   m.rotation.x = -Math.PI / 2;
   return m;
 }
@@ -459,168 +462,160 @@ function school(preset) {
 
 // ---------- Outdoors ----------
 
-function sky(preset) {
-  return { day: "#cfe6ff", evening: "#f0a27a", night: "#141d3f" }[preset];
+/** Painted lines on the road: a dashed yellow middle line and white edges, one mesh. */
+function roadLines(length, halfWidth) {
+  const g = new THREE.Group();
+  const yellow = paint("#f4d35e", { roughness: 0.6 });
+  const white = paint("#f2f2ee", { roughness: 0.6 });
+  for (let x = -length / 2; x < length / 2; x += 6) {
+    const dash = flat(3, 0.3, yellow);
+    dash.position.set(x, 0.025, 0);
+    g.add(dash);
+  }
+  for (const z of [-halfWidth + 0.6, halfWidth - 0.6]) {
+    const edge = flat(length, 0.25, white);
+    edge.position.set(0, 0.025, z);
+    g.add(edge);
+  }
+  return freeze(g);
 }
 
 function town(preset) {
   const g = new THREE.Group();
   const lit = preset !== "day";
-  const grass = canvasTexture(
-    "grassTown",
-    256,
-    (ctx, s) => speckle(ctx, s, "#5aa04f", ["#3f8a3e", "#79b863"], "gt", 1800, 3),
-    { repeat: [30, 20] },
+  const layout = LAYOUTS.town;
+  g.add(
+    flat(
+      500,
+      360,
+      paint("#ffffff", { ...grass("#5aa04f", [110, 80]), roughness: 0.95, bumpScale: 1.5 }),
+    ),
   );
-  const lawn = ground(200, 140, grass);
-  lawn.position.y = -0.02;
-  g.add(lawn);
-  const asphalt = canvasTexture(
-    "road",
-    512,
-    (ctx, s) => {
-      speckle(ctx, s, "#4a4d55", ["#3a3c42", "#5e616a"], "asphalt", 2600, 2);
-      ctx.fillStyle = "#f4d35e";
-      for (let x = 0; x < s; x += 128) ctx.fillRect(x + 20, s / 2 - 6, 70, 12);
-    },
-    { repeat: [20, 1] },
+  const road = flat(
+    400,
+    16,
+    paint("#ffffff", { ...asphalt([50, 2]), roughness: 0.85, bumpScale: 1.2 }),
   );
-  const road = ground(200, 9, asphalt, { roughness: 0.8 });
-  road.position.y = 0.01;
-  g.add(road);
-  const pavement = canvasTexture(
-    "pavement",
-    256,
-    (ctx, s) => {
-      speckle(ctx, s, "#c4c4c8", ["#a8a8ae", "#dadade"], "pv", 900, 2);
-      ctx.fillStyle = "rgba(0,0,0,0.25)";
-      ctx.fillRect(0, 0, 4, s);
-    },
-    { repeat: [50, 1] },
-  );
-  for (const z of [-6.5, 6.5]) {
-    const walk = mesh(
-      new THREE.BoxGeometry(200, 0.3, 4),
-      paint("#ffffff", { map: pavement, roughness: 0.85 }),
-    );
-    walk.position.set(0, 0.15, z);
-    g.add(walk);
+  road.position.y = 0.012;
+  g.add(road, roadLines(400, 8));
+  // The pavements (concrete slabs, a step up) and their curbs.
+  const slabs = paint("#ffffff", {
+    ...concrete("#c9c7c2", [80, 1], 2),
+    roughness: 0.9,
+    bumpScale: 1,
+  });
+  const curb = paint("#d8d6d0", { roughness: 0.85 });
+  for (const side of [-1, 1]) {
+    const walk = mesh(new THREE.BoxGeometry(400, 0.3, 5), slabs);
+    walk.position.set(0, 0.15, side * 10.5);
+    const edge = mesh(new THREE.BoxGeometry(400, 0.34, 0.45), curb);
+    edge.position.set(0, 0.17, side * 8.2);
+    g.add(walk, edge);
   }
-  const random = rng("town");
-  for (let k = -5; k <= 5; k++) {
-    const h = house(`h${k}`, lit);
-    h.position.set(k * 15 + (random() - 0.5) * 2, 0, -15);
-    g.add(h);
-    const t = tree(`t${k}`, 0.9 + random() * 0.3);
-    t.position.set(k * 15 + 7.5, 0, -10.5);
-    g.add(t);
-    if (k % 2 === 0) {
-      const back = house(`hb${k}`, lit);
-      back.position.set(k * 15 + 5, 0, 44);
-      back.rotation.y = Math.PI;
-      g.add(back);
-    }
-  }
-  for (let k = -3; k <= 3; k++) {
-    const lamp = streetLamp(lit);
-    lamp.position.set(k * 15 - 2.5, 0.3, -8);
-    g.add(lamp);
-  }
-  const parked = car("#3b5dc9");
-  parked.position.set(11, 0, -2.4);
-  const parked2 = car("#e8344e");
-  parked2.position.set(-16, 0, 2.4);
-  parked2.rotation.y = Math.PI;
-  g.add(parked, parked2);
+  buildPieces(g, layout.pieces, { lit });
+  g.add(backdrop({ seed: "town", radius: 150 }));
 
-  // The sun (or moon) is the key light with its shadows; once it's dark, the street lamps near the middle cast warm
+  // The sun (or moon) is the key light with its shadows; once it's dark, the street lamps by the house cast warm
   // pools with soft shadows.
-  sunLight(g, preset, [0, 0, 0], 24, 1, outdoorBoost(preset));
+  sunLight(g, preset, [0, 0, -10], 28, 1, outdoorBoost(preset));
   if (lit) {
-    for (const x of [-1.3, 13.7, -16.3]) {
-      lampSpot(g, [x, 7.1, -8], [0.2, -7, 2.2], {
+    for (const x of [-15, 15]) {
+      lampSpot(g, [x, 11.6, -8.9], [0, -11, -1.2], {
         color: "#ffd9a0",
-        intensity: preset === "night" ? 170 : 70,
-        angle: 1.05,
-        distance: 34,
-        shadow: x === -1.3,
+        intensity: preset === "night" ? 260 : 110,
+        angle: 1.0,
+        distance: 40,
+        shadow: x === 15,
       });
     }
   }
-
   return {
     group: g,
-    ...LAYOUTS.town,
-    fog: { color: sky(preset), near: 60, far: 160 },
+    ...layout,
+    fog: { color: horizonOf(preset), near: 80, far: 320 },
   };
 }
 
 function park(preset) {
   const g = new THREE.Group();
-  const grass = canvasTexture(
-    "grassPark",
-    256,
-    (ctx, s) => speckle(ctx, s, "#63ad55", ["#4b9545", "#8acb6c", "#a7d77f"], "gp", 2000, 3),
-    { repeat: [24, 24] },
+  const lit = preset !== "day";
+  const layout = LAYOUTS.park;
+  g.add(
+    flat(
+      320,
+      320,
+      paint("#ffffff", { ...grass("#63ad55", [70, 70]), roughness: 0.95, bumpScale: 1.5 }),
+    ),
   );
-  g.add(ground(200, 200, grass));
-  const path = canvasTexture(
-    "path",
-    256,
-    (ctx, s) => speckle(ctx, s, "#d8c49a", ["#bfa97c", "#ead9b4"], "path", 1600, 2),
-    { repeat: [2, 20] },
+  const walkway = flat(
+    6,
+    120,
+    paint("#ffffff", { ...gravel("#d8c49a", [2, 30]), roughness: 0.95, bumpScale: 1.5 }),
   );
-  const walkway = ground(6, 120, path);
   walkway.position.set(2, 0.02, 0);
   walkway.rotation.z = 0.18;
   g.add(walkway);
-  const playSlide = slide();
-  playSlide.position.set(-9, 0, -11);
-  playSlide.rotation.y = 0.5;
-  const swings = swingSet();
-  swings.position.set(9, 0, -14);
-  swings.rotation.y = -0.2;
-  const seat = bench();
-  seat.position.set(9, 0, -3);
-  seat.rotation.y = -0.9;
-  const sand = block(8, 0.4, 6, "#e8d29a", -10, 0, -3, { radius: 0.15, roughness: 1 });
-  g.add(playSlide, swings, seat, sand);
-  const random = rng("park");
-  for (let k = 0; k < 16; k++) {
-    const a = (k / 16) * Math.PI * 2 + random() * 0.3;
-    const r = 26 + random() * 14;
-    const t = tree(`pt${k}`, 1 + random() * 0.4);
-    t.position.set(Math.cos(a) * r, 0, Math.sin(a) * r - 6);
-    g.add(t);
-  }
-  for (let k = 0; k < 24; k++) {
-    const flower = block(
-      0.4,
-      0.5,
-      0.4,
-      ["#e8344e", "#f4c542", "#ffffff", "#e86a8a"][k % 4],
-      -14 + random() * 28,
-      0,
-      -16 + random() * 8,
-      { radius: 0.12 },
-    );
-    g.add(flower);
-  }
-  for (let k = 0; k < 3; k++) {
-    const hill = mesh(new THREE.SphereGeometry(40, 24, 12), paint("#5c9c55", { roughness: 1 }), {
-      cast: false,
-    });
-    hill.scale.set(1.6, 0.35, 1);
-    hill.position.set(-70 + k * 70, -4, -110);
-    g.add(hill);
-  }
+  buildPieces(g, layout.pieces, { lit });
+  g.add(backdrop({ seed: "park", radius: 110, center: [0, -6] }));
 
-  sunLight(g, preset, [0, 0, -4], 24, 1, outdoorBoost(preset));
-
+  sunLight(g, preset, [0, 0, -4], 26, 1, outdoorBoost(preset));
+  if (lit) {
+    for (const [x, z] of [
+      [3.6, -12],
+      [8.5, 12.5],
+    ]) {
+      lampSpot(g, [x, 9.9, z], [0, -9, 0.01], {
+        color: "#ffd9a0",
+        intensity: preset === "night" ? 160 : 70,
+        angle: 1.1,
+        distance: 30,
+        shadow: z < 0,
+      });
+    }
+  }
   return {
     group: g,
-    ...LAYOUTS.park,
-    fog: { color: sky(preset), near: 70, far: 200 },
+    ...layout,
+    fog: { color: horizonOf(preset), near: 70, far: 260 },
+  };
+}
+
+function backyard(preset) {
+  const g = new THREE.Group();
+  const lit = preset !== "day";
+  const layout = LAYOUTS.backyard;
+  g.add(
+    flat(
+      320,
+      320,
+      paint("#ffffff", { ...grass("#5fae52", [70, 70]), roughness: 0.95, bumpScale: 1.5 }),
+    ),
+  );
+  buildPieces(g, layout.pieces, { lit });
+  g.add(backdrop({ seed: "backyard", radius: 110 }));
+
+  // The sun leads by day. In the evening and at night the lamp by the back door and the string lights over the deck
+  // light the yard warmly.
+  sunLight(g, preset, [0, 0, -4], 26, 1, outdoorBoost(preset));
+  if (lit) {
+    lampSpot(g, [1.4, 6.2, -18.4], [0, -6, 8], {
+      color: "#ffcf8a",
+      intensity: preset === "night" ? 90 : 45,
+      angle: 1.15,
+      distance: 34,
+    });
+    for (const [x, z] of [
+      [-7, -12],
+      [7, -12],
+      [0, -10],
+    ]) {
+      lampLight(g, x, 7.6, z, preset === "night" ? 14 : 7, "#ffcf7a", 16);
+    }
+  }
+  return {
+    group: g,
+    ...layout,
+    fog: { color: horizonOf(preset), near: 70, far: 260 },
   };
 }
 
@@ -808,7 +803,7 @@ function forest(preset) {
   };
 }
 
-const BUILDERS = { home, bedroom, school, town, park, forest };
+const BUILDERS = { home, bedroom, school, town, park, backyard, forest };
 
 /** The names Claude can use for `place` in story.js. */
 export const PLACE_NAMES = Object.keys(BUILDERS);
@@ -820,6 +815,7 @@ export const DEFAULT_LIGHT = {
   school: "day",
   town: "day",
   park: "day",
+  backyard: "day",
   forest: "night",
 };
 

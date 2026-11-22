@@ -282,6 +282,7 @@ export function simulate(
         density: shape.mass / volume,
         friction: shape.friction,
         restitution: shape.restitution,
+        ...(shape.damping ? { damping: shape.damping } : {}),
         ccd: true,
         group: GROUPS.OBJECT,
         listen: true,

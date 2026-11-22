@@ -274,23 +274,6 @@ export function lockerTexture() {
 
 // ---------- Outdoors ----------
 
-/** A round, blocky tree (summer). */
-export function tree(seed, scale = 1) {
-  const random = rng(seed);
-  const green = ["#3f9a52", "#4caf5c", "#358a48", "#5bb867"][Math.floor(random() * 4)];
-  const leaves = paint(green, { roughness: 0.85 });
-  const g = group(block(0.9, 4.5, 0.9, "#7a5638", 0, 0, 0, { radius: 0.15 }));
-  for (let i = 0; i < 4; i++) {
-    const s = 2.6 + random() * 1.6;
-    const m = mesh(roundedBox(s, s * 0.85, s, 0.6), leaves);
-    m.position.set((random() - 0.5) * 2.2, 5.2 + random() * 1.8, (random() - 0.5) * 2.2);
-    m.rotation.y = random() * Math.PI;
-    g.add(m);
-  }
-  g.scale.setScalar(scale);
-  return g;
-}
-
 /** A pine tree from stacked cones, optionally with snow on it. */
 export function pine(seed, scale = 1, snowy = false) {
   const random = rng(seed);
@@ -317,96 +300,6 @@ export function pine(seed, scale = 1, snowy = false) {
     }
   }
   g.scale.setScalar(scale * (0.8 + random() * 0.5));
-  return g;
-}
-
-export function house(seed, lit) {
-  const random = rng(seed);
-  const walls = ["#e8d7b5", "#9fc5e8", "#f4c7a1", "#c9e4c5", "#e6b8c8", "#d8d8e8"][
-    Math.floor(random() * 6)
-  ];
-  const roofColor = ["#7a3b3b", "#3b4a7a", "#4a4a4a", "#8a5a35"][Math.floor(random() * 4)];
-  // A one-story house at real size: walls about 3 m high, a 2.1 m door, windows a figure can look through.
-  const w = 10 + random() * 3;
-  const h = meters(2.9) + random() * 1.2;
-  const d = 8;
-  const siding = canvasTexture(
-    `siding:${walls}`,
-    128,
-    (ctx, s) => {
-      ctx.fillStyle = walls;
-      ctx.fillRect(0, 0, s, s);
-      ctx.fillStyle = "rgba(0,0,0,0.08)";
-      for (let y = 0; y < s; y += 16) ctx.fillRect(0, y, s, 3);
-    },
-    { repeat: [2, 2] },
-  );
-  const g = group(
-    block(w, h, d, null, 0, 0, 0, { material: paint("#ffffff", { map: siding }), radius: 0.1 }),
-  );
-  const roofGeometry = cachedGeometry(`roof:${w.toFixed(1)}`, () => {
-    const shape = new THREE.Shape();
-    shape.moveTo(-w / 2 - 0.6, 0);
-    shape.lineTo(0, 3.4);
-    shape.lineTo(w / 2 + 0.6, 0);
-    shape.closePath();
-    const geometry = new THREE.ExtrudeGeometry(shape, { depth: d + 1, bevelEnabled: false });
-    geometry.translate(0, 0, -(d + 1) / 2);
-    return geometry;
-  });
-  const roof = mesh(roofGeometry, paint(roofColor, { roughness: 0.8 }));
-  roof.position.y = h;
-  g.add(roof);
-  const windowMaterial = lit
-    ? glow("#ffcf7a", 1.1)
-    : paint("#6f9fc8", { roughness: 0.15, metalness: 0.2 });
-  for (const x of [-w / 4 - 0.6, w / 4 + 0.6]) {
-    const pane = mesh(roundedBox(2.6, 2.6, 0.2, 0.05), windowMaterial, { cast: false });
-    pane.position.set(x, meters(1.5), d / 2 + 0.02);
-    g.add(pane, block(3.0, 0.25, 0.4, "#f4f4f4", x, meters(1.5) - 1.55, d / 2 + 0.1));
-  }
-  const frontDoor = door(["#b13e53", "#29366f", "#257179", "#5d275d"][Math.floor(random() * 4)]);
-  frontDoor.position.set(0, 0, d / 2 + 0.05);
-  g.add(frontDoor);
-  return g;
-}
-
-export function streetLamp(on) {
-  const g = group(
-    block(0.3, 7.5, 0.3, "#3a3f4a", 0, 0, 0),
-    block(1.6, 0.25, 0.3, "#3a3f4a", 0.65, 7.3, 0),
-  );
-  const bulb = mesh(
-    roundedBox(0.9, 0.35, 0.6, 0.12),
-    on ? glow("#ffe2a8", 1.5) : paint("#e8e8e8"),
-    { cast: false },
-  );
-  bulb.position.set(1.2, 7.2, 0);
-  g.add(bulb);
-  return g;
-}
-
-export function car(color = "#3b5dc9") {
-  const body = paint(color, { roughness: 0.35, metalness: 0.1 });
-  const g = group(
-    block(8, 1.6, 3.6, null, 0, 0.7, 0, { material: body, radius: 0.5 }),
-    block(4.6, 1.5, 3.3, null, -0.4, 2.2, 0, { material: body, radius: 0.45 }),
-  );
-  const glass = paint("#b9d7ef", { roughness: 0.1, metalness: 0.3 });
-  for (const z of [-1.67, 1.67]) {
-    const side = mesh(roundedBox(3.8, 1.0, 0.05, 0.02), glass, { cast: false });
-    side.position.set(-0.4, 2.95, z);
-    g.add(side);
-  }
-  const wheel = cachedGeometry("wheel", () => new THREE.CylinderGeometry(0.75, 0.75, 0.6, 20));
-  for (const x of [-2.6, 2.6]) {
-    for (const z of [-1.7, 1.7]) {
-      const w = mesh(wheel, paint("#1b1b22", { roughness: 0.8 }));
-      w.rotation.x = Math.PI / 2;
-      w.position.set(x, 0.75, z);
-      g.add(w);
-    }
-  }
   return g;
 }
 

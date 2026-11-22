@@ -44,6 +44,8 @@ interface PlayerProps {
   onStoryLength?: (length: number | null) => void;
   /** The effect sounds the film places, each time it loads (null when it doesn't say). */
   onSounds?: (sounds: FilmSound[] | null) => void;
+  /** The places the film's engine can show, each time it loads (null when it doesn't say). */
+  onPlaces?: (places: string[] | null) => void;
   ref?: Ref<PlayerHandle>;
 }
 
@@ -100,12 +102,14 @@ export function Player({
   timeline,
   onStoryLength,
   onSounds,
+  onPlaces,
   video = NO_CLIPS,
   ref,
 }: PlayerProps) {
   const player = useFilmPlayer({ src, fps, duration });
   useEffect(() => onStoryLength?.(player.length), [onStoryLength, player.length]);
   useEffect(() => onSounds?.(player.sounds), [onSounds, player.sounds]);
+  useEffect(() => onPlaces?.(player.places), [onPlaces, player.places]);
   const { frame, total, toggle, step, seek, pause, currentFrame, clockFrame } = player;
   const stageRef = useRef<HTMLDivElement>(null);
   const stage = useElementSize(stageRef);

@@ -120,6 +120,16 @@
     return { sounds };
   }
 
+  /** The places the film's engine can show (`window.KAIROS_PLACES`), when it says (Blocky Cinema). */
+  function readPlaces() {
+    const raw = window.KAIROS_PLACES;
+    if (!Array.isArray(raw)) return {};
+    const places = raw
+      .filter((name) => typeof name === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(name))
+      .slice(0, 60);
+    return { places };
+  }
+
   /** Draws frame `t` once the film is ready. Throws the film's own errors. */
   async function draw(t) {
     await ready;
@@ -171,6 +181,7 @@
           scenes: readScenes(),
           ...readLength(),
           ...readSounds(),
+          ...readPlaces(),
         });
       });
     } else if (message.type === "seek" && Number.isFinite(message.t)) {

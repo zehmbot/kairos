@@ -192,8 +192,9 @@ someone, try another `angle` or `shot`, or move people (`at`).
 | `home` | living room: sofa, coffee table, lamp, TV, shelf, door, window | lamps with soft shadows in the evening and at night |
 | `bedroom` | bed, nightstand with a lamp, desk and chair, toy box | the window by day; the bedside lamp's warm pool at night |
 | `school` | a long hallway with lockers | cool-white ceiling panels down the hall |
-| `town` | a street of houses, two cars, street lamps, trees | the sun or moon; street lamps once it's dark |
-| `park` | slide, swings, bench, sandbox, trees | the sun (low and warm in the evening) |
+| `town` | a street of real-size houses with porches, garages, picket fences, mailboxes, parked cars, lantern lamps; stories happen in front of "the house" (spots `gate`, `porch`, `driveway`) | the sun or moon; street lamps once it's dark |
+| `park` | slide, swings, bench, sandbox, picnic table, pond, flower beds, trees | the sun (low and warm in the evening); lamp posts at night |
+| `backyard` | the back of a house: a deck with garden chairs, a table and a barbecue, string lights, a lawn, a big tree, a trampoline, a wooden fence | the sun; the door lamp and string lights in the evening and at night |
 | `forest` | snow, pines, a campfire with logs, a cabin, northern lights | the flickering campfire at night |
 
 - **Light:** `day` clear, `evening` warm and golden with lamps on, `night` cool with lamps, windows and fire
@@ -201,9 +202,13 @@ someone, try another `angle` or `shot`, or move people (`at`).
 - **Every place has physics:** walls, furniture, cars, trees. People walk around them and things land on them.
 - **Looks** change only the finish: the preview is a lighter look (standard), frames and renders the richest
   (cinematic). `SETTINGS.look` forces one; leave it unset.
+- **The sky** has drifting clouds by day and in the evening, and a big moon at night: a `low` camera or a wide
+  shot outside shows it.
+- **Changing a place for the story** (a tree where the story needs one, a second car, a bench by the pond): add or
+  move a piece in its `pieces` in `blocky/layouts.js` (`{ kind: "tree", x, z, scale }`); its physics and footprint
+  follow by themselves. Then check the places sheet.
 - **A place the engine lacks:** pick the nearest one and tell the user, or add one in `blocky/places.js` and
-  `blocky/layouts.js` (its spots, footprints with heights, and `solids` for the physics), then check the places
-  sheet.
+  `blocky/layouts.js` (its spots and its pieces), then check the places sheet.
 
 ## Characters
 

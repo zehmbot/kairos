@@ -38,7 +38,8 @@ export const SIZES = {
 export const BODIES = {
   box: { box: [0.42, 0.36, 0.42], mass: 1.4, friction: 0.7, restitution: 0.12 },
   pillow: { box: [0.46, 0.14, 0.34], mass: 0.35, friction: 0.95, restitution: 0.04 },
-  ball: { ball: 0.11, mass: 0.43, friction: 0.6, restitution: 0.72 },
+  // A ball rolls on and slows down (rolling resistance on grass and floors): `damping` is [linear, angular].
+  ball: { ball: 0.11, mass: 0.43, friction: 0.6, restitution: 0.72, damping: [0.3, 1.4] },
   gift: { box: [0.3, 0.27, 0.3], mass: 0.6, friction: 0.6, restitution: 0.15 },
   book: { box: [0.24, 0.05, 0.19], mass: 0.5, friction: 0.7, restitution: 0.1 },
   cup: { box: [0.09, 0.11, 0.09], mass: 0.3, friction: 0.6, restitution: 0.2 },

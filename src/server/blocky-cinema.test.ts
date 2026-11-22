@@ -336,7 +336,8 @@ const TOUR = {
     ball: { prop: "ball", place: "bedroom", at: { x: 1.2, z: -1.2 } },
     cup: { prop: "cup", place: "bedroom", at: { x: 9.6, z: -5.2, y: 2.2 } },
     crates: { prop: "box", place: "school", at: { x: 0.6, z: -2.8 }, stack: 2 },
-    parcel: { prop: "gift", place: "town", at: { x: 2.4, z: 6.4, y: 0.3 } },
+    parcel: { prop: "gift", place: "town", at: { x: 2.4, z: -11.6, y: 0.3 } },
+    yardBall: { prop: "ball", place: "backyard", at: { x: 3, z: -1 } },
     present: { prop: "gift", place: "park", at: { x: 2, z: 0.4 } },
     crate: { prop: "box", place: "forest", at: { x: 1.6, z: 0.6 } },
   },
@@ -375,6 +376,30 @@ const TOUR = {
       say: "Ruby raced home before dark.",
     },
     {
+      place: "backyard",
+      light: "evening",
+      shot: "wide",
+      who: ["ruby", "bo"],
+      at: { bo: "chair1" },
+      pose: { bo: "sit" },
+      go: { ruby: { from: "door", to: "center", pace: "run" } },
+      say: "Out back, Ruby ran past Grandpa Bo,",
+    },
+    {
+      shot: "full",
+      who: ["ruby", "bo"],
+      go: { ruby: "yardBall", bo: "back" },
+      act: { ruby: { pickUp: "yardBall" } },
+      say: "grabbed her ball from the grass",
+    },
+    {
+      shot: "medium",
+      who: ["ruby", "bo"],
+      act: { ruby: { throw: "bo", at: "Grandpa." } },
+      say: "and tossed it right to Grandpa.",
+    },
+    { shot: "close", who: ["bo", "ruby"], say: "He laughed so hard he cried." },
+    {
       place: "park",
       light: "day",
       shot: "full",
@@ -402,6 +427,27 @@ const TOUR = {
 };
 
 describe("Blocky Cinema: every place", () => {
+  it("has its spots clear of the furniture, standing on its ground", () => {
+    for (const [name, layout] of Object.entries(LAYOUTS) as [
+      string,
+      {
+        spots: Record<string, { x: number; z: number; y?: number; seat?: number; bed?: number }>;
+        blocks: { name: string; x: number; z: number; w: number; d: number; rot?: number }[];
+        ground?: (x: number, z: number) => number;
+      },
+    ][]) {
+      for (const [spot, at] of Object.entries(layout.spots)) {
+        // A seat or a bed is on its furniture; everyone else stands clear of it.
+        if (at.seat === undefined && at.bed === undefined) {
+          const inside = layout.blocks.filter((b) => insideBlock(b, at, 0)).map((b) => b.name);
+          expect(inside, `${name}: ${spot}`).toEqual([]);
+        }
+        const ground = layout.ground ? layout.ground(at.x, at.z) : 0;
+        expect(ground, `${name}: ${spot} stands at y ${at.y ?? 0}`).toBeCloseTo(at.y ?? 0, 2);
+      }
+    }
+  });
+
   it("has physics shapes inside its walls, and a height on every piece of furniture", () => {
     for (const [name, layout] of Object.entries(LAYOUTS) as [
       string,
@@ -439,7 +485,13 @@ describe("Blocky Cinema: every place", () => {
       for (const target of solids.filter((b) => Math.max(b.w, b.d) < 30)) {
         const world = create({ hz: 120 });
         world.fixedBox({ x: 0, y: -0.5, z: 0, w: 400, h: 1, d: 400 });
-        for (const b of solids) {
+        // Only the boxes near it can catch the box (a whole street would only slow the test down).
+        const near = solids.filter(
+          (b) =>
+            Math.hypot(b.x - target.x, b.z - target.z) <
+            (Math.hypot(b.w, b.d) + Math.hypot(target.w, target.d)) / 2 + 2,
+        );
+        for (const b of near) {
           world.fixedBox({
             x: meters(b.x),
             y: meters(b.y),
@@ -494,13 +546,16 @@ describe("Blocky Cinema: every place", () => {
     expect(planned.motion.problems).toEqual([]);
     const sim = physics(planned, TOUR.THINGS);
     expect(sim.problems).toEqual([]);
-    expect(sim.hits.map((h) => h.id)).toEqual(["zee"]);
+    expect(sim.hits.map((h) => h.id)).toEqual(["zee", "bo"]);
     // The cup rests on the desk, the parcel on the pavement: things on furniture stay on it.
     const end = planned.timeline.duration;
     const cup = sampleTrack(sim.tracks.get("cup") as Track, end).position;
     expect(cup.y).toBeGreaterThan(2.2);
     const parcel = sampleTrack(sim.tracks.get("parcel") as Track, end).position;
     expect(parcel.y).toBeGreaterThan(0.3);
+    // Grandpa got up from his garden chair on the deck, and the ball came to rest on the grass.
+    const ball = sampleTrack(sim.tracks.get("yardBall") as Track, end).position;
+    expect(ball.y).toBeLessThan(0.6);
     // Theo's run knocked the crates along the hall.
     const crate = sampleTrack(sim.tracks.get("crates#0") as Track, end).position;
     expect(Math.hypot(crate.x - 0.6, crate.z + 2.8)).toBeGreaterThan(1);

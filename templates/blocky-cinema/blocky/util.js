@@ -1,6 +1,7 @@
 // Small helpers shared by the Blocky engine. Everything here is pure or cached: no clocks, no Math.random.
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 export const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 export const lerp = (a, b, k) => a + (b - a) * k;
@@ -72,10 +73,13 @@ export function cachedGeometry(key, make) {
 
 const materials = new Map();
 
-/** A plastic-like toy material. Same color and options → the same material object. */
+/**
+ * A plastic-like toy material. Same color and options → the same material object. `map` paints it, `bumpMap`
+ * (with `bumpScale`) gives its surface relief that catches the light (wood grain, siding, shingles).
+ */
 export function paint(color, options = {}) {
-  const { map, ...rest } = options;
-  const key = `${color}|${map ? map.uuid : ""}|${JSON.stringify(rest)}`;
+  const { map, bumpMap, ...rest } = options;
+  const key = `${color}|${map ? map.uuid : ""}|${bumpMap ? bumpMap.uuid : ""}|${JSON.stringify(rest)}`;
   let material = materials.get(key);
   if (!material) {
     material = new THREE.MeshStandardMaterial({
@@ -84,7 +88,9 @@ export function paint(color, options = {}) {
       metalness: options.metalness ?? 0,
       emissive: options.emissive ?? "#000000",
       emissiveIntensity: options.emissiveIntensity ?? 1,
-      map: options.map ?? null,
+      map: map ?? null,
+      bumpMap: bumpMap ?? null,
+      bumpScale: options.bumpScale ?? 1,
       transparent: options.transparent ?? false,
       opacity: options.opacity ?? 1,
       side: options.side ?? THREE.FrontSide,
@@ -92,6 +98,54 @@ export function paint(color, options = {}) {
     materials.set(key, material);
   }
   return material;
+}
+
+/**
+ * Merges a built piece's meshes that share a material (and shadow settings) into one mesh each: a detailed house
+ * draws in a few calls instead of dozens. Meshes marked for the Places sheet (`userData.kind`), kept on purpose
+ * (`userData.keep`), animated pieces' parts, instanced meshes and meshes with several materials stay as they are.
+ */
+export function freeze(root) {
+  root.updateMatrixWorld(true);
+  const inverse = root.matrixWorld.clone().invert();
+  const groups = new Map();
+  root.traverse((o) => {
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || Array.isArray(o.material)) return;
+    if (o.userData.kind || o.userData.keep || o.visible === false) return;
+    for (let p = o.parent; p && p !== root.parent; p = p.parent) {
+      if (p.userData.kind || p.userData.keep) return;
+    }
+    const key = `${o.material.uuid}|${o.castShadow}|${o.receiveShadow}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(o);
+  });
+  for (const meshes of groups.values()) {
+    if (meshes.length < 2) continue;
+    const parts = meshes.map((m) => {
+      let geometry = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+      const kept = new THREE.BufferGeometry();
+      kept.setAttribute("position", geometry.getAttribute("position"));
+      if (!geometry.getAttribute("normal")) geometry.computeVertexNormals();
+      kept.setAttribute("normal", geometry.getAttribute("normal"));
+      const count = geometry.getAttribute("position").count;
+      kept.setAttribute(
+        "uv",
+        geometry.getAttribute("uv") ?? new THREE.BufferAttribute(new Float32Array(count * 2), 2),
+      );
+      geometry = kept;
+      geometry.applyMatrix4(inverse.clone().multiply(m.matrixWorld));
+      return geometry;
+    });
+    const merged = mergeGeometries(parts, false);
+    if (!merged) continue;
+    const first = meshes[0];
+    const one = new THREE.Mesh(merged, first.material);
+    one.castShadow = first.castShadow;
+    one.receiveShadow = first.receiveShadow;
+    for (const m of meshes) m.removeFromParent();
+    root.add(one);
+  }
+  return root;
 }
 
 /** A mesh that casts and receives shadows. */

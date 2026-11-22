@@ -21,83 +21,16 @@ import { layoutOf, solidsOf } from "./layouts.js";
 import { headDrop, personState, planMotion, wrapAngle } from "./motion.js";
 import { drawOverlays } from "./overlays.js";
 import { loadPhysics } from "./physics.js";
-import { getPlace, LIGHTS, setLook, shadowSize } from "./places.js";
+import { getPlace, LIGHTS, PLACE_NAMES, setLook, shadowSize } from "./places.js";
 import { PROPS } from "./props.js";
 import { blendFrames, partFrames, poseFrames } from "./rig.js";
 import { frameShot, SHOT_TYPES, viewBlocked } from "./shots.js";
 import { LIMB_NAMES, sampleTrack, simulate, thingSpots } from "./simulation.js";
 import { fitSize, SIZES } from "./sizes.js";
+import { makeSky } from "./sky.js";
 import { planStory } from "./timing.js";
 import { clamp, hash, lerp, smooth, wobble } from "./util.js";
 import { loadVoices } from "./voice.js";
-
-const SKY = {
-  day: { top: "#5d9fe6", horizon: "#d6ecff" },
-  evening: { top: "#33337a", horizon: "#ff9d6a" },
-  night: { top: "#04081a", horizon: "#1a2a5c" },
-};
-
-/** The sky dome (gradient, stars and a moon at night); the Places sheet uses it too. */
-export function makeSky() {
-  const material = new THREE.ShaderMaterial({
-    uniforms: { top: { value: new THREE.Color() }, horizon: { value: new THREE.Color() } },
-    vertexShader: /* glsl */ `
-      varying vec3 vDir;
-      void main() {
-        vDir = normalize(position);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragmentShader: /* glsl */ `
-      uniform vec3 top;
-      uniform vec3 horizon;
-      varying vec3 vDir;
-      void main() {
-        float h = clamp(vDir.y * 1.6 + 0.1, 0.0, 1.0);
-        gl_FragColor = vec4(mix(horizon, top, pow(h, 0.8)), 1.0);
-      }
-    `,
-    side: THREE.BackSide,
-    depthWrite: false,
-    fog: false,
-  });
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), material);
-  // Stars and a moon for nights.
-  const stars = new THREE.BufferGeometry();
-  const points = [];
-  let seed = 7;
-  const random = () => {
-    seed = (seed * 16807) % 2147483647;
-    return seed / 2147483647;
-  };
-  for (let i = 0; i < 1400; i++) {
-    const a = random() * Math.PI * 2;
-    const y = 0.08 + random() * 0.92;
-    const r = Math.sqrt(1 - y * y);
-    points.push(Math.cos(a) * r * 380, y * 380, Math.sin(a) * r * 380);
-  }
-  stars.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
-  const starField = new THREE.Points(
-    stars,
-    new THREE.PointsMaterial({ color: "#ffffff", size: 1.4, sizeAttenuation: false, fog: false }),
-  );
-  const moon = new THREE.Mesh(
-    new THREE.SphereGeometry(12, 24, 16),
-    new THREE.MeshBasicMaterial({ color: "#fff6dc", fog: false }),
-  );
-  moon.position.set(-120, 190, -260);
-  const sky = new THREE.Group();
-  sky.add(dome, starField, moon);
-  return {
-    group: sky,
-    set(preset) {
-      material.uniforms.top.value.set(SKY[preset].top);
-      material.uniforms.horizon.value.set(SKY[preset].horizon);
-      starField.visible = preset === "night";
-      moon.visible = preset === "night";
-    },
-  };
-}
 
 /** Focus blur by shot type: close shots blur the background more. */
 const APERTURE = {
@@ -157,42 +90,64 @@ function fitInRoom(view, layout) {
 }
 
 /**
+ * How far along a ray (from `o`, unit direction `d`) it enters a physics box `b` ({ x, y, z, w, h, d, rot }), or
+ * Infinity when it misses. The box turns like everywhere else: local x = dx·cos − dz·sin, local z = dx·sin + dz·cos.
+ */
+function rayBox(o, d, b) {
+  const c = Math.cos(b.rot ?? 0);
+  const s = Math.sin(b.rot ?? 0);
+  const ox = o.x - b.x;
+  const oz = o.z - b.z;
+  const axes = [
+    [ox * c - oz * s, d.x * c - d.z * s, b.w / 2],
+    [o.y - b.y, d.y, b.h / 2],
+    [ox * s + oz * c, d.x * s + d.z * c, b.d / 2],
+  ];
+  let near = 0;
+  let far = Number.POSITIVE_INFINITY;
+  for (const [start, step, half] of axes) {
+    if (Math.abs(step) < 1e-9) {
+      if (Math.abs(start) > half) return Number.POSITIVE_INFINITY;
+      continue;
+    }
+    let a = (-half - start) / step;
+    let z = (half - start) / step;
+    if (a > z) [a, z] = [z, a];
+    near = Math.max(near, a);
+    far = Math.min(far, z);
+    if (near > far) return Number.POSITIVE_INFINITY;
+  }
+  return near;
+}
+
+/**
  * How much furniture spoils the view (0 = not at all): standing between the camera and anyone it frames (their head
  * or chest: 1 each), covering the middle of the picture in front of them (beyond a fifth of it), or standing close
  * to the camera anywhere in the picture, edges too (a shelf down one side: beyond an eighth of it). Rays from the
- * camera against the place's own meshes.
+ * camera against the place's physics boxes (layouts.js `solids`, which the Places sheet checks against what's
+ * built), so a richly detailed place costs no more than a plain one. Low things (pavements, decks, rugs) don't count.
  */
-const raycaster = new THREE.Raycaster();
 const probe = new THREE.PerspectiveCamera();
-/** How big a mesh is (its bounding sphere): floors, walls and ceilings are the big ones. */
-const radius = (mesh) => {
-  if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
-  return (
-    mesh.geometry.boundingSphere.radius *
-    Math.max(...mesh.getWorldScale(new THREE.Vector3()).toArray())
-  );
-};
 function furnitureInView(place, look, aspect, framed) {
   let cost = 0;
+  const layout = layoutOf(place.name);
   // Still inside furniture or outside the walls after moving in (rays from there see through it all): the worst.
-  if (!roomForCamera(layoutOf(place.name), look.position)) cost += 3;
-  place.meshes ??= (() => {
-    const list = [];
-    place.group.traverse((o) => {
-      if (o.isMesh && o.visible !== false) list.push(o);
-    });
-    return list;
-  })();
-  place.group.updateMatrixWorld(true);
+  if (!roomForCamera(layout, look.position)) cost += 3;
+  place.viewSolids ??= solidsOf(layout).filter((b) => b.y + b.h / 2 > 0.6);
   const { position } = look;
+  const subject = Math.min(...framed.map((s) => s.head.distanceTo(position)));
+  // Only boxes that could be in the way.
+  const reach = subject + 12;
+  const solids = place.viewSolids.filter(
+    (b) => Math.hypot(b.x - position.x, b.z - position.z) - Math.hypot(b.w, b.d) / 2 < reach,
+  );
+  const hits = (dir, far) => solids.some((b) => rayBox(position, dir, b) < far);
   for (const s of framed) {
     for (const point of [s.head, s.chest]) {
       const toward = point.clone().sub(position);
       const far = toward.length();
       if (far < 1e-3) continue;
-      raycaster.set(position, toward.normalize());
-      raycaster.far = far - 0.9 * s.size;
-      if (raycaster.intersectObjects(place.meshes, false).length) cost += 1;
+      if (hits(toward.normalize(), far - 0.9 * s.size)) cost += 1;
     }
   }
   // The middle of the picture: furniture in front of the subjects covering more than a fifth of it.
@@ -205,15 +160,11 @@ function furnitureInView(place, look, aspect, framed) {
   probe.lookAt(look.target);
   probe.updateProjectionMatrix();
   probe.updateMatrixWorld(true);
-  const subject = Math.min(...framed.map((s) => s.head.distanceTo(position)));
+  const dir = new THREE.Vector3();
   /** Is there furniture along this ray (a point of the picture), nearer than `far`? */
   const blocked = (x, y, far) => {
-    raycaster.setFromCamera(new THREE.Vector2(x, y), probe);
-    raycaster.far = far;
-    // The floor, rugs, walls and ceiling don't count: only furniture standing in the way.
-    return raycaster
-      .intersectObjects(place.meshes, false)
-      .some((h) => h.point.y > 0.2 && radius(h.object) < 12);
+    dir.set(x, y, 0.5).unproject(probe).sub(position).normalize();
+    return hits(dir, far);
   };
   let middle = 0;
   for (let gx = -2; gx <= 2; gx++) {
@@ -299,11 +250,11 @@ export function createEngine({ width: W, height: H, story }) {
   const scene = new THREE.Scene();
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  const sky = makeSky();
-  scene.add(sky.group);
   const camera = new THREE.PerspectiveCamera(40, W / H, 0.1, 900);
   const look = chooseLook(renderer, settings);
   setLook(look);
+  const sky = makeSky(look);
+  scene.add(sky.group);
   const effects = createEffects(renderer, scene, camera, W, H, settings, look);
   // Lighting as on a film set, placed around each shot's camera: a key light beside the camera (faces are always
   // lit; indoors it casts the soft shadows), a soft fill from the other side, and a cool rim behind people that
@@ -523,6 +474,7 @@ export function createEngine({ width: W, height: H, story }) {
       shownPlace = place;
     }
     sky.set(place.light);
+    sky.update(t);
     scene.fog = place.fog ? new THREE.Fog(place.fog.color, place.fog.near, place.fog.far) : null;
     renderer.toneMappingExposure = place.exposure * (settings.exposure ?? 1);
     scene.environmentIntensity = place.env;
@@ -793,7 +745,11 @@ export function createEngine({ width: W, height: H, story }) {
               layout,
             );
             const framed = close ? still.slice(0, 1) : still;
-            const people = close && viewBlocked(look.position, look.target, still.slice(1)) ? 1 : 0;
+            // Someone else in the way: of the close shot's target, or of the one the shot is about.
+            const others = still.slice(1);
+            const people =
+              (close && viewBlocked(look.position, look.target, others) ? 1 : 0) +
+              (others.length && viewBlocked(look.position, still[0].head, others) ? 1 : 0);
             return sum + people + furnitureInView(place, look, W / H, framed);
           }, 0);
         // The first clear view, in this order; when none is clear, the least spoiled one.
@@ -1028,6 +984,8 @@ export function createEngine({ width: W, height: H, story }) {
     get sounds() {
       return sounds;
     },
+    /** The places this engine can show (the Sheets tab lists them). */
+    places: PLACE_NAMES,
     /** The effects, timed (for sheets and tests). */
     get effects() {
       return events;

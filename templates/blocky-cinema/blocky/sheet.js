@@ -9,7 +9,6 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { getUpPose, jumpPose, pickUpPose, punchPose, throwPose } from "./animation.js";
 import { BLOCKY_CAST } from "./cast.js";
 import { makeCharacter } from "./characters.js";
-import { makeSky } from "./engine.js";
 import { EXPRESSIONS } from "./faces.js";
 import { figureAt } from "./figure.js";
 import {
@@ -25,7 +24,7 @@ import {
 import { layoutOf, solidsOf } from "./layouts.js";
 import { composePose, GRAVITY, insideBlock, personState, planMotion, poseFor } from "./motion.js";
 import { loadPhysics } from "./physics.js";
-import { DEFAULT_LIGHT, getPlace } from "./places.js";
+import { DEFAULT_LIGHT, getPlace, PLACE_NAMES } from "./places.js";
 import {
   GAIT_NAMES,
   GAITS,
@@ -50,6 +49,7 @@ import {
   UNITS_PER_METER,
   WORLD,
 } from "./sizes.js";
+import { makeSky } from "./sky.js";
 import { plainWord, planStory, sayWords } from "./timing.js";
 import { loadVoices } from "./voice.js";
 
@@ -457,6 +457,10 @@ export function createSheet({ story, params }) {
   }
 
   function placesSheet() {
+    if (!PLACE_NAMES.includes(placeName)) {
+      report(`There's no place called "${placeName}": the places are ${PLACE_NAMES.join(", ")}.`);
+      bad.add(0);
+    }
     const sky = makeSky();
     add(sky.group);
     const lights = ["day", "evening", "night"];
@@ -543,7 +547,17 @@ export function createSheet({ story, params }) {
     /** Everything built (an instanced piece counts one by one), for "the shape stands on something". */
     const built = [];
     const candidates = [];
+    const tops = [];
     for (const piece of place.group.children) {
+      // Far scenery (hills, tree lines) isn't furniture.
+      if (piece.isLight || piece.isPoints || piece.userData.scenery) continue;
+      // A piece built along the place (a fence down the street, string lights) is checked run by run.
+      const along =
+        piece.userData.piece && piece.userData.piece.x === undefined && piece.children.length > 1;
+      if (along) tops.push(...piece.children);
+      else tops.push(piece);
+    }
+    for (const piece of tops) {
       if (piece.isLight || piece.isPoints) continue;
       if (piece.isInstancedMesh) {
         if (!piece.geometry.boundingBox) piece.geometry.computeBoundingBox();
@@ -563,8 +577,9 @@ export function createSheet({ story, params }) {
     }
     for (const { piece, box, instance } of candidates) {
       const size = box.getSize(new THREE.Vector3());
-      if (Math.max(size.x, size.z) > 30 || size.y < 0.3) continue;
+      if (size.y < 0.3) continue;
       built.push(box);
+      if (Math.max(size.x, size.z) > 30) continue;
       if (box.min.y > 2.5 || Math.max(size.x, size.z) < 0.6) continue;
       if (box.max.x < bounds.minX - 2 || box.min.x > bounds.maxX + 2) continue;
       if (box.max.z < bounds.minZ - 2 || box.min.z > bounds.maxZ + 2) continue;
@@ -630,15 +645,19 @@ export function createSheet({ story, params }) {
 
   function checkPlace(place) {
     checkPhysics(place);
+    const layout = layoutOf(place.name);
     place.group.traverse((object) => {
       const kind = object.userData.kind;
       if (!kind) return;
       const box = new THREE.Box3().setFromObject(object);
       const height = box.max.y - box.min.y;
       if (kind === "seat") {
-        if (Math.abs(box.max.y - SEAT_HEIGHT) > 0.2) {
+        // From the ground it stands on (a garden chair on a deck stands a step up).
+        const middle = box.getCenter(new THREE.Vector3());
+        const seat = box.max.y - (layout.ground ? layout.ground(middle.x, middle.z) : 0);
+        if (Math.abs(seat - SEAT_HEIGHT) > 0.2) {
           report(
-            `${placeName}: a seat is ${box.max.y.toFixed(2)} units high; seats sit at the figures' knee height (${SEAT_HEIGHT}).`,
+            `${placeName}: a seat is ${seat.toFixed(2)} units high; seats sit at the figures' knee height (${SEAT_HEIGHT}).`,
           );
           bad.add(0);
         }
