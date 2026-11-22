@@ -323,6 +323,8 @@ describe("Blocky Cinema: moves and actions", () => {
       expect.stringContaining(
         'jumping over the coffee table needs a run-up: pace "run" or "sprint"',
       ),
+      // Milo stays at "left" from the first shot, so his walk to the back is too long for the shots left here.
+      expect.stringContaining("Milo's walk to the back takes"),
       expect.stringContaining('there\'s no "cake" in home to pick up'),
     ]);
   });
@@ -338,6 +340,7 @@ const TOUR = {
     crates: { prop: "box", place: "school", at: { x: 0.6, z: -2.8 }, stack: 2 },
     parcel: { prop: "gift", place: "town", at: { x: 2.4, z: -11.6, y: 0.3 } },
     yardBall: { prop: "ball", place: "backyard", at: { x: 3, z: -1 } },
+    classBook: { prop: "book", place: "classroom", at: { x: 4.4, z: -7.9, y: 2.2 } },
     present: { prop: "gift", place: "park", at: { x: 2, z: 0.4 } },
     crate: { prop: "box", place: "forest", at: { x: 1.6, z: 0.6 } },
   },
@@ -358,6 +361,7 @@ const TOUR = {
       act: { milo: { throw: "zee", at: "catch." } },
       say: "and yelled: catch.",
     },
+    { shot: "close", who: ["zee"], say: "Zee caught it with his face." },
     {
       place: "school",
       light: "day",
@@ -399,6 +403,34 @@ const TOUR = {
       say: "and tossed it right to Grandpa.",
     },
     { shot: "close", who: ["bo", "ruby"], say: "He laughed so hard he cried." },
+    {
+      place: "kitchen",
+      light: "evening",
+      shot: "wide",
+      who: ["theo", "nadia", "milo"],
+      at: { theo: "chair1", nadia: "stove" },
+      pose: { theo: "sit" },
+      go: { milo: { from: "left", to: "chair3" } },
+      say: "At dinner, Milo sat down by Dad",
+    },
+    { shot: "medium", who: ["milo", "theo"], say: "while Mom stirred the soup." },
+    {
+      place: "classroom",
+      light: "day",
+      shot: "wide",
+      who: ["bo", "zee", "ruby"],
+      at: { bo: "back", zee: "desk2", ruby: "desk5" },
+      pose: { zee: "sit", ruby: "sit" },
+      say: "In class, Grandpa taught fractions,",
+    },
+    {
+      shot: "full",
+      who: ["bo", "zee"],
+      go: { bo: "classBook" },
+      act: { bo: { pickUp: "classBook" } },
+      say: "picked up his big math book",
+    },
+    { shot: "close", who: ["zee", "bo"], say: "and Zee gasped." },
     {
       place: "park",
       light: "day",
@@ -462,10 +494,15 @@ describe("Blocky Cinema: every place", () => {
       const walls = layout.walls;
       if (!walls) continue;
       for (const b of solidsOf(layout) as Solid[]) {
-        expect(b.x - b.w / 2, name).toBeGreaterThanOrEqual(walls.minX - 0.01);
-        expect(b.x + b.w / 2, name).toBeLessThanOrEqual(walls.maxX + 0.01);
-        expect(b.z - b.d / 2, name).toBeGreaterThanOrEqual(walls.minZ - 0.01);
-        expect(b.z + b.d / 2, name).toBeLessThanOrEqual(walls.maxZ + 0.01);
+        // A turned box reaches out along x and z by its turned sides.
+        const c = Math.abs(Math.cos(b.rot ?? 0));
+        const n = Math.abs(Math.sin(b.rot ?? 0));
+        const halfX = (c * b.w + n * b.d) / 2;
+        const halfZ = (n * b.w + c * b.d) / 2;
+        expect(b.x - halfX, name).toBeGreaterThanOrEqual(walls.minX - 0.01);
+        expect(b.x + halfX, name).toBeLessThanOrEqual(walls.maxX + 0.01);
+        expect(b.z - halfZ, name).toBeGreaterThanOrEqual(walls.minZ - 0.01);
+        expect(b.z + halfZ, name).toBeLessThanOrEqual(walls.maxZ + 0.01);
       }
     }
   });
@@ -553,6 +590,10 @@ describe("Blocky Cinema: every place", () => {
     expect(cup.y).toBeGreaterThan(2.2);
     const parcel = sampleTrack(sim.tracks.get("parcel") as Track, end).position;
     expect(parcel.y).toBeGreaterThan(0.3);
+    // Milo sat down at the kitchen table; Grandpa holds the book he picked up from his desk.
+    expect(
+      planned.motion.holds.map((h: { id: string; thing: string }) => `${h.id}:${h.thing}`),
+    ).toContain("bo:classBook");
     // Grandpa got up from his garden chair on the deck, and the ball came to rest on the grass.
     const ball = sampleTrack(sim.tracks.get("yardBall") as Track, end).position;
     expect(ball.y).toBeLessThan(0.6);

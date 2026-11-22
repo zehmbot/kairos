@@ -4,30 +4,21 @@
 // anything that moves.
 import * as THREE from "three";
 import { buildPieces } from "./kit.js";
+import { tiledPlane } from "./kit-parts.js";
 import { LAYOUTS } from "./layouts.js";
-import {
-  bed,
-  cabin,
-  campfire,
-  chair,
-  door,
-  floorLamp,
-  glow,
-  lockerTexture,
-  nightstand,
-  picture,
-  pine,
-  plant,
-  rug,
-  shelf,
-  sofa,
-  table,
-  tableLamp,
-  tv,
-  windowPane,
-} from "./props.js";
+import { cabin, campfire, glow, pine } from "./props.js";
 import { backdrop, horizonOf } from "./sky.js";
-import { asphalt, concrete, grass, gravel } from "./textures.js";
+import {
+  asphalt,
+  carpet,
+  concrete,
+  grass,
+  gravel,
+  planks,
+  plaster,
+  tiles,
+  wallpaper,
+} from "./textures.js";
 import { block, canvasTexture, freeze, mesh, paint, rng, roundedBox, speckle } from "./util.js";
 
 /** Light settings for each time of day. */
@@ -161,14 +152,6 @@ function lampLight(g, x, y, z, intensity, color = "#ffc27a", distance = 26) {
   return light;
 }
 
-function ground(w, d, texture, { color = "#ffffff", roughness = 0.9 } = {}) {
-  const m = mesh(new THREE.PlaneGeometry(w, d), paint(color, { map: texture, roughness }), {
-    cast: false,
-  });
-  m.rotation.x = -Math.PI / 2;
-  return m;
-}
-
 /** A flat ground of `material` (textures repeat with its maps). */
 function flat(w, d, material) {
   const m = mesh(new THREE.PlaneGeometry(w, d), material, { cast: false });
@@ -176,26 +159,38 @@ function flat(w, d, material) {
   return m;
 }
 
-/** A room: floor, four walls and a ceiling that only show from the inside (the camera can stand outside). */
-function room(g, { w, d, h, floor, wall, ceiling = "#f2efe8" }) {
-  g.add(ground(w, d, floor));
-  const wallMaterial = paint(wall.color ?? "#ffffff", { map: wall.map ?? null, roughness: 0.92 });
-  const walls = [
+/** A textured surface: `make` gives { map, bumpMap }; its texture repeats every `tile` units. */
+const surface = (maps, bumpScale = 1, roughness = 0.9) =>
+  paint("#ffffff", { ...maps, roughness, bumpScale });
+
+/**
+ * A room's shell: the floor, four walls and a ceiling (they show only from inside, so the camera can stand outside),
+ * skirting boards along the floor and a crown molding along the ceiling. `floor` and `wall` are { material, tile }:
+ * their textures repeat every `tile` units.
+ */
+function roomShell(g, { w, d, h, floor, wall, ceiling = "#f2efe8" }) {
+  const ground = mesh(tiledPlane(w, d, floor.tile), floor.material, { cast: false });
+  ground.rotation.x = -Math.PI / 2;
+  g.add(ground);
+  const white = paint("#f4f1ea", { roughness: 0.6 });
+  const sides = [
     [0, -d / 2, 0, w],
     [-w / 2, 0, Math.PI / 2, d],
     [w / 2, 0, -Math.PI / 2, d],
     [0, d / 2, Math.PI, w],
   ];
-  for (const [x, z, ry, width] of walls) {
-    const m = mesh(new THREE.PlaneGeometry(width, h), wallMaterial, { cast: false });
+  for (const [x, z, ry, width] of sides) {
+    const m = mesh(tiledPlane(width, h, wall.tile), wall.material, { cast: false });
     m.position.set(x, h / 2, z);
     m.rotation.y = ry;
     g.add(m);
-    // Skirting board along the bottom.
-    const board = mesh(roundedBox(width, 0.5, 0.2, 0.04), paint("#f4f1ea"), { cast: false });
+    const board = mesh(roundedBox(width, 0.5, 0.2, 0.04), white, { cast: false });
     board.position.set(x + Math.sin(ry) * 0.1, 0.25, z + Math.cos(ry) * 0.1);
     board.rotation.y = ry;
-    g.add(board);
+    const crown = mesh(roundedBox(width, 0.45, 0.35, 0.06), white, { cast: false });
+    crown.position.set(x + Math.sin(ry) * 0.17, h - 0.22, z + Math.cos(ry) * 0.17);
+    crown.rotation.y = ry;
+    g.add(board, crown);
   }
   const top = mesh(new THREE.PlaneGeometry(w, d), paint(ceiling, { roughness: 1 }), {
     cast: false,
@@ -205,38 +200,23 @@ function room(g, { w, d, h, floor, wall, ceiling = "#f2efe8" }) {
   g.add(top);
 }
 
-const woodFloor = (tone = "#b07a4a") =>
-  canvasTexture(
-    `wood:${tone}`,
-    512,
-    (ctx, s) => {
-      speckle(ctx, s, tone, ["#7a4f2c", "#c99464"], `wood${tone}`, 600, 2);
-      const random = rng(`planks${tone}`);
-      for (let row = 0; row < 8; row++) {
-        const y = row * (s / 8);
-        ctx.fillStyle = `rgba(0,0,0,${0.04 + random() * 0.08})`;
-        ctx.fillRect(0, y, s, s / 8);
-        ctx.fillStyle = "rgba(40,20,5,0.45)";
-        ctx.fillRect(0, y, s, 3);
-        const cut = random() * s;
-        ctx.fillRect(cut, y, 3, s / 8);
-      }
-    },
-    { repeat: [3, 3] },
-  );
+/** What a room's pieces need to know about the light: lamps on, night, the sky in the windows. */
+const roomContext = (preset) => ({
+  lit: preset !== "day",
+  night: preset === "night",
+  sky: LIGHTS[preset].windowSky,
+});
 
-const plainWall = (color, seed) =>
-  canvasTexture(
-    `wall:${color}`,
-    256,
-    (ctx, s) => {
-      // Very light speckles in the wall color: paint, not polka dots.
-      const dark = new THREE.Color(color).multiplyScalar(0.9).getStyle();
-      const light = new THREE.Color(color).lerp(new THREE.Color("#ffffff"), 0.25).getStyle();
-      speckle(ctx, s, color, [dark, light], seed, 260, 2);
-    },
-    { repeat: [4, 2] },
-  );
+/** Ceiling panels in rows over `xs` × `zs`, glowing (school halls, classrooms). */
+function ceilingPanels(g, xs, zs, y) {
+  for (const x of xs) {
+    for (const z of zs) {
+      const panel = mesh(roundedBox(3.2, 0.15, 1.2, 0.05), glow("#ffffff", 1.3), { cast: false });
+      panel.position.set(x, y - 0.1, z);
+      g.add(panel);
+    }
+  }
+}
 
 // ---------- Indoors ----------
 
@@ -244,34 +224,14 @@ function home(preset) {
   const g = new THREE.Group();
   const night = preset === "night";
   const lampsOn = preset !== "day";
-  room(g, { w: 30, d: 26, h: 11, floor: woodFloor(), wall: { map: plainWall("#e9dcc4", "home") } });
-  const homeRug = rug(13, 9, ["#b85c4a", "#f2d7a6"]);
-  homeRug.position.z = -3;
-  g.add(homeRug);
-
-  const couch = sofa("#4f7f8a");
-  couch.position.set(0, 0, -7.6);
-  const coffee = table(5, 2.4, 1.35);
-  coffee.position.set(0, 0, -3.3);
-  const lamp = floorLamp(lampsOn);
-  lamp.position.set(-7, 0, -9);
-  const green = plant();
-  green.position.set(6.6, 0, -9.3);
-  const books = shelf();
-  books.position.set(-12.2, 0, -3);
-  books.rotation.y = Math.PI / 2;
-  const screen = tv(night);
-  screen.position.set(11.8, 0, -2);
-  screen.rotation.y = -Math.PI / 2;
-  const win = windowPane(6, 4.2, LIGHTS[preset].windowSky, night ? 0.45 : 0.85);
-  win.position.set(-5.5, 4.2, -12.9);
-  const art1 = picture(2.2, 1.6, "art1");
-  art1.position.set(3, 5.6, -12.9);
-  const art2 = picture(1.4, 1.8, "art2");
-  art2.position.set(5.8, 5.4, -12.9);
-  const entry = door();
-  entry.position.set(9, 0, -12.85);
-  g.add(couch, coffee, lamp, green, books, screen, win, art1, art2, entry);
+  roomShell(g, {
+    w: 30,
+    d: 26,
+    h: 11,
+    floor: { material: surface(planks("#b07a4a", [1, 1], { count: 6 }), 1.2, 0.55), tile: 4 },
+    wall: { material: surface(wallpaper("#efe3cc", "#c9a97a"), 0.4), tile: 4 },
+  });
+  buildPieces(g, LAYOUTS.home.pieces, roomContext(preset));
 
   // The window's light (soft, no shadow: the engine's key light casts them), the floor lamp's warm pool with its
   // soft shadows, and a faint glow from the hall. No ceiling light: it only blew the ceiling out to white.
@@ -295,42 +255,14 @@ function home(preset) {
 function bedroom(preset) {
   const g = new THREE.Group();
   const night = preset === "night";
-  room(g, {
+  roomShell(g, {
     w: 26,
     d: 22,
     h: 10.5,
-    floor: canvasTexture(
-      "carpet",
-      256,
-      (ctx, s) => speckle(ctx, s, "#c9b9a6", ["#a89480", "#e0d4c4"], "carpet", 1600, 2),
-      { repeat: [4, 4] },
-    ),
-    wall: { map: plainWall("#a9c8e8", "bedroom") },
+    floor: { material: surface(carpet("#c9b9a6", [1, 1]), 1.5, 1), tile: 6 },
+    wall: { material: surface(plaster("#a9c8e8"), 0.5), tile: 6 },
   });
-  const bedroomRug = rug(8, 6, ["#f4c542", "#ef7d57"]);
-  bedroomRug.position.set(2, 0.03, 1);
-  g.add(bedroomRug);
-  const bedroomBed = bed("#e46a6a");
-  bedroomBed.position.set(-6, 0, -5.8);
-  const stand = nightstand();
-  stand.position.set(-1.8, 0, -9.2);
-  const lamp = tableLamp(preset !== "day");
-  lamp.position.set(-1.8, 2, -9.2);
-  const win = windowPane(5, 4, LIGHTS[preset].windowSky, night ? 0.45 : 0.85);
-  win.position.set(5, 4, -10.9);
-  const desk = table(5, 2.4, 2.2, "#f4f1ea");
-  desk.position.set(9.5, 0, -6);
-  desk.rotation.y = -Math.PI / 2;
-  const deskChair = chair("#3b5dc9");
-  deskChair.position.set(7.4, 0, -6);
-  deskChair.rotation.y = -Math.PI / 2;
-  const poster1 = picture(2.4, 3.2, "poster1");
-  poster1.position.set(-6, 5.6, -10.9);
-  const poster2 = picture(2, 2, "poster2");
-  poster2.position.set(12.9, 5, -2);
-  poster2.rotation.y = -Math.PI / 2;
-  const toys = block(1.6, 1.6, 1.6, "#3b5dc9", 7, 0, 3, { radius: 0.2 });
-  g.add(bedroomBed, stand, lamp, win, desk, deskChair, poster1, poster2, toys);
+  buildPieces(g, LAYOUTS.bedroom.pieces, roomContext(preset));
 
   // The window's light (no shadow: the engine's key light casts them), the bedside lamp's warm pool with soft
   // shadows in the evening and at night, a faint glow from the hall. No ceiling light.
@@ -339,6 +271,8 @@ function bedroom(preset) {
   if (preset !== "day") {
     lampSpot(g, [-1.8, 3.4, -9.1], [1.8, -2.6, 4], { intensity: night ? 110 : 70 });
     lampLight(g, -1.8, 3.5, -8.9, night ? 10 : 6, "#ffc27a", 10);
+    // The desk lamp.
+    lampLight(g, 9.4, 3.6, -7.8, night ? 6 : 3, "#ffd59a", 8);
   }
   lampLight(g, 10, 7, 8, night ? 2 : 4, "#fff2dc", 22);
 
@@ -356,78 +290,51 @@ function school(preset) {
   const w = 17;
   const length = 70;
   const z0 = -45;
-  const tiles = canvasTexture(
-    "tiles",
-    256,
-    (ctx, s) => {
-      speckle(ctx, s, "#d9dbe0", ["#b8bcc6", "#f2f3f6", "#9aa0ae"], "marble", 1400, 3);
-      ctx.fillStyle = "rgba(90,96,110,0.35)";
-      ctx.fillRect(0, 0, s, 3);
-      ctx.fillRect(0, 0, 3, s);
-    },
-    { repeat: [6, 24] },
-  );
   // A matte floor: a shiny one mirrors the ceiling panels and glows white.
-  const floor = ground(w, length, tiles, { roughness: 0.75 });
+  const floor = mesh(
+    tiledPlane(w, length, 4),
+    surface(tiles("#d9dbe0", "#c6cbd4", [1, 1], 4), 0.8, 0.75),
+    { cast: false },
+  );
+  floor.rotation.x = -Math.PI / 2;
   floor.position.z = z0 + length / 2;
   g.add(floor);
-  const wallMaterial = paint("#e3e6ea", { roughness: 0.9 });
+  const wallMaterial = surface(plaster("#e3e6ea"), 0.5);
   for (const side of [-1, 1]) {
-    const wall = mesh(new THREE.PlaneGeometry(length, 11), wallMaterial, { cast: false });
+    const wall = mesh(tiledPlane(length, 11, 6), wallMaterial, { cast: false });
     wall.position.set((side * w) / 2, 5.5, z0 + length / 2);
     wall.rotation.y = -side * (Math.PI / 2);
     g.add(wall);
+    // A painted band along the wall, above the lockers.
+    const band = mesh(new THREE.PlaneGeometry(length, 0.5), paint("#29366f", { roughness: 0.8 }), {
+      cast: false,
+    });
+    band.position.set((side * w) / 2 - side * 0.01, 7, z0 + length / 2);
+    band.rotation.y = -side * (Math.PI / 2);
+    g.add(band);
   }
-  const end = mesh(new THREE.PlaneGeometry(w, 11), wallMaterial, { cast: false });
-  end.position.set(0, 5.5, z0);
-  g.add(end);
-  const back = mesh(new THREE.PlaneGeometry(w, 11), wallMaterial, { cast: false });
-  back.position.set(0, 5.5, z0 + length);
-  back.rotation.y = Math.PI;
-  g.add(back);
+  for (const [z, ry] of [
+    [z0, 0],
+    [z0 + length, Math.PI],
+  ]) {
+    const end = mesh(tiledPlane(w, 11, 6), wallMaterial, { cast: false });
+    end.position.set(0, 5.5, z);
+    end.rotation.y = ry;
+    g.add(end);
+  }
   const ceiling = mesh(new THREE.PlaneGeometry(w, length), paint("#f4f4f4", { roughness: 1 }), {
     cast: false,
   });
   ceiling.rotation.x = Math.PI / 2;
   ceiling.position.set(0, 11, z0 + length / 2);
   g.add(ceiling);
-  for (let z = z0 + 5; z < z0 + length; z += 7) {
-    const panel = mesh(roundedBox(3.2, 0.15, 1.2, 0.05), glow("#ffffff", 1.3), { cast: false });
-    panel.position.set(0, 10.9, z);
-    g.add(panel);
-  }
-
-  // Lockers along both walls: one instanced mesh.
-  const lockerGeometry = roundedBox(1.9, 6.6, 1.5, 0.08);
-  const lockerMaterial = paint("#ffffff", {
-    map: lockerTexture(),
-    roughness: 0.45,
-    metalness: 0.15,
-  });
-  const count = 2 * 30;
-  const lockers = new THREE.InstancedMesh(lockerGeometry, lockerMaterial, count);
-  lockers.castShadow = true;
-  lockers.receiveShadow = true;
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  let i = 0;
-  for (const side of [-1, 1]) {
-    for (let k = 0; k < 30; k++) {
-      const z = z0 + 3 + k * 2.0 + (k > 14 ? 4 : 0);
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -side * (Math.PI / 2));
-      m.compose(new THREE.Vector3(side * (w / 2 - 0.78), 3.3, z), q, new THREE.Vector3(1, 1, 1));
-      lockers.setMatrixAt(i++, m);
-    }
-  }
-  g.add(lockers);
-  const doors = door("#5a6a8a");
-  doors.position.set(-1.7, 0, z0 + 0.2);
-  const doors2 = door("#5a6a8a");
-  doors2.position.set(1.7, 0, z0 + 0.2);
-  const sign = picture(3, 1.6, "schoolsign");
-  sign.position.set(-w / 2 + 0.1, 6.4, z0 + 33);
-  sign.rotation.y = Math.PI / 2;
-  g.add(doors, doors2, sign);
+  ceilingPanels(
+    g,
+    [0],
+    Array.from({ length: 10 }, (_, k) => z0 + 5 + k * 7),
+    11,
+  );
+  buildPieces(g, LAYOUTS.school.pieces, roomContext(preset));
 
   // The ceiling panels light the hall: cool-white pools down its length (the three where stories happen cast soft
   // shadows), a soft fill from the floor and walls, and daylight from the far doors.
@@ -457,6 +364,94 @@ function school(preset) {
     // A white hall: a little under the other rooms, so its floor and walls don't blow out.
     exposure: LIGHTS[preset].indoorExposure * 0.85,
     env: 0.2,
+  };
+}
+
+function kitchen(preset) {
+  const g = new THREE.Group();
+  const night = preset === "night";
+  const lampsOn = preset !== "day";
+  roomShell(g, {
+    w: 26,
+    d: 22,
+    h: 10.5,
+    floor: { material: surface(tiles("#efe9df", "#c9c2b6", [1, 1], 4), 0.8, 0.6), tile: 4.4 },
+    wall: { material: surface(plaster("#f1e6c8"), 0.5), tile: 6 },
+  });
+  buildPieces(g, LAYOUTS.kitchen.pieces, roomContext(preset));
+
+  // The window over the sink by day; in the evening and at night the lamp over the table is the key light (warm,
+  // with soft shadows) and the lights under the wall cabinets glow on the counters.
+  const daylight = sunLight(g, preset, [0, 0, -3], 16, night ? 0.3 : 0.65);
+  daylight.castShadow = false;
+  if (lampsOn) {
+    lampSpot(g, [0, 6.6, 1.5], [0, -6.6, 0.01], {
+      intensity: night ? 160 : 95,
+      angle: 1.2,
+      distance: 30,
+    });
+    lampLight(g, -8, 5.4, -9.4, night ? 6 : 4, "#fff2d0", 9);
+    lampLight(g, 2.6, 5.4, -9.4, night ? 6 : 4, "#fff2d0", 9);
+  }
+  lampLight(g, -10, 7, 8, night ? 2 : 4, "#fff2dc", 22);
+
+  return {
+    group: g,
+    ...LAYOUTS.kitchen,
+    indoor: true,
+    exposure: LIGHTS[preset].indoorExposure,
+    fog: null,
+  };
+}
+
+function classroom(preset) {
+  const g = new THREE.Group();
+  const night = preset === "night";
+  roomShell(g, {
+    w: 30,
+    d: 26,
+    h: 11,
+    floor: { material: surface(tiles("#d6dbe2", "#bfc6d0", [1, 1], 4), 0.8, 0.75), tile: 4 },
+    wall: { material: surface(plaster("#e8efe3"), 0.5), tile: 6 },
+  });
+  ceilingPanels(g, [-6, 6], [-7, 0, 7], 11);
+  buildPieces(g, LAYOUTS.classroom.pieces, roomContext(preset));
+
+  // The ceiling panels light the room (the two over the front rows cast soft shadows), with daylight coming in at
+  // the windows on the left.
+  const hemi = new THREE.HemisphereLight("#ffffff", "#9aa0ae", 0.3 * SCALE);
+  g.add(hemi);
+  for (const [x, z] of [
+    [-6, -7],
+    [6, -7],
+    [-6, 3],
+    [6, 3],
+  ]) {
+    lampSpot(g, [x, 10.7, z], [0, -10, 0.01], {
+      color: "#eef4ff",
+      intensity: night ? 26 : 30,
+      angle: 1.15,
+      distance: 30,
+      shadow: z < 0,
+    });
+  }
+  if (!night) {
+    const windows = new THREE.DirectionalLight(
+      preset === "day" ? "#fff6e8" : "#ffb37a",
+      0.6 * SCALE,
+    );
+    windows.position.set(-60, 26, 4);
+    windows.target.position.set(0, 0, 0);
+    g.add(windows, windows.target);
+  }
+
+  return {
+    group: g,
+    ...LAYOUTS.classroom,
+    indoor: true,
+    // A bright room: a little under the others, so the white board and the floor don't blow out.
+    exposure: LIGHTS[preset].indoorExposure * 0.9,
+    fog: null,
   };
 }
 
@@ -803,7 +798,7 @@ function forest(preset) {
   };
 }
 
-const BUILDERS = { home, bedroom, school, town, park, backyard, forest };
+const BUILDERS = { home, bedroom, kitchen, school, classroom, town, park, backyard, forest };
 
 /** The names Claude can use for `place` in story.js. */
 export const PLACE_NAMES = Object.keys(BUILDERS);
@@ -812,7 +807,9 @@ export const PLACE_NAMES = Object.keys(BUILDERS);
 export const DEFAULT_LIGHT = {
   home: "evening",
   bedroom: "night",
+  kitchen: "evening",
   school: "day",
+  classroom: "day",
   town: "day",
   park: "day",
   backyard: "day",

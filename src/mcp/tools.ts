@@ -557,7 +557,7 @@ export function createKairosServer(context: ToolContext): McpServer {
           .regex(/^[A-Za-z0-9_-]{1,40}$/)
           .optional()
           .describe(
-            "For the places sheet: one of the engine's places (home, bedroom, school, town, park, backyard, forest, and any the film adds; default home).",
+            "For the places sheet: one of the engine's places (home, bedroom, kitchen, school, classroom, town, park, backyard, forest, and any the film adds; default home).",
           ),
         who: z
           .string()

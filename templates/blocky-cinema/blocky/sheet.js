@@ -9,6 +9,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { getUpPose, jumpPose, pickUpPose, punchPose, throwPose } from "./animation.js";
 import { BLOCKY_CAST } from "./cast.js";
 import { makeCharacter } from "./characters.js";
+import { fitInRoom } from "./engine.js";
 import { EXPRESSIONS } from "./faces.js";
 import { figureAt } from "./figure.js";
 import {
@@ -37,6 +38,7 @@ import {
 } from "./poses.js";
 import { PROP_NAMES, PROPS, table } from "./props.js";
 import { aimArm } from "./rig.js";
+import { NO_PHYSICS } from "./shapes.js";
 import { simulate, thingSpots } from "./simulation.js";
 import {
   fitSize,
@@ -502,9 +504,14 @@ export function createSheet({ story, params }) {
       ];
       views.forEach(([name, offset], c) => {
         const cell = list[r * 4 + c];
-        camera.fov = 40;
+        // Where a film's camera would stand: inside the room, out of the furniture (as the engine does).
+        const view = fitInRoom(
+          { position: target.clone().add(offset), target, fov: 40, focus: offset.length() },
+          layoutOf(placeName),
+        );
+        camera.fov = view.fov;
         camera.aspect = cell.w / (cell.h - LABEL_H);
-        camera.position.copy(target).add(offset);
+        camera.position.copy(view.position);
         camera.lookAt(target);
         camera.updateProjectionMatrix();
         draw(cell, place);
@@ -556,6 +563,9 @@ export function createSheet({ story, params }) {
         piece.userData.piece && piece.userData.piece.x === undefined && piece.children.length > 1;
       if (along) tops.push(...piece.children);
       else tops.push(piece);
+      // Things on walls and ceilings (windows, doors, boards, lights) have no physics on purpose: they only count
+      // as something built.
+      if (NO_PHYSICS.has(piece.userData.piece?.kind)) piece.userData.wallThing = true;
     }
     for (const piece of tops) {
       if (piece.isLight || piece.isPoints) continue;
@@ -579,7 +589,7 @@ export function createSheet({ story, params }) {
       const size = box.getSize(new THREE.Vector3());
       if (size.y < 0.3) continue;
       built.push(box);
-      if (Math.max(size.x, size.z) > 30) continue;
+      if (Math.max(size.x, size.z) > 30 || piece.userData.wallThing) continue;
       if (box.min.y > 2.5 || Math.max(size.x, size.z) < 0.6) continue;
       if (box.max.x < bounds.minX - 2 || box.min.x > bounds.maxX + 2) continue;
       if (box.max.z < bounds.minZ - 2 || box.min.z > bounds.maxZ + 2) continue;

@@ -410,7 +410,197 @@ const SHAPES = {
       raised: [{ x: 0, z: 0, w, d, y: DECK_HEIGHT }],
     };
   },
+  // ---------- Indoors ----------
+  sofa(p) {
+    const w = p.w ?? 9;
+    return {
+      solids: [
+        { x: 0, y: 0.33, z: 0.15, w, h: 0.66, d: 3.1 },
+        { x: 0, y: 1.37, z: -1.2, w, h: 2.5, d: 1 },
+        { x: 0, y: 1.46, z: -0.6, w: w - 1.1, h: 1.6, d: 0.6 },
+        { x: -w / 2 + 0.5, y: 0.9, z: 0, w: 1, h: 1.56, d: 3.4 },
+        { x: w / 2 - 0.5, y: 0.9, z: 0, w: 1, h: 1.56, d: 3.4 },
+      ],
+      blocks: [{ name: p.name ?? "the sofa", x: 0, z: 0, w: w + 0.4, d: 3.6, h: 2.62 }],
+      raised: [],
+    };
+  },
+  armchair: (p) => ({
+    solids: [
+      { x: 0, y: 0.33, z: 0.15, w: 3.2, h: 0.66, d: 3 },
+      { x: 0, y: 1.4, z: -1.2, w: 3.4, h: 2.6, d: 0.8 },
+      { x: -1.45, y: 0.9, z: 0, w: 0.6, h: 1.6, d: 3.2 },
+      { x: 1.45, y: 0.9, z: 0, w: 0.6, h: 1.6, d: 3.2 },
+    ],
+    blocks: [{ name: p.name ?? "the armchair", x: 0, z: 0, w: 3.6, d: 3.4, h: 2.7 }],
+    raised: [],
+  }),
+  /** A table `w` × `d`, its top `h` high (a coffee table 1.35, a desk or a dining table 2.2), with `items` on it. */
+  table(p) {
+    const w = p.w ?? 5;
+    const d = p.d ?? 2.4;
+    const h = p.h ?? 1.35;
+    const solids = [{ x: 0, y: h - 0.15, z: 0, w, h: 0.3, d }];
+    for (const x of [-w / 2 + 0.35, w / 2 - 0.35]) {
+      for (const z of [-d / 2 + 0.35, d / 2 - 0.35]) {
+        solids.push({ x, y: (h - 0.3) / 2, z, w: 0.3, h: h - 0.3, d: 0.3 });
+      }
+    }
+    if (p.items === "desk") {
+      solids.push({ x: -0.8, y: h + 1.0, z: -0.6, w: 2.4, h: 2, d: 0.7 });
+      solids.push({ x: 1.8, y: h + 0.8, z: -0.5, w: 0.9, h: 1.6, d: 0.9 });
+    }
+    if (p.items === "dinner") solids.push({ x: 0, y: h + 0.4, z: 0, w: 1.8, h: 0.8, d: 1.8 });
+    return {
+      solids,
+      blocks: [{ name: p.name ?? "the table", x: 0, z: 0, w: w + 0.2, d: d + 0.2, h }],
+      raised: [],
+    };
+  },
+  chair: (p) => ({
+    solids: [
+      { x: 0, y: SEAT_HEIGHT / 2, z: 0, w: 1.9, h: SEAT_HEIGHT, d: 1.9 },
+      { x: 0, y: SEAT_HEIGHT + 1.1, z: -0.85, w: 1.9, h: 2.2, d: 0.2 },
+    ],
+    blocks: [{ name: p.name ?? "a chair", x: 0, z: 0, w: 2.1, d: 2.1, h: SEAT_HEIGHT + 2.2 }],
+    raised: [],
+  }),
+  floorLamp: (p) => ({
+    solids: [{ x: 0, y: 3.45, z: 0, w: 1.2, h: 6.9, d: 1.2 }],
+    blocks: [{ name: p.name ?? "the lamp", x: 0, z: 0, w: 1.4, d: 1.4, h: 6.9 }],
+    raised: [],
+  }),
+  plant: (p) => ({
+    solids: [{ x: 0, y: 1.55, z: 0, w: 1.8, h: 3.1, d: 1.9 }],
+    blocks: [{ name: p.name ?? "the plant", x: 0, z: 0, w: 1.4, d: 1.4, h: 3.1 }],
+    raised: [],
+  }),
+  bookcase: (p) => ({
+    solids: [{ x: 0, y: 3, z: 0, w: 4, h: 6, d: 1.42 }],
+    blocks: [{ name: p.name ?? "the bookcase", x: 0, z: 0, w: 4.2, d: 1.6, h: 6 }],
+    raised: [],
+  }),
+  tv: (p) => ({
+    solids: [{ x: 0, y: 2.3, z: 0, w: 5, h: 4.6, d: 1.4 }],
+    blocks: [{ name: p.name ?? "the TV", x: 0, z: 0, w: 5.2, d: 1.6, h: 4.6 }],
+    raised: [],
+  }),
+  coatRack: () => ({
+    solids: [{ x: 0, y: 3.1, z: 0, w: 1.7, h: 6.2, d: 1.7 }],
+    blocks: [{ name: "the coat rack", x: 0, z: 0, w: 1.6, d: 1.6, h: 6.2 }],
+    raised: [],
+  }),
+  bed: (p) => ({
+    solids: [
+      { x: 0, y: 0.65, z: 0, w: 5.4, h: 1.3, d: 9.4 },
+      { x: 0, y: 1.4, z: 1.5, w: 5.2, h: 0.2, d: 6 },
+      { x: 0, y: 1.6, z: -4.6, w: 5.6, h: 3.2, d: 0.6 },
+      { x: 0, y: 1.55, z: -3.4, w: 3.4, h: 0.5, d: 1.6 },
+    ],
+    blocks: [{ name: p.name ?? "the bed", x: 0, z: 0, w: 5.6, d: 9.8, h: 1.5 }],
+    raised: [],
+  }),
+  nightstand: (p) => ({
+    solids: [
+      { x: 0, y: 1, z: 0, w: 2, h: 2, d: 1.8 },
+      ...(p.lamp ? [{ x: 0, y: 2.93, z: 0, w: 1.3, h: 1.85, d: 1.3 }] : []),
+    ],
+    blocks: [{ name: "the nightstand", x: 0, z: 0, w: 2.2, d: 2, h: 2 }],
+    raised: [],
+  }),
+  toyBox: () => ({
+    solids: [{ x: 0, y: 0.8, z: 0, w: 1.7, h: 1.6, d: 1.7 }],
+    blocks: [{ name: "the toy box", x: 0, z: 0, w: 1.8, d: 1.8, h: 1.6 }],
+    raised: [],
+  }),
+  wardrobe: () => ({
+    solids: [{ x: 0, y: 3.1, z: 0, w: 3.6, h: 6.2, d: 1.8 }],
+    blocks: [{ name: "the wardrobe", x: 0, z: 0, w: 3.8, d: 2, h: 6.2 }],
+    raised: [],
+  }),
+  beanbag: () => ({
+    solids: [{ x: 0, y: 0.45, z: 0, w: 3, h: 0.9, d: 3 }],
+    blocks: [{ name: "the beanbag", x: 0, z: 0, w: 3, d: 3, h: 1.2 }],
+    raised: [],
+  }),
+  /** Kitchen counters `w` long (base cabinets, sink, stove), with wall cabinets over `uppers` ([from, to] along it). */
+  counter(p) {
+    const w = p.w ?? 16;
+    return {
+      solids: [
+        { x: 0, y: 1.33, z: 0, w, h: 2.65, d: 1.9 },
+        ...(p.uppers ?? []).map(([a, b]) => ({
+          x: (a + b) / 2,
+          y: 7.4,
+          z: -0.35,
+          w: b - a,
+          h: 2.8,
+          d: 1.2,
+        })),
+      ],
+      blocks: [{ name: "the counter", x: 0, z: 0, w, d: 2.1, h: 2.65 }],
+      raised: [],
+    };
+  },
+  /** A lamp hanging `drop` below the ceiling (the piece's y): its shade, which a thrown thing or a camera can hit. */
+  pendant: (p) => ({
+    solids: [{ x: 0, y: -(p.drop ?? 3) - 0.35, z: 0, w: 2.3, h: 1.2, d: 2.3 }],
+    blocks: [],
+    raised: [],
+  }),
+  fridge: () => ({
+    solids: [{ x: 0, y: 2.8, z: 0, w: 2.8, h: 5.6, d: 2.2 }],
+    blocks: [{ name: "the fridge", x: 0, z: 0, w: 3, d: 2.4, h: 5.6 }],
+    raised: [],
+  }),
+  lockers: (p) => ({
+    solids: [{ x: 0, y: 3.3, z: 0, w: (p.count ?? 15) * 2, h: 6.6, d: 1.5 }],
+    blocks: [{ name: "the lockers", x: 0, z: 0, w: (p.count ?? 15) * 2, d: 1.7, h: 6.6 }],
+    raised: [],
+  }),
+  trophyCase: () => ({
+    solids: [{ x: 0, y: 3.7, z: 0, w: 4.5, h: 7.4, d: 1.6 }],
+    blocks: [{ name: "the trophy case", x: 0, z: 0, w: 4.7, d: 1.8, h: 7.4 }],
+    raised: [],
+  }),
+  fountain: () => ({
+    solids: [{ x: 0, y: 1.6, z: 0, w: 1.6, h: 3.2, d: 1.4 }],
+    blocks: [{ name: "the water fountain", x: 0, z: 0, w: 1.8, d: 1.6, h: 3.2 }],
+    raised: [],
+  }),
+  trashCan: () => ({
+    solids: [{ x: 0, y: 1.2, z: 0, w: 1.6, h: 2.4, d: 1.6 }],
+    blocks: [{ name: "a bin", x: 0, z: 0, w: 1.7, d: 1.7, h: 2.4 }],
+    raised: [],
+  }),
+  teacherDesk: () => ({
+    solids: [
+      { x: 0, y: 2.05, z: 0, w: 5.2, h: 0.3, d: 2.6 },
+      { x: 1.6, y: 0.95, z: 0, w: 1.6, h: 1.9, d: 2.4 },
+      { x: 0, y: 1.1, z: 1.1, w: 5, h: 1.8, d: 0.25 },
+      { x: -2.35, y: 0.95, z: 0, w: 0.3, h: 1.9, d: 2.4 },
+      { x: -1.2, y: 2.9, z: -0.2, w: 1.4, h: 1.5, d: 1.4 },
+    ],
+    blocks: [{ name: "the teacher's desk", x: 0, z: 0, w: 5.4, d: 2.8, h: 2.2 }],
+    raised: [],
+  }),
 };
+
+/** Kinds that hang on walls or ceilings, or lie flat: nothing to bump into (no physics, no footprint). */
+export const NO_PHYSICS = new Set([
+  "window",
+  "door",
+  "picture",
+  "clock",
+  "ceilingLight",
+  "rug",
+  "wallShelf",
+  "board",
+  "bulletinBoard",
+]);
+for (const kind of NO_PHYSICS) {
+  SHAPES[kind] = () => ({ solids: [], blocks: [], raised: [] });
+}
 
 /** The kinds kit.js can build. */
 export const PIECE_KINDS = Object.keys(SHAPES);

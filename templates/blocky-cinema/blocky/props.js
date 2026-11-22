@@ -146,35 +146,6 @@ export function plant() {
   return g;
 }
 
-export function shelf() {
-  const wood = paint("#7a5638");
-  const g = group(block(4, 6, 1.4, null, 0, 0, 0, { material: wood, radius: 0.08 }));
-  const colors = ["#e8344e", "#3b5dc9", "#f4c542", "#38b764", "#ef7d57", "#5d275d"];
-  const random = rng("books");
-  for (let row = 0; row < 3; row++) {
-    g.add(block(3.6, 0.12, 1.2, "#5e412b", 0, 0.5 + row * 1.8, 0.12));
-    let x = -1.6;
-    while (x < 1.4) {
-      const w = 0.22 + random() * 0.2;
-      const h = 0.9 + random() * 0.5;
-      g.add(
-        block(
-          w,
-          h,
-          0.9,
-          colors[Math.floor(random() * colors.length)],
-          x + w / 2,
-          0.62 + row * 1.8,
-          0.15,
-          { radius: 0.03 },
-        ),
-      );
-      x += w + 0.04;
-    }
-  }
-  return g;
-}
-
 export function tv(on) {
   const g = group(
     block(5, 1.6, 1.4, "#3a2a20", 0, 0, 0, { radius: 0.1 }),
@@ -210,22 +181,6 @@ export function picture(w, h, seed) {
   art.position.set(0, (h + 0.3) / 2, 0.09);
   g.add(art);
   return g;
-}
-
-/** A window: frame plus a glowing pane showing the sky outside. */
-export function windowPane(w, h, skyColor, intensity = 1) {
-  const frame = paint("#f4f4f4");
-  const pane = mesh(new THREE.PlaneGeometry(w, h), glow(skyColor, intensity), { cast: false });
-  pane.position.set(0, h / 2, 0.02);
-  return group(
-    pane,
-    block(w + 0.5, 0.3, 0.4, null, 0, -0.3, 0.1, { material: frame }),
-    block(w + 0.5, 0.3, 0.4, null, 0, h, 0.1, { material: frame }),
-    block(0.3, h, 0.4, null, -w / 2 - 0.1, 0, 0.1, { material: frame }),
-    block(0.3, h, 0.4, null, w / 2 + 0.1, 0, 0.1, { material: frame }),
-    block(0.18, h, 0.3, null, 0, 0, 0.1, { material: frame }),
-    block(w, 0.18, 0.3, null, 0, h / 2, 0.1, { material: frame }),
-  );
 }
 
 /** A door: 2.1 m by 90 cm. */

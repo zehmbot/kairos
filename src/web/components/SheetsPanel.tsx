@@ -13,7 +13,17 @@ const SHEETS = [
   ["moves", "Moves"],
 ] as const;
 /** The places when the film doesn't say which it has. */
-const PLACES = ["home", "bedroom", "school", "town", "park", "backyard", "forest"];
+const PLACES = [
+  "home",
+  "bedroom",
+  "kitchen",
+  "school",
+  "classroom",
+  "town",
+  "park",
+  "backyard",
+  "forest",
+];
 
 /**
  * A Blocky film's sheets: every character, pose, face, object and place of its engine on one picture, with the

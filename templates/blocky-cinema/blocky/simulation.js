@@ -532,11 +532,15 @@ export function simulate(
       }
     }
 
-    // Checks: things sinking into the furniture or the floor, things still moving at the end.
+    // Checks: things sinking into the furniture or the floor, things still moving at the end (a thing someone
+    // still carries when the scene ends moves with them: that's fine).
     for (const [key, handle] of bodies) {
       deepest = Math.max(deepest, world.depthInStatic(handle));
       const v = world.velocity(handle);
-      if (Math.hypot(v.x, v.y, v.z) > 0.35) {
+      const carried = holdsHere.some(
+        (h) => key.split("#")[0] === h.thing && h.t0 < run.t1 && h.t1 >= run.t1 - 1e-6,
+      );
+      if (!carried && Math.hypot(v.x, v.y, v.z) > 0.35) {
         problems.push(`The ${key.split("#")[0]} still moves when the scene in ${run.place} ends.`);
       }
     }

@@ -375,3 +375,191 @@ export function stone(color = "#9a9aa2", repeat = [1, 1]) {
     );
   });
 }
+
+/** Painted plaster: a wall's color with the soft mottling of a roller. */
+export function plaster(color, repeat = [1, 1]) {
+  return surface(`plaster:${color}`, 256, repeat, (ctx, s, fill) => {
+    const random = rng(`plaster${color}`);
+    ctx.fillStyle = fill(color, 128);
+    ctx.fillRect(0, 0, s, s);
+    dots(
+      ctx,
+      s,
+      fill,
+      random,
+      90,
+      22,
+      [shade(color, -0.04), shade(color, 0.05)],
+      [118, 140],
+      [0.2, 0.4],
+    );
+    dots(
+      ctx,
+      s,
+      fill,
+      random,
+      1400,
+      1.2,
+      [shade(color, -0.07), shade(color, 0.06)],
+      [110, 150],
+      [0.15, 0.35],
+    );
+  });
+}
+
+/** Wallpaper: soft stripes of two tones with a small pattern between them. */
+export function wallpaper(color, accent, repeat = [1, 1]) {
+  return surface(`wallpaper:${color}:${accent}`, 256, repeat, (ctx, s, fill) => {
+    ctx.fillStyle = fill(color, 128);
+    ctx.fillRect(0, 0, s, s);
+    for (let k = 0; k < 4; k++) {
+      ctx.fillStyle = fill(shade(color, -0.06), 120);
+      ctx.fillRect(k * (s / 4), 0, s / 8, s);
+      for (let y = 0; y < 8; y++) {
+        ctx.fillStyle = fill(accent, 140);
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath();
+        ctx.arc(k * (s / 4) + (3 * s) / 16, (y + 0.5) * (s / 8), 3.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+  });
+}
+
+/** Upholstery: a woven fabric (sofas, armchairs, cushions, curtains). */
+export function fabric(color, repeat = [1, 1]) {
+  return surface(`fabric:${color}`, 128, repeat, (ctx, s, fill) => {
+    const random = rng(`fabric${color}`);
+    ctx.fillStyle = fill(color, 128);
+    ctx.fillRect(0, 0, s, s);
+    for (let i = 0; i < s; i += 3) {
+      ctx.fillStyle = fill(shade(color, -0.08), 100);
+      ctx.fillRect(0, i, s, 1);
+      ctx.fillStyle = fill(shade(color, 0.06), 150);
+      ctx.fillRect(i, 0, 1, s);
+    }
+    dots(
+      ctx,
+      s,
+      fill,
+      random,
+      300,
+      1.2,
+      [shade(color, -0.12), shade(color, 0.1)],
+      [100, 160],
+      [0.2, 0.4],
+    );
+  });
+}
+
+/** Carpet: soft, flecked pile. */
+export function carpet(color, repeat = [4, 4]) {
+  return surface(`carpet:${color}`, 256, repeat, (ctx, s, fill) => {
+    const random = rng(`carpet${color}`);
+    ctx.fillStyle = fill(color, 128);
+    ctx.fillRect(0, 0, s, s);
+    dots(
+      ctx,
+      s,
+      fill,
+      random,
+      5000,
+      1.1,
+      [shade(color, -0.16), shade(color, 0.12), shade(color, -0.05)],
+      [90, 170, 120],
+      [0.35, 0.7],
+    );
+  });
+}
+
+/** Floor tiles: squares of one or two colors (a checkerboard) with grout lines. */
+export function tiles(color, second = null, repeat = [6, 6], count = 4) {
+  return surface(`tiles:${color}:${second}:${count}`, 256, repeat, (ctx, s, fill) => {
+    const random = rng(`tiles${color}`);
+    const t = s / count;
+    for (let r = 0; r < count; r++) {
+      for (let c = 0; c < count; c++) {
+        const base = second && (r + c) % 2 ? second : color;
+        ctx.fillStyle = fill(shade(base, (random() - 0.5) * 0.05), 170);
+        ctx.fillRect(c * t, r * t, t, t);
+      }
+    }
+    dots(
+      ctx,
+      s,
+      fill,
+      random,
+      900,
+      1.4,
+      [shade(color, -0.12), shade(color, 0.1)],
+      [150, 185],
+      [0.1, 0.25],
+    );
+    ctx.fillStyle = fill("#9a958c", 40);
+    for (let k = 0; k <= count; k++) {
+      ctx.fillRect(k * t - 1.5, 0, 3, s);
+      ctx.fillRect(0, k * t - 1.5, s, 3);
+    }
+  });
+}
+
+/** Cork board, with pinned papers drawn on it. */
+export function cork(repeat = [1, 1]) {
+  return surface("cork", 256, repeat, (ctx, s, fill) => {
+    const random = rng("cork");
+    ctx.fillStyle = fill("#b98a55", 120);
+    ctx.fillRect(0, 0, s, s);
+    dots(
+      ctx,
+      s,
+      fill,
+      random,
+      2600,
+      1.6,
+      ["#8a6236", "#d2a774", "#6e4b2a"],
+      [90, 170, 70],
+      [0.4, 0.8],
+    );
+    const papers = ["#ffffff", "#fff4b0", "#cfe8ff", "#ffd1dc", "#d7f5c8"];
+    for (let i = 0; i < 9; i++) {
+      const w = 40 + random() * 40;
+      const h = 34 + random() * 44;
+      const x = random() * (s - w);
+      const y = random() * (s - h);
+      ctx.save();
+      ctx.translate(x + w / 2, y + h / 2);
+      ctx.rotate((random() - 0.5) * 0.25);
+      ctx.fillStyle = fill(papers[i % papers.length], 200);
+      ctx.fillRect(-w / 2, -h / 2, w, h);
+      ctx.fillStyle = fill("#9aa3b5", 190);
+      for (let l = 0; l < 4; l++)
+        ctx.fillRect(-w / 2 + 6, -h / 2 + 8 + l * 8, w - 12 - random() * 10, 2);
+      ctx.fillStyle = fill(["#e8344e", "#3b5dc9", "#38b764"][i % 3], 230);
+      ctx.beginPath();
+      ctx.arc(0, -h / 2 + 4, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  });
+}
+
+/** Granite: a speckled stone countertop. */
+export function granite(color = "#d9d4cc", repeat = [2, 1]) {
+  return surface(`granite:${color}`, 256, repeat, (ctx, s, fill) => {
+    const random = rng(`granite${color}`);
+    ctx.fillStyle = fill(color, 140);
+    ctx.fillRect(0, 0, s, s);
+    dots(
+      ctx,
+      s,
+      fill,
+      random,
+      3200,
+      1.3,
+      ["#6b6660", "#ffffff", "#a39d94", "#3e3a36"],
+      [120, 160, 140, 110],
+      [0.35, 0.8],
+    );
+  });
+}

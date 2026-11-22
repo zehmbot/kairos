@@ -73,6 +73,198 @@ function streetRow({ side, xs, seeds, special = {} }) {
   return pieces;
 }
 
+// ---------- Indoors ----------
+// A wall thing's `rot` turns its front into the room: the back wall (−z) 0, the left wall (−x) π/2, the right wall
+// −π/2, the front wall π. Its `y` is its bottom edge (a ceiling light's: the ceiling).
+
+const HOME_PIECES = [
+  { kind: "rug", x: 0, z: -3, w: 13, d: 9, colors: ["#b85c4a", "#f2d7a6"] },
+  { kind: "sofa", x: 0, z: -7.6, color: "#4f7f8a" },
+  {
+    kind: "table",
+    x: 0,
+    z: -3.3,
+    w: 5,
+    d: 2.4,
+    h: 1.35,
+    items: "coffee",
+    name: "the coffee table",
+  },
+  { kind: "floorLamp", x: -7, z: -9 },
+  { kind: "plant", x: 6.6, z: -9.3 },
+  { kind: "bookcase", x: -12.2, z: -3, rot: Math.PI / 2, name: "the shelf", seed: "home" },
+  { kind: "tv", x: 11.8, z: -2, rot: -Math.PI / 2 },
+  { kind: "armchair", x: -9.5, z: 3.5, rot: Math.PI / 2, color: "#c96f4a" },
+  { kind: "coatRack", x: 12.6, z: -11.4 },
+  { kind: "window", x: -5.5, y: 4.2, z: -12.95, w: 6, h: 4.2, curtain: "#f2d7a6", long: true },
+  { kind: "door", x: 9, z: -12.85 },
+  { kind: "picture", x: 3, y: 5.6, z: -12.92, w: 2.2, h: 1.6, seed: "art1" },
+  { kind: "picture", x: 5.8, y: 5.4, z: -12.92, w: 1.4, h: 1.8, seed: "art2" },
+  { kind: "picture", x: -14.92, y: 5.2, z: 6.4, rot: Math.PI / 2, w: 1.8, h: 1.4, seed: "family1" },
+  { kind: "picture", x: -14.92, y: 5.6, z: 9, rot: Math.PI / 2, w: 1.3, h: 1.7, seed: "family2" },
+  { kind: "clock", x: -0.8, y: 8.4, z: -12.9 },
+  { kind: "ceilingLight", x: 0, y: 11, z: -1 },
+];
+
+const BEDROOM_PIECES = [
+  { kind: "rug", x: 2, z: 1, w: 8, d: 6, colors: ["#f4c542", "#ef7d57"] },
+  { kind: "bed", x: -6, z: -5.8, color: "#e46a6a" },
+  { kind: "nightstand", x: -1.8, z: -9.2, lamp: true },
+  {
+    kind: "table",
+    x: 9.5,
+    z: -6,
+    rot: -Math.PI / 2,
+    w: 5,
+    d: 2.4,
+    h: 2.2,
+    color: "#f4f1ea",
+    items: "desk",
+    name: "the desk",
+  },
+  { kind: "chair", x: 7.4, z: -6, rot: -Math.PI / 2, color: "#3b5dc9", name: "the chair" },
+  { kind: "toyBox", x: 7, z: 3 },
+  { kind: "wardrobe", x: -11.9, z: 4, rot: Math.PI / 2 },
+  { kind: "beanbag", x: 2.5, z: 6.5, rot: -0.4, color: "#ef7d57" },
+  { kind: "wallShelf", x: 12.85, y: 5.4, z: 4, rot: -Math.PI / 2, w: 5, seed: "bedroom" },
+  { kind: "window", x: 5, y: 4, z: -10.95, w: 5, h: 4, curtain: "#c9dcef" },
+  { kind: "picture", x: -6, y: 5.6, z: -10.92, w: 2.4, h: 3.2, seed: "poster1" },
+  { kind: "picture", x: 12.92, y: 5, z: -2, rot: -Math.PI / 2, w: 2, h: 2, seed: "poster2" },
+  { kind: "door", x: 8, z: 10.9, rot: Math.PI },
+  { kind: "ceilingLight", x: 1, y: 10.5, z: 0 },
+];
+
+const SCHOOL_PIECES = [
+  { kind: "lockers", x: -7.72, z: -28, rot: Math.PI / 2, count: 15 },
+  { kind: "lockers", x: -7.72, z: 6, rot: Math.PI / 2, count: 15 },
+  { kind: "lockers", x: 7.72, z: -28, rot: -Math.PI / 2, count: 15 },
+  { kind: "lockers", x: 7.72, z: 6, rot: -Math.PI / 2, count: 15 },
+  { kind: "door", style: "classroom", x: -8.45, z: -11, rot: Math.PI / 2, label: "Room 4" },
+  { kind: "fountain", x: 7.78, z: -11, rot: -Math.PI / 2 },
+  { kind: "clock", x: -8.45, y: 8.7, z: -11, rot: Math.PI / 2 },
+  { kind: "bulletinBoard", x: -8.47, y: 7.3, z: -28, rot: Math.PI / 2, w: 8, h: 2.8 },
+  { kind: "bulletinBoard", x: 8.47, y: 7.3, z: 6, rot: -Math.PI / 2, w: 8, h: 2.8 },
+  {
+    kind: "picture",
+    x: 8.47,
+    y: 7.4,
+    z: -24,
+    rot: -Math.PI / 2,
+    w: 2.4,
+    h: 2.4,
+    seed: "schoolposter",
+  },
+  { kind: "picture", x: -8.47, y: 7.4, z: 12, rot: Math.PI / 2, w: 3, h: 1.6, seed: "schoolsign" },
+  { kind: "trophyCase", x: -5.8, z: -44.1 },
+  { kind: "door", x: -1.7, z: -44.85, color: "#5a6a8a" },
+  { kind: "door", x: 1.7, z: -44.85, color: "#5a6a8a" },
+  { kind: "window", x: 0, y: 7.3, z: -44.97, w: 6, h: 2, curtain: null },
+  { kind: "trashCan", x: 5.8, z: 22.6 },
+  { kind: "trashCan", x: 5.2, z: -43.6 },
+];
+
+/** The kitchen's chairs around its table (each one a seat). */
+const KITCHEN_CHAIRS = [
+  { kind: "chair", x: -1.9, z: -1.2, rot: 0, color: "#8b5a35" },
+  { kind: "chair", x: 1.9, z: -1.2, rot: 0, color: "#8b5a35" },
+  { kind: "chair", x: -1.9, z: 4.2, rot: Math.PI, color: "#8b5a35" },
+  { kind: "chair", x: 1.9, z: 4.2, rot: Math.PI, color: "#8b5a35" },
+];
+
+const KITCHEN_PIECES = [
+  {
+    kind: "counter",
+    x: -2,
+    z: -10.05,
+    w: 16,
+    sink: -1.5,
+    stove: 5,
+    uppers: [
+      [-8, -4.2],
+      [1.2, 8],
+    ],
+  },
+  { kind: "fridge", x: 9.2, z: -9.8 },
+  {
+    kind: "table",
+    x: 0,
+    z: 1.5,
+    w: 7,
+    d: 4,
+    h: 2.2,
+    items: "dinner",
+    wood: "#a8744a",
+    name: "the table",
+  },
+  ...KITCHEN_CHAIRS,
+  { kind: "pendant", x: 0, y: 10.5, z: 1.5, drop: 3.2 },
+  { kind: "window", x: -3.5, y: 4.4, z: -10.95, w: 4.4, h: 3.4, curtain: "#f3c9c9" },
+  { kind: "door", x: -12.85, z: 5, rot: Math.PI / 2 },
+  { kind: "clock", x: 12.92, y: 7.6, z: 0, rot: -Math.PI / 2 },
+  {
+    kind: "picture",
+    x: 12.92,
+    y: 4.8,
+    z: 4.5,
+    rot: -Math.PI / 2,
+    w: 2.2,
+    h: 1.6,
+    seed: "kitchenart",
+  },
+  { kind: "plant", x: 11.4, z: 9.2 },
+  { kind: "rug", x: -2, z: -7.3, w: 6, d: 2, colors: ["#3b5dc9", "#f2efe6"] },
+];
+
+/** The classroom's desks (two rows of three facing the board) and the chairs behind them (each one a seat). */
+const CLASS_DESKS = [];
+for (const z of [-2.5, 3.5]) {
+  for (const x of [-7, 0, 7]) {
+    CLASS_DESKS.push({
+      kind: "table",
+      x,
+      z,
+      w: 2.8,
+      d: 1.9,
+      h: 2.1,
+      wood: "#c9a06a",
+      legs: "#4a4f57",
+      items: "school",
+      name: "a desk",
+    });
+    CLASS_DESKS.push({
+      kind: "chair",
+      x,
+      z: z + 1.6,
+      rot: Math.PI,
+      color: x === 0 ? "#e8344e" : "#3b5dc9",
+    });
+  }
+}
+const deskSeats = CLASS_DESKS.filter((p) => p.kind === "chair");
+
+const CLASSROOM_PIECES = [
+  { kind: "board", x: 0, y: 3.2, z: -12.95, w: 14, h: 5.4 },
+  { kind: "teacherDesk", x: 6.5, z: -8.6 },
+  { kind: "chair", x: 6.5, z: -10.6, rot: 0, color: "#2f2f35", name: "the teacher's chair" },
+  ...CLASS_DESKS,
+  ...[-6, 1, 8].map((z) => ({
+    kind: "window",
+    x: -14.95,
+    y: 3,
+    z,
+    rot: Math.PI / 2,
+    w: 4.6,
+    h: 5,
+    curtain: null,
+  })),
+  { kind: "bulletinBoard", x: 14.92, y: 3.6, z: 2, rot: -Math.PI / 2, w: 7, h: 3.6 },
+  { kind: "door", style: "classroom", x: 14.85, z: -9, rot: -Math.PI / 2, label: "Room 4" },
+  { kind: "clock", x: 0, y: 9.3, z: -12.92 },
+  { kind: "bookcase", x: 12.6, z: 10.5, rot: -Math.PI / 2, seed: "class" },
+  { kind: "plant", x: -13.6, z: 11.2 },
+  { kind: "trashCan", x: 10.2, z: -11.6 },
+];
+
 const TOWN_PIECES = [
   ...streetRow({
     side: -1,
@@ -214,38 +406,15 @@ export const LAYOUTS = {
       // Either side of the coffee table (to run and jump over it).
       tableR: { x: 5.6, z: -3.1, rot: -Math.PI / 2 },
       tableL: { x: -5.8, z: -3.1, rot: 2.45 },
+      armchair: { x: -9.5, z: 3.5, rot: Math.PI / 2, seat: SEAT_HEIGHT },
     },
-    seats: ["sofaL", "sofaR", "sofa"],
+    seats: ["sofaL", "sofaR", "sofa", "armchair"],
     beds: [],
-    blocks: [
-      { name: "the sofa", x: 0, z: -7.6, w: 9.4, d: 3.6, h: 2.62 },
-      { name: "the coffee table", x: 0, z: -3.3, w: 5.2, d: 2.6, h: 1.35 },
-      { name: "the lamp", x: -7, z: -9, w: 1.4, d: 1.4, h: 6.9 },
-      { name: "the plant", x: 6.6, z: -9.3, w: 1.4, d: 1.4, h: 3.1 },
-      { name: "the shelf", x: -12.2, z: -3, w: 1.6, d: 4.2, h: 6 },
-      { name: "the TV", x: 11.8, z: -2, w: 1.6, d: 5.2, h: 4.6 },
-    ],
+    blocks: [],
+    solids: [],
+    pieces: HOME_PIECES,
     bounds: { minX: -13.6, maxX: 13.6, minZ: -11.6, maxZ: 11.6 },
     walls: { minX: -15, maxX: 15, minZ: -13, maxZ: 13 },
-    solids: [
-      // The sofa: seat, back, back cushions, arms.
-      { x: 0, y: 0.33, z: -7.45, w: 9, h: 0.66, d: 3.1 },
-      { x: 0, y: 1.37, z: -8.8, w: 9, h: 2.5, d: 1 },
-      { x: 0, y: 1.46, z: -8.2, w: 7.9, h: 1.6, d: 0.6 },
-      { x: -4, y: 0.9, z: -7.6, w: 1, h: 1.56, d: 3.4 },
-      { x: 4, y: 0.9, z: -7.6, w: 1, h: 1.56, d: 3.4 },
-      // The coffee table: top and legs.
-      { x: 0, y: 1.2, z: -3.3, w: 5, h: 0.3, d: 2.4 },
-      { x: -2.15, y: 0.53, z: -4.15, w: 0.3, h: 1.05, d: 0.3 },
-      { x: -2.15, y: 0.53, z: -2.45, w: 0.3, h: 1.05, d: 0.3 },
-      { x: 2.15, y: 0.53, z: -4.15, w: 0.3, h: 1.05, d: 0.3 },
-      { x: 2.15, y: 0.53, z: -2.45, w: 0.3, h: 1.05, d: 0.3 },
-      // The lamp, the plant, the shelf, the TV.
-      { x: -7, y: 3.45, z: -9, w: 1.2, h: 6.9, d: 1.2 },
-      { x: 6.6, y: 1.55, z: -9.3, w: 1.8, h: 3.1, d: 1.9 },
-      { x: -12.2, y: 3, z: -3, w: 1.42, h: 6, d: 4 },
-      { x: 11.8, y: 2.3, z: -2, w: 1.4, h: 4.6, d: 5 },
-    ],
     wide: { pos: [3, 7, 14], target: [0, 3, -5] },
     surface: [0.4, 1.37, -3.1],
   },
@@ -259,39 +428,16 @@ export const LAYOUTS = {
       bed: { x: -6, z: -4.4, rot: 0, bed: BED_HEIGHT + 0.2 },
       bedSit: { x: -3, z: -3, rot: 1.2, seat: BED_HEIGHT },
       desk: { x: 7.4, z: -6, rot: -Math.PI / 2, seat: SEAT_HEIGHT },
+      beanbag: { x: 2.5, z: 6.5, rot: -0.4, seat: SEAT_HEIGHT },
+      wardrobe: { x: -9.7, z: 4, rot: -Math.PI / 2 },
     },
-    seats: ["bedSit", "desk"],
+    seats: ["bedSit", "desk", "beanbag"],
     beds: ["bed"],
-    blocks: [
-      { name: "the bed", x: -6, z: -5.8, w: 5.6, d: 9.8, h: 1.5 },
-      { name: "the nightstand", x: -1.8, z: -9.2, w: 2.2, d: 2, h: 2 },
-      { name: "the desk", x: 9.5, z: -6, w: 2.6, d: 5.2, h: 2.2 },
-      { name: "the chair", x: 7.4, z: -6, w: 2, d: 2, h: 2.86 },
-      { name: "the toy box", x: 7, z: 3, w: 1.8, d: 1.8, h: 1.6 },
-    ],
+    blocks: [],
+    solids: [],
+    pieces: BEDROOM_PIECES,
     bounds: { minX: -11.6, maxX: 11.6, minZ: -9.6, maxZ: 9.6 },
     walls: { minX: -13, maxX: 13, minZ: -11, maxZ: 11 },
-    solids: [
-      // The bed: frame and mattress, the blanket, the headboard, the pillow.
-      { x: -6, y: 0.65, z: -5.8, w: 5.4, h: 1.3, d: 9.4 },
-      { x: -6, y: 1.4, z: -4.3, w: 5.2, h: 0.2, d: 6 },
-      { x: -6, y: 1.6, z: -10.4, w: 5.6, h: 3.2, d: 0.6 },
-      { x: -6, y: 1.55, z: -9.2, w: 3.4, h: 0.5, d: 1.6 },
-      // The nightstand and its lamp.
-      { x: -1.8, y: 1, z: -9.2, w: 2, h: 2, d: 1.8 },
-      { x: -1.8, y: 2.93, z: -9.2, w: 1.3, h: 1.85, d: 1.3 },
-      // The desk: top and legs.
-      { x: 9.5, y: 2.05, z: -6, w: 2.4, h: 0.3, d: 5 },
-      { x: 10.35, y: 0.95, z: -8.15, w: 0.3, h: 1.9, d: 0.3 },
-      { x: 8.65, y: 0.95, z: -8.15, w: 0.3, h: 1.9, d: 0.3 },
-      { x: 10.35, y: 0.95, z: -3.85, w: 0.3, h: 1.9, d: 0.3 },
-      { x: 8.65, y: 0.95, z: -3.85, w: 0.3, h: 1.9, d: 0.3 },
-      // The chair: seat (with its legs) and back.
-      { x: 7.4, y: 0.33, z: -6, w: 1.9, h: 0.66, d: 1.9 },
-      { x: 8.25, y: 1.76, z: -6, w: 0.2, h: 2.2, d: 1.9 },
-      // The toy box.
-      { x: 7, y: 0.8, z: 3, w: 1.6, h: 1.6, d: 1.6 },
-    ],
     wide: { pos: [5, 7.5, 12], target: [-1, 2.5, -4] },
     surface: [-1.8, 2.02, -8.5],
   },
@@ -304,21 +450,72 @@ export const LAYOUTS = {
       front: { x: -1.5, z: 7, rot: 0.3 },
       lockerL: { x: -5.6, z: -1, rot: Math.PI / 2 },
       lockerR: { x: 5.6, z: -3, rot: -Math.PI / 2 },
+      classroom: { x: -6, z: -11, rot: -Math.PI / 2 },
+      fountain: { x: 6, z: -11, rot: Math.PI / 2 },
     },
     seats: [],
     beds: [],
     blocks: [],
+    solids: [],
+    pieces: SCHOOL_PIECES,
     bounds: { minX: -6.2, maxX: 6.2, minZ: -43, maxZ: 23 },
     walls: { minX: -8.5, maxX: 8.5, minZ: -45, maxZ: 25 },
-    solids: [
-      // The lockers along both walls, in two runs each (a gap for the sign).
-      { x: -7.72, y: 3.3, z: -27.95, w: 1.5, h: 6.6, d: 29.9 },
-      { x: -7.72, y: 3.3, z: 6.05, w: 1.5, h: 6.6, d: 29.9 },
-      { x: 7.72, y: 3.3, z: -27.95, w: 1.5, h: 6.6, d: 29.9 },
-      { x: 7.72, y: 3.3, z: 6.05, w: 1.5, h: 6.6, d: 29.9 },
-    ],
     wide: { pos: [0, 6, 16], target: [0, 3.2, -14] },
     surface: [0, 0.02, 4.5],
+  },
+  kitchen: {
+    spots: {
+      center: { x: 0, z: 7, rot: 0 },
+      left: { x: -4, z: 7.4, rot: 1.0 },
+      right: { x: 4, z: 7.4, rot: -1.0 },
+      back: { x: -7, z: -5.5, rot: 0.3 },
+      sink: { x: -3.5, z: -7.8, rot: Math.PI },
+      stove: { x: 3, z: -7.8, rot: Math.PI },
+      fridge: { x: 9.2, z: -7.4, rot: Math.PI },
+      door: { x: -11.2, z: 5, rot: -Math.PI / 2 },
+      ...Object.fromEntries(
+        KITCHEN_CHAIRS.map((c, i) => [
+          `chair${i + 1}`,
+          { x: c.x, z: c.z, rot: c.rot, seat: SEAT_HEIGHT },
+        ]),
+      ),
+    },
+    seats: ["chair1", "chair2", "chair3", "chair4"],
+    beds: [],
+    blocks: [],
+    solids: [],
+    pieces: KITCHEN_PIECES,
+    bounds: { minX: -11.6, maxX: 11.6, minZ: -9.6, maxZ: 9.6 },
+    walls: { minX: -13, maxX: 13, minZ: -11, maxZ: 11 },
+    wide: { pos: [4, 7.5, 13.5], target: [-1, 3.2, -5] },
+    surface: [1.8, 2.22, 2.5],
+  },
+  classroom: {
+    spots: {
+      center: { x: 0, z: 9.5, rot: 0 },
+      left: { x: -4, z: 9.9, rot: 1.0 },
+      right: { x: 4, z: 9.9, rot: -1.0 },
+      back: { x: -3.5, z: -7, rot: 0.3 },
+      board: { x: -3, z: -10.6, rot: 0 },
+      teacher: { x: 6.5, z: -10.6, rot: 0, seat: SEAT_HEIGHT },
+      door: { x: 13.2, z: -9, rot: Math.PI / 2 },
+      window: { x: -13.2, z: 1, rot: -Math.PI / 2 },
+      ...Object.fromEntries(
+        deskSeats.map((c, i) => [
+          `desk${i + 1}`,
+          { x: c.x, z: c.z, rot: c.rot, seat: SEAT_HEIGHT },
+        ]),
+      ),
+    },
+    seats: ["desk1", "desk2", "desk3", "desk4", "desk5", "desk6", "teacher"],
+    beds: [],
+    blocks: [],
+    solids: [],
+    pieces: CLASSROOM_PIECES,
+    bounds: { minX: -13.6, maxX: 13.6, minZ: -11.6, maxZ: 11.6 },
+    walls: { minX: -15, maxX: 15, minZ: -13, maxZ: 13 },
+    wide: { pos: [3, 7.5, 14.5], target: [-1, 3.5, -6] },
+    surface: [5.4, 2.22, -8.2],
   },
   town: {
     // A street at real size: a two-lane road, pavements a step up on both sides, front yards behind picket fences,

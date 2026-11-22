@@ -103,7 +103,8 @@ spot or the next person, put long ones in wide or full shots, and run when it's 
 next shot of the same place.
 
 **People stay where they went:** in the next shots of the same place, whoever walked to the door is still there,
-whoever sat is still sitting, whoever was knocked down gets up where they fell.
+whoever a shot put in a spot (`at`) is still there, whoever sat is still sitting, whoever was knocked down gets up
+where they fell. Nobody jumps somewhere else between two shots of the same place.
 
 ## Acting (`act`)
 
@@ -189,9 +190,11 @@ someone, try another `angle` or `shot`, or move people (`at`).
 
 | Place | What's there | Light |
 | --- | --- | --- |
-| `home` | living room: sofa, coffee table, lamp, TV, shelf, door, window | lamps with soft shadows in the evening and at night |
-| `bedroom` | bed, nightstand with a lamp, desk and chair, toy box | the window by day; the bedside lamp's warm pool at night |
-| `school` | a long hallway with lockers | cool-white ceiling panels down the hall |
+| `home` | living room: sofa, armchair, coffee table, floor lamp, TV, bookcase, coat rack, curtains, a clock | lamps with soft shadows in the evening and at night |
+| `bedroom` | bed, nightstand with a lamp, desk with a computer, wardrobe, beanbag, toy box, a shelf of toys | the window by day; the bedside lamp's warm pool at night |
+| `kitchen` | counters with a sink and a stove, wall cabinets, a fridge, a table for four (`chair1` to `chair4`) | the window by day; the lamp over the table in the evening and at night |
+| `school` | a long hallway with lockers, a classroom door, a water fountain, a trophy case | cool-white ceiling panels down the hall |
+| `classroom` | a whiteboard, the teacher's desk (`teacher`), six desks (`desk1` to `desk6`), big windows | ceiling panels and daylight from the windows |
 | `town` | a street of real-size houses with porches, garages, picket fences, mailboxes, parked cars, lantern lamps; stories happen in front of "the house" (spots `gate`, `porch`, `driveway`) | the sun or moon; street lamps once it's dark |
 | `park` | slide, swings, bench, sandbox, picnic table, pond, flower beds, trees | the sun (low and warm in the evening); lamp posts at night |
 | `backyard` | the back of a house: a deck with garden chairs, a table and a barbecue, string lights, a lawn, a big tree, a trampoline, a wooden fence | the sun; the door lamp and string lights in the evening and at night |

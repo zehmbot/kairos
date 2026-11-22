@@ -89,7 +89,7 @@ templates' `template.json` (the template editor, `src/web/templateForm.ts`: ques
 and saved ids are kept, so earlier briefs still match); Kairos' templates can only be duplicated.
 
 **Blocky Cinema** (`templates/blocky-cinema/`, its guide the `kairos-blocky-cinema` skill; places: home, bedroom,
-school, town, park, backyard, forest) is a template with an
+kitchen, school, classroom, town, park, backyard, forest) is a template with an
 engine: Claude writes the shot list in `story.js` (places, shot types, the cast, faces, poses, walks, actions,
 things, effects, captions) and `blocky/*.js` turns it into frames: three.js toy figures with drawn faces, six places
 with day/evening/night light, framing computed for any film size, word-by-word captions and icons on a 2D layer, and
@@ -158,18 +158,26 @@ Its engine:
     where they lie.
 - **Never inside anything:** walks never end inside furniture (`freeSpot`), standing up makes room, and the
   planner reports people standing inside each other.
+- **Nobody jumps between cuts:** someone a shot puts in a spot (`at`) stays there in the next shots of that place,
+  as walkers and sitters do. A walk may go on into the next shots of the same place that still show the walker;
+  the planner reports one that is longer than all of them. A thing someone still carries when a scene ends isn't
+  reported as "still moving".
 - **Places are pieces:** a layout's `pieces` (`{ kind, x, z, rot, ... }`) say what stands where. `shapes.js` turns
   each kind into physics boxes (`solids`), footprints (`blocks`, with heights for `over`) and raised ground
   (`raised`: porches, decks; `ground(x, z)` follows it), from the same specs (`houseSpec`, `treeSpec`...) that size
   what `kit.js` builds (`kit-house.js`: houses, cars, lamps, mailboxes, bins, decks, string lights;
-  `kit-garden.js`: trees, bushes, flower beds, fences, the pond, park and garden things). The town, park and
-  backyard are built this way; the indoor places still list hand-measured `solids` next to their builders.
+  `kit-garden.js`: trees, bushes, flower beds, fences, the pond, park and garden things; `kit-room.js`: sofas,
+  tables with things on them, beds, bookcases, wardrobes, windows with curtains, doors, clocks, ceiling lights;
+  `kit-kitchen.js`: counters, the fridge, the pendant lamp; `kit-school.js`: lockers, the classroom door, boards,
+  desks). Every place is built this way; wall things (`NO_PHYSICS` in `shapes.js`: windows, doors, pictures,
+  boards...) have no physics and the Places sheet doesn't ask them for any.
 - **Detail without the cost:** each built piece merges its meshes by material (`freeze` in `util.js`), so a
   street of detailed houses draws in about as many calls as before. Textures are made by code (`textures.js`: a
   color map and a bump map from one seed), and `kit-parts.js` keeps their scale in the world on any box or plane.
 - **The sky** (`sky.js`, `makeSky(look)`): a gradient, the sun's glow, clouds moving with `t`, stars and a big
   moon at night; `backdrop()` rings outdoor places with hills and a tree line.
-- **The Places sheet** checks each place's physics against what's built: furniture where people go must be mostly
+- **The Places sheet** stands its cameras where a film's would (`fitInRoom`: inside the room, out of the
+  furniture) and checks each place's physics against what's built: furniture where people go must be mostly
   inside a physics box, and a box with nothing built there is an invisible wall. Long pieces (a fence down the
   street) are checked run by run; scenery (`userData.scenery`) is skipped. Seats are measured from the ground they
   stand on.

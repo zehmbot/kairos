@@ -567,9 +567,10 @@ export function planMotion(
       }
     }
     const placed = arrange(entry, layout, people, pinned, at);
-    // Someone sitting or lying down stays there in the next shots, until a shot gets them up.
+    // Someone sitting or lying down stays there in the next shots, until a shot gets them up; someone the shot puts
+    // in a spot (`at`) stays standing there (nobody jumps somewhere else between two shots of the same place).
     for (const [id, state] of placed) {
-      if (state.posture !== "stand" && state.spot) pinned.set(id, state);
+      if ((state.posture !== "stand" || at[id]) && state.spot) pinned.set(id, state);
     }
     const startOf = (id) => pinned.get(id) ?? placed.get(id);
     /** The others in the shot at time t, as the camera frames them: `[{ id, x, z, fx, fz }]`. */
@@ -727,11 +728,22 @@ export function planMotion(
         }
       }
       if (move.t1 > end + 0.05) {
-        const next = entries[i + 1];
-        const goesOn = next && place(next, i + 1) === where && (next.shot.who ?? []).includes(id);
-        if (!goesOn) {
+        // A walk may go on into the next shots of the same place that still show them, but no further.
+        let last = end;
+        let shots = 1;
+        for (let k = i + 1; k < entries.length; k++) {
+          const next = entries[k];
+          if (place(next, k) !== where || !(next.shot.who ?? []).includes(id)) break;
+          last = next.start + next.seconds;
+          shots++;
+        }
+        if (move.t1 > last + 0.05) {
+          const lasts =
+            shots > 1
+              ? `the shot and the next ${shots - 1 > 1 ? `${shots - 1} shots` : "shot"} here last ${(last - t0).toFixed(1)} s`
+              : `the shot lasts ${(end - t0).toFixed(1)} s`;
           problems.push(
-            `Shot ${n}: ${cap(id)}'s ${move.pace === "walk" ? "walk" : move.pace} ${move.toWords} takes ${(move.t1 - t0).toFixed(1)} s, but the shot lasts ${(end - t0).toFixed(1)} s. Make the shot longer, use a faster pace, or go on in the next shot.`,
+            `Shot ${n}: ${cap(id)}'s ${move.pace === "walk" ? "walk" : move.pace} ${move.toWords} takes ${(move.t1 - t0).toFixed(1)} s, but ${lasts}. Make the shot longer, use a faster pace, start nearer, or go on in the next shot.`,
           );
         }
       }

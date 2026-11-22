@@ -69,7 +69,7 @@ function roomForCamera(layout, p) {
  * A camera that would stand outside the room's walls or inside furniture moves in along its line toward what it
  * looks at, until it's clear, and widens its lens so the framing stays the same (as a crew does in a small room).
  */
-function fitInRoom(view, layout) {
+export function fitInRoom(view, layout) {
   if (!layout.walls && !(layout.solids ?? []).length) return view;
   if (roomForCamera(layout, view.position)) return view;
   const far = view.position.distanceTo(view.target);

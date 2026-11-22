@@ -61,7 +61,7 @@ export const SHOTS = [
 
 ```js
 {
-  place: "home",            // home, bedroom, school, town, park, backyard, forest (kept from the shot before)
+  place: "home",            // home, bedroom, kitchen, school, classroom, town, park, backyard, forest
   light: "evening",         // day, evening, night (each place has its own default)
   shot: "close",            // wide, full, medium, close, xclose, ots, low, high, insert
   who: ["milo", "ruby"],    // who is in the shot; the first one is the focus
@@ -113,8 +113,9 @@ What the engine does by itself:
   shot gives a standing pose (`wave`, `cheer`...) stands up; someone standing nearby who gets a sitting pose walks
   to the nearest seat and sits.
 - **People stay where they went:** in the next shots in the same place, someone who walked to the door is still
-  by the door, and someone who sat down is still sitting, until a shot moves them (`at`, `go`) or the place
-  changes.
+  by the door, someone a shot put in a spot (`at`) is still there, and someone who sat down is still sitting, until
+  a shot moves them (`at`, `go`) or the place changes. A walk can go on into the next shots of the same place that
+  still show the walker; the moves sheet says when it doesn't fit even then.
 - **The camera:** it follows someone walking between spots, holds where someone comes in (or leaves from), and
   `move: "pan"` keeps it still and turns it to follow; `move: "follow"` follows even entrances and exits.
 - **Alive while standing:** listeners look at whoever talks and at anyone walking; people shift their weight;
@@ -163,7 +164,7 @@ something goes wrong: a walk into furniture, a throw that misses, things that ne
   with a wider lens. Ask for the shot you want (`shot`, `angle`, `move`); if a frame still hides someone, try
   another `angle` or move people.
 - **The light** has a reason in every place: lamps with soft shadows indoors in the evening and at night, the
-  school's ceiling panels, the sun or moon outside (with drifting clouds, and a big moon at night), the street
+  kitchen's lamp over the table, the school's and the classroom's ceiling panels, the sun or moon outside (with drifting clouds, and a big moon at night), the street
   lamps once it's dark, the backyard's door lamp and string lights, the campfire in the forest at night.
 - **Looks:** the preview uses a lighter look (standard), frames and renders the richest (cinematic), and a
   computer drawing without a graphics card the lightest (draft). Only the finish changes, never what happens.
@@ -228,9 +229,13 @@ heart.
 - **Spots:**
   - **Every place:** `center`, `left`, `right`, `back`.
   - **Extra spots:**
-    - **home:** `front`, `door`, `window`, `sofa`, `sofaL`, `sofaR`, `tableL`, `tableR`;
-    - **bedroom:** `window`, `bed` (lying), `bedSit`, `desk`;
-    - **school:** `front`, `lockerL`, `lockerR`;
+    - **home:** `front`, `door`, `window`, `sofa`, `sofaL`, `sofaR`, `tableL`, `tableR`, `armchair`;
+    - **bedroom:** `window`, `bed` (lying), `bedSit`, `desk`, `beanbag`, `wardrobe`;
+    - **kitchen** (counters with a sink and a stove, a fridge, a table for four): `sink`, `stove`, `fridge`, `door`,
+      `chair1`, `chair2` (the table's far side), `chair3`, `chair4` (its near side);
+    - **school** (the hallway): `front`, `lockerL`, `lockerR`, `classroom` (at the classroom's door), `fountain`;
+    - **classroom** (a board, the teacher's desk, two rows of three desks): `board`, `teacher` (the teacher's
+      chair), `desk1` to `desk6` (the students' chairs, the front row first, left to right), `door`, `window`;
     - **town** (a street of houses: stories happen on the far pavement, in front of the house): `road`, `far`,
       `gate` (inside the house's front gate), `porch` (at its front door), `driveway`, `across` (the other
       pavement);
@@ -286,8 +291,9 @@ heart.
 - **poses and places:** `poses.js` (with the gaits, sitting down and standing up), `places.js` (each place's
   ground, light and pieces), `layouts.js` (each place's spots, walls and `pieces`: what stands there);
 - **the place kit:** `shapes.js` (what each kind of piece takes up: its physics boxes, its footprint, raised ground
-  like porches and decks), `kit.js` with `kit-house.js` and `kit-garden.js` (how houses, cars, lamps, fences,
-  trees, bushes, flower beds, decks and garden things look), `textures.js` (wood, siding, shingles, bricks, grass,
+  like porches and decks), `kit.js` with `kit-house.js`, `kit-garden.js`, `kit-room.js`, `kit-kitchen.js` and
+  `kit-school.js` (how houses, cars, lamps, fences, trees, garden things, furniture, kitchens and classrooms
+  look), `textures.js` (wood, siding, shingles, bricks, grass,
   asphalt, concrete, sand... made by code), `sky.js` (the sky with clouds and the moon, and the far hills);
 - **moving:** `motion.js` (where everyone is in each shot: the walks, jumps and actions, planned once);
 - **acting:** `animation.js` (the poses of jumps, punches, falls, getting up, carrying, throwing, reactions),
