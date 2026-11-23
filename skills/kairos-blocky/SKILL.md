@@ -1,11 +1,11 @@
 ---
-name: kairos-blocky-cinema
-description: Directing Blocky Cinema films in Kairos - narrated stories filmed like an animated movie, where blocky toy characters walk, run, sprint, jump over furniture, punch, fall and get up, pick things up and throw them, things tumble by real physics, the light is cinematic and the camera steers around furniture by itself; the narrator never stops, captions pop word by word, effects land the moments. Use whenever a Kairos film was made with the Blocky Cinema template (its CLAUDE.md says "Blocky Cinema", it has story.js and a blocky/ folder), or the user asks for an action-packed or cinematic blocky story video.
+name: kairos-blocky
+description: Directing Blocky films in Kairos - narrated stories filmed like an animated movie, where blocky toy characters walk, run, sprint, jump over furniture, punch, fall and get up, pick things up and throw them, things tumble by real physics, the light is cinematic and the camera steers around furniture by itself; the narrator never stops, captions pop word by word, effects land the moments. Use whenever a Kairos film was made with the Blocky template (its CLAUDE.md says "Blocky", it has story.js and a blocky/ folder), or the user asks for an action-packed or cinematic blocky story video.
 ---
 
-# Blocky Cinema films
+# Blocky films
 
-A Blocky Cinema film is a narrated short story filmed like an animated movie: a voice tells it **without ever
+A Blocky film is a narrated short story filmed like an animated movie: a voice tells it **without ever
 stopping**, while quick shots show blocky toy characters acting it out. They don't just stand and make faces: they
 walk in, run, jump over the coffee table, pick up a pillow and throw it, punch, fall down and get up, and things
 fall and tumble by real physics. The film's `CLAUDE.md` is the reference for `story.js` (every field); this skill

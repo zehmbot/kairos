@@ -548,7 +548,7 @@ export function createKairosServer(context: ToolContext): McpServer {
     {
       title: "Look at a Blocky sheet",
       description:
-        "For Blocky Cinema films: a picture of every character (cast: front, three-quarter, side, back), every pose, every face, every prop at its real size (props), a place from four angles in day, evening and night (places), every effect at its peak (effects: it also checks the story's effects) or the walks, runs, sitting down and standing up (moves: it also checks the story's walks, and that feet don't slide), drawn with this film's own engine. It also lists the problems its checks found: a prop without a real size in blocky/sizes.js or at the wrong size, a pose that pushes a joint past its limit or pulls a part off the body, a door, table or seat at the wrong size. Moves also plans the story's jumps and actions and runs its physics (someone too far to punch, a throw that misses, things that never settle), and places also checks the place's physics (furniture without a physics shape, a shape with nothing built there). Look at the props sheet after adding a prop, the cast sheet after adding a character, the poses sheet after adding a pose.",
+        "For Blocky films: a picture of every character (cast: front, three-quarter, side, back), every pose, every face, every prop at its real size (props), a place from four angles in day, evening and night (places), every effect at its peak (effects: it also checks the story's effects) or the walks, runs, sitting down and standing up (moves: it also checks the story's walks, and that feet don't slide), drawn with this film's own engine. It also lists the problems its checks found: a prop without a real size in blocky/sizes.js or at the wrong size, a pose that pushes a joint past its limit or pulls a part off the body, a door, table or seat at the wrong size. Moves also plans the story's jumps and actions and runs its physics (someone too far to punch, a throw that misses, things that never settle), and places also checks the place's physics (furniture without a physics shape, a shape with nothing built there). Look at the props sheet after adding a prop, the cast sheet after adding a character, the poses sheet after adding a pose.",
       inputSchema: {
         film: filmArg,
         sheet: z.enum(["cast", "poses", "faces", "props", "places", "effects", "moves"]),
@@ -582,7 +582,7 @@ export function createKairosServer(context: ToolContext): McpServer {
         const summary = await hub.film(id);
         if (!summary.hasSheets) {
           return problem(
-            `"${id}" has no sheets: they come with the Blocky Cinema template (its sheet.html and blocky/ folder).`,
+            `"${id}" has no sheets: they come with the Blocky template (its sheet.html and blocky/ folder).`,
           );
         }
         const { png, checks } = await hub.sheet(id, sheet, { place, who });

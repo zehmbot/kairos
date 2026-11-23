@@ -120,11 +120,7 @@ describe("Claude makes the film in the background", () => {
 
     const steps = activityEvents().map((event) => event.activity?.detail ?? null);
     expect(steps).toEqual(
-      expect.arrayContaining([
-        "Reading the brief",
-        "Reading the Blocky Cinema guide",
-        "Writing story.js",
-      ]),
+      expect.arrayContaining(["Reading the brief", "Reading the Blocky guide", "Writing story.js"]),
     );
     const end = activityEvents().at(-1);
     expect(end?.activity).toBeNull();

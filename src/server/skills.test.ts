@@ -142,6 +142,24 @@ describe("Skills", () => {
     expect(await skills.retire()).toEqual([]);
   });
 
+  it("turns a renamed skill on under its new name", async () => {
+    await writeSkill(dirs.builtinDir, "kairos-before", "The guide under its old name.");
+    await skills.turnOn("kairos-before");
+    await rm(join(dirs.builtinDir, "kairos-before"), { recursive: true });
+    await writeSkill(dirs.builtinDir, "kairos-after", "The same guide, renamed.");
+
+    const renamed = { "kairos-before": "kairos-after" };
+    expect(await skills.retire(renamed)).toEqual(["kairos-before"]);
+    expect(await exists(join(dirs.claudeDir, "kairos-before"))).toBe(false);
+    expect(await stateOf("kairos-after")).toBe("on");
+  });
+
+  it("leaves the new name alone when the renamed skill was off", async () => {
+    await writeSkill(dirs.builtinDir, "kairos-after", "The same guide, renamed.");
+    expect(await skills.retire({ "kairos-before": "kairos-after" })).toEqual([]);
+    expect(await stateOf("kairos-after")).toBe("off");
+  });
+
   it("leaves a copy the user edited, until they press Update", async () => {
     await skills.turnOn("kairos-a");
     await writeFile(join(dirs.claudeDir, "kairos-a", "more.md"), "My edit.");
@@ -218,7 +236,7 @@ describe("the skills Kairos ships", () => {
     expect(names.sort()).toEqual([
       "kairos",
       "kairos-3d",
-      "kairos-blocky-cinema",
+      "kairos-blocky",
       "kairos-camera",
       "kairos-captions",
       "kairos-directing",

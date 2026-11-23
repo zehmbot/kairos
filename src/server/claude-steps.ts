@@ -15,7 +15,7 @@ export interface ClaudeStep {
 const fileName = (path: unknown): string =>
   typeof path === "string" && path.trim() ? (path.split(/[\\/]/).pop() ?? path) : "a file";
 
-/** `kairos-blocky-cinema` -> `Blocky Cinema`, `kairos-3d` -> `3D`, `kairos` -> `Kairos`. */
+/** `kairos-blocky` -> `Blocky`, `kairos-3d` -> `3D`, `kairos` -> `Kairos`. */
 export function guideName(skill: unknown): string | null {
   if (typeof skill !== "string" || !skill.startsWith("kairos")) return null;
   const words = (skill.replace(/^kairos-?/, "") || "kairos").split("-").filter(Boolean);

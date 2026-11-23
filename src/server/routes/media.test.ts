@@ -126,7 +126,7 @@ describe("sheets", () => {
       payload: {
         title: "Toy",
         shape: "wide",
-        template: "blocky-cinema",
+        template: "blocky",
         brief: { story: "A test." },
       },
     });

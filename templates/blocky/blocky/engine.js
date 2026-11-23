@@ -1,4 +1,4 @@
-// The Blocky Cinema engine: turns the shot list in story.js into frames. The narration never stops: shots cut on
+// The Blocky engine: turns the shot list in story.js into frames. The narration never stops: shots cut on
 // its words (timing.js), and effects (fx.js) land on them. People move and act (motion.js, figure.js), and things
 // fall, tumble and fly by physics (simulation.js), worked out once when the film loads. renderOut(t) is a pure
 // function of t.

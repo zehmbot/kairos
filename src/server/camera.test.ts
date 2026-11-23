@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { LAYOUTS } from "../../templates/blocky-cinema/blocky/layouts.js";
-import { planStory } from "../../templates/blocky-cinema/blocky/timing.js";
-import { voiceLinesFrom } from "../../templates/blocky-cinema/blocky/voice.js";
+import { LAYOUTS } from "../../templates/blocky/blocky/layouts.js";
+import { planStory } from "../../templates/blocky/blocky/timing.js";
+import { voiceLinesFrom } from "../../templates/blocky/blocky/voice.js";
 import { clipBox } from "../shared/clips.ts";
 import { FilmConfigSchema } from "../shared/types.ts";
 import { Camera, findBrowser, launchHeadless, openFilm } from "./camera.ts";
@@ -130,8 +130,8 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
     expect(first.equals(second)).toBe(false);
   }, 60_000);
 
-  it("plays a Blocky Cinema film to its voices, and says how long its story lasts", async () => {
-    const template = fileURLToPath(new URL("../../templates/blocky-cinema/", import.meta.url));
+  it("plays a Blocky film to its voices, and says how long its story lasts", async () => {
+    const template = fileURLToPath(new URL("../../templates/blocky/", import.meta.url));
     const id = await createFilm(
       filmsDir,
       template,
@@ -262,7 +262,7 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
   );
 
   it("catches a prop without a real size and a pose past a joint's limit on the sheets", async () => {
-    const template = fileURLToPath(new URL("../../templates/blocky-cinema/", import.meta.url));
+    const template = fileURLToPath(new URL("../../templates/blocky/", import.meta.url));
     const id = await createFilm(
       filmsDir,
       template,
@@ -306,7 +306,7 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
   }, 180_000);
 
   it("catches a wrong effect and a walk to nowhere on the effects and moves sheets", async () => {
-    const template = fileURLToPath(new URL("../../templates/blocky-cinema/", import.meta.url));
+    const template = fileURLToPath(new URL("../../templates/blocky/", import.meta.url));
     const id = await createFilm(
       filmsDir,
       template,
@@ -349,12 +349,12 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
     ]);
   }, 240_000);
 
-  it("draws Blocky Cinema's sheets without problems, and the same frames in any order in any browser", async () => {
-    const template = fileURLToPath(new URL("../../templates/blocky-cinema/", import.meta.url));
+  it("draws Blocky's sheets without problems, and the same frames in any order in any browser", async () => {
+    const template = fileURLToPath(new URL("../../templates/blocky/", import.meta.url));
     const id = await createFilm(
       filmsDir,
       template,
-      { title: "Cinema check", shape: "tall" },
+      { title: "Blocky check", shape: "tall" },
       { size: { width: 360, height: 640 } },
     );
     // Every sheet, and the Places sheet for every place (each in day, evening and night, with its physics checked).
@@ -431,7 +431,7 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
         await hidden.close();
       }
     };
-    // Off: software drawing (Blocky Cinema then picks its draft look).
+    // Off: software drawing (Blocky then picks its draft look).
     expect(await drawer(false)).toMatch(/swiftshader/i);
   }, 60_000);
 

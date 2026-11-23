@@ -21,6 +21,9 @@ const SKIPPED = new Set([".git", "node_modules", MARKER_FILE, ".DS_Store", "Thum
 const MAX_FILES = 200;
 const MAX_BYTES = 20 * 1024 * 1024;
 
+/** Kairos skills that now ship under another name: retiring the old copy turns the new one on. */
+export const RENAMED_SKILLS: Record<string, string> = { "kairos-blocky-cinema": "kairos-blocky" };
+
 /** A skill can't be changed. The message is shown to the user as-is. */
 export class SkillError extends Error {}
 
@@ -322,9 +325,10 @@ export class Skills {
   /**
    * Removes Kairos' copies of skills it no longer ships (taken out of the repo), so Claude stops reading an old
    * guide. Only folders with Kairos' marker that nobody edited: an edited copy, or a folder Kairos didn't put
-   * there, stays.
+   * there, stays. A skill that was renamed (`RENAMED_SKILLS`) is turned on under its new name, when that name is
+   * free.
    */
-  async retire(): Promise<string[]> {
+  async retire(renamed: Record<string, string> = RENAMED_SKILLS): Promise<string[]> {
     const sources = await this.#sources();
     const entries = await readdir(this.#options.claudeDir, { withFileTypes: true }).catch(() => []);
     const removed: string[] = [];
@@ -336,6 +340,10 @@ export class Skills {
       if ((await hashOf(this.#target(entry.name))) !== marker.hash) continue;
       await rm(this.#target(entry.name), { recursive: true, force: true });
       removed.push(entry.name);
+      const next = sources.get(renamed[entry.name] ?? "");
+      if (next?.source === "kairos" && (await this.#state(next)) === "off") {
+        await this.turnOn(next.name);
+      }
     }
     return removed;
   }

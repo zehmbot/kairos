@@ -76,7 +76,7 @@ describe("templates", () => {
     const list = (await app.inject("/api/templates")).json() as TemplateSummary[];
     expect(list.map((template) => [template.id, template.source])).toEqual([
       ["starter", "kairos"],
-      ["blocky-cinema", "kairos"],
+      ["blocky", "kairos"],
       ["story", "yours"],
     ]);
     const preview = await app.inject("/api/templates/story/preview");
@@ -90,7 +90,7 @@ describe("templates", () => {
       204,
     );
     const left = (await app.inject("/api/templates")).json() as TemplateSummary[];
-    expect(left.map((template) => template.id)).toEqual(["starter", "blocky-cinema"]);
+    expect(left.map((template) => template.id)).toEqual(["starter", "blocky"]);
   });
 });
 
@@ -183,10 +183,10 @@ describe("film card pictures", () => {
   });
 });
 
-describe("the Blocky Cinema template", () => {
+describe("the Blocky template", () => {
   it("is valid and makes a vertical film with its engine, font and story questions", async () => {
     const blocky = ((await app.inject("/api/templates")).json() as TemplateSummary[]).find(
-      (template) => template.id === "blocky-cinema",
+      (template) => template.id === "blocky",
     );
     expect(blocky).toMatchObject({ source: "kairos", hasPreview: true, problem: null });
     expect(blocky?.defaults).toMatchObject({ shape: "tall", fps: 30 });
@@ -204,7 +204,7 @@ describe("the Blocky Cinema template", () => {
     const made = await post("/api/films", {
       title: "Snow day",
       shape: "tall",
-      template: "blocky-cinema",
+      template: "blocky",
       kind: "story",
       brief: { story: "It snowed all night.", characters: "Keep the Blocky cast" },
     });

@@ -1,6 +1,6 @@
 # {{title}}
 
-This folder is a Kairos film made with the **Blocky Cinema** template: a narrated story told in quick shots, with
+This folder is a Kairos film made with the **Blocky** template: a narrated story told in quick shots, with
 blocky toy characters filmed like an animated movie. They walk, run, jump, fight, fall, get up, pick things up and
 throw them; things fall and tumble by real physics; the light and the camera are cinematic. Word-by-word captions
 and effects make every shot feel alive.
@@ -43,7 +43,7 @@ time a file here is saved.
 **Main character, place and mood:** follow the brief. With "Let Claude choose", pick the place that fits the
 story.
 
-The `kairos-blocky-cinema` skill has the full style guide (narration, pacing, shot choice, staging actions,
+The `kairos-blocky` skill has the full style guide (narration, pacing, shot choice, staging actions,
 things, faces, effects, checks). Use it.
 
 ## story.js

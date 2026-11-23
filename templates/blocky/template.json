@@ -1,5 +1,5 @@
 {
-  "name": "Blocky Cinema",
+  "name": "Blocky",
   "description": "Narrated stories with blocky toy characters, filmed like an animated movie: real physics, weight and contact, cinematic light and camera. Vertical, made for short-video stories.",
   "defaults": {
     "shape": "tall",

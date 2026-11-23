@@ -101,7 +101,7 @@
     return Number.isFinite(length) && length > 0 ? { length } : {};
   }
 
-  /** The effect sounds the film places (`window.KAIROS_SOUNDS`), when it says (Blocky Cinema). */
+  /** The effect sounds the film places (`window.KAIROS_SOUNDS`), when it says (Blocky). */
   function readSounds() {
     const raw = window.KAIROS_SOUNDS;
     if (!Array.isArray(raw)) return {};
@@ -120,7 +120,7 @@
     return { sounds };
   }
 
-  /** The places the film's engine can show (`window.KAIROS_PLACES`), when it says (Blocky Cinema). */
+  /** The places the film's engine can show (`window.KAIROS_PLACES`), when it says (Blocky). */
   function readPlaces() {
     const raw = window.KAIROS_PLACES;
     if (!Array.isArray(raw)) return {};

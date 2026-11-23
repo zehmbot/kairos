@@ -26,7 +26,7 @@ const threeDir = dirname(dirname(fileURLToPath(import.meta.resolve("three"))));
 const THREE_FOLDERS = ["build/", "examples/jsm/"];
 
 /**
- * Rapier, the physics of Blocky Cinema: its deterministic build (the same results on every computer), one file
+ * Rapier, the physics of Blocky: its deterministic build (the same results on every computer), one file
  * with its WebAssembly inside. Films map the package's own name to it with their import map.
  */
 export const RAPIER_PATH = "/__kairos/lib/rapier/rapier.mjs";

@@ -65,11 +65,7 @@ describe("listing templates", () => {
     const list = await listTemplates(builtinDir, userDir);
     expect(list[0]).toMatchObject({ id: "starter", source: "kairos", problem: null });
     expect(list[0]?.kinds[0]?.fields[0]?.id).toBe("idea");
-    expect(list.slice(1).map((template) => template.id)).toEqual([
-      "blocky-cinema",
-      "my-style",
-      "zebra",
-    ]);
+    expect(list.slice(1).map((template) => template.id)).toEqual(["blocky", "my-style", "zebra"]);
     expect(list[2]).toMatchObject({
       source: "yours",
       defaults: { shape: "tall", fps: 24, duration: 5 },

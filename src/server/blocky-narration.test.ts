@@ -6,7 +6,7 @@ import {
   FX_VOLUME,
   normalizeFx,
   planEffects,
-} from "../../templates/blocky-cinema/blocky/fx.js";
+} from "../../templates/blocky/blocky/fx.js";
 import {
   effectTime,
   LEAD,
@@ -14,7 +14,7 @@ import {
   planStory,
   spokenWords,
   TAIL,
-} from "../../templates/blocky-cinema/blocky/timing.js";
+} from "../../templates/blocky/blocky/timing.js";
 import { DUCK, duckExpression, duckGain, talkSpans, voiceSpans } from "../shared/duck.ts";
 import { AudioTrackSchema } from "../shared/types.ts";
 import { joinArgs, mixFilter } from "./ffmpeg.ts";
@@ -31,7 +31,7 @@ const line = (speaker: string, text: string, start: number) => {
   return { speaker, start, end: words.at(-1)?.end ?? start, words };
 };
 
-describe("Blocky Cinema: the narration never stops", () => {
+describe("Blocky: the narration never stops", () => {
   const shots = [
     { say: "Every Sunday, Grandpa Bo" },
     { say: "told the same joke." },
@@ -101,7 +101,7 @@ describe("Blocky Cinema: the narration never stops", () => {
   });
 });
 
-describe("Blocky Cinema effects", () => {
+describe("Blocky effects", () => {
   it("reads effects in their short and long forms", () => {
     expect(normalizeFx("notes")).toEqual({ type: "notes", value: true });
     expect(normalizeFx({ magic: "zee", appear: true, at: "appeared" })).toEqual({

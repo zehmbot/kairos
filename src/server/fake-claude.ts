@@ -42,7 +42,7 @@ if (mode === "login") {
   process.exit(1);
 }
 if (process.argv.includes("--permission-mode")) {
-  say({ type: "assistant", message: { content: [{ type: "tool_use", name: "Skill", input: { skill: "kairos-blocky-cinema" } }] } });
+  say({ type: "assistant", message: { content: [{ type: "tool_use", name: "Skill", input: { skill: "kairos-blocky" } }] } });
   say({ type: "assistant", message: { content: [{ type: "tool_use", name: "Write", input: { file_path: process.cwd() + "/story.js", content: "secret words" } }] } });
   writeFileSync("made-by-claude.txt", prompt);
   if (mode === "slow") await new Promise((resolve) => setTimeout(resolve, 60000));

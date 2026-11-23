@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { voiceLinesFrom } from "../../templates/blocky-cinema/blocky/voice.js";
+import { voiceLinesFrom } from "../../templates/blocky/blocky/voice.js";
 
-describe("Blocky Cinema reads the film's voices", () => {
+describe("Blocky reads the film's voices", () => {
   const made = [
     {
       id: "v1",
@@ -54,11 +54,11 @@ describe("Blocky Cinema reads the film's voices", () => {
   });
 });
 
-describe("Blocky Cinema sizes", () => {
+describe("Blocky sizes", () => {
   it("sizes a built object to its real size, at the figure's scale", async () => {
-    const { PROPS } = await import("../../templates/blocky-cinema/blocky/props.js");
+    const { PROPS } = await import("../../templates/blocky/blocky/props.js");
     const { fitSize, longestSide, meters, UNITS_PER_METER, sizeWords } = await import(
-      "../../templates/blocky-cinema/blocky/sizes.js"
+      "../../templates/blocky/blocky/sizes.js"
     );
     // The mouse is built about 2 units long; it becomes 11 cm of a 1.8 m figure 5.3 units tall.
     const mouse = PROPS.mouse();

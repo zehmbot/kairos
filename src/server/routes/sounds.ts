@@ -330,7 +330,7 @@ export function soundRoutes(app: FastifyInstance, studio: Studio): void {
       .send(soundWav(request.params.name));
   });
 
-  // The film says which effect sounds it places (Blocky Cinema: window.KAIROS_SOUNDS): the Effects lane follows.
+  // The film says which effect sounds it places (Blocky: window.KAIROS_SOUNDS): the Effects lane follows.
   app.put<{ Params: IdParams }>("/api/films/:id/fx", async (request, reply) => {
     const film = await filmOr(reply, request.params.id);
     if (!film) return reply;

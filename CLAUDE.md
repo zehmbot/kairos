@@ -88,7 +88,7 @@ template starts from. It is never shown as a template card. The **Templates page
 templates' `template.json` (the template editor, `src/web/templateForm.ts`: question ids come from the question text
 and saved ids are kept, so earlier briefs still match); Kairos' templates can only be duplicated.
 
-**Blocky Cinema** (`templates/blocky-cinema/`, its guide the `kairos-blocky-cinema` skill; places: home, bedroom,
+**Blocky** (`templates/blocky/`, its guide the `kairos-blocky` skill; places: home, bedroom,
 kitchen, school, classroom, cafe, town, park, backyard, forest) is a template with an
 engine: Claude writes the shot list in `story.js` (places, shot types, the cast, faces, poses, walks, actions,
 things, effects, captions) and `blocky/*.js` turns it into frames: three.js toy figures with drawn faces, six places
@@ -268,7 +268,7 @@ boom, sparkle, magic, puff, flash, chime, party, heart, patter) from code: filte
 seeded, 44.1 kHz WAV, peaks at 0.8. `GET /api/sounds` lists them, `GET /api/sounds/:name` plays one, and a film
 gets its copy in `audio/fx/` when it uses one. Effect sounds start at 65% (a volume you set is kept: `tuned`). Effect tracks have `sfx: true` and sit on the timeline's **Effects** lane:
 
-- **A film that places sounds** (Blocky Cinema) sends them with `ready`; the film page puts them to
+- **A film that places sounds** (Blocky) sends them with `ready`; the film page puts them to
   `PUT /api/films/:id/fx`, and a render syncs them from its first page before mixing. `src/server/fx.ts`
   (`withEffectSounds`) adds new keys, moves keys whose time changed, and removes keys that are gone.
 - **Your edits stay:** saving the timeline (`noteEffectEdits`) marks a placed sound you moved (`moved`: it keeps
@@ -342,7 +342,7 @@ yours).
 
 - **Making it** turns each line into a voice line (unchanged ones reused) and places it at its start, after the
   line before when they would overlap; the moved start is saved. `only` + `fresh` make a new take of some lines.
-- **Packed narration** (`narration: "packed"` in `kairos.json`, Blocky Cinema): the lines go back to back in script
+- **Packed narration** (`narration: "packed"` in `kairos.json`, Blocky): the lines go back to back in script
   order, each clip trimmed to its words (`trimToWords`: `from`/`length`), 0.12 s apart (0.28 s after a sentence),
   so the voice never stops. Starts only give the order. A timeline change that moves or removes a voice clip packs
   them again, and "Write the narration" asks Claude for continuous narration.
@@ -420,7 +420,8 @@ or a file's contents. While Kairos runs Claude on a film, hooks for it are ignor
 
 **Skills** come from `skills/` (Kairos) and `~/.kairos/skills/` (the user's own). Turning one on copies it into
 `~/.claude/skills/<name>/` with a `.kairos-skill` marker (source + content hash). Kairos only changes folders that
-carry its marker, and the hub refreshes unedited copies at start. `KAIROS_CLAUDE_DIR` moves `~/.claude` (tests).
+carry its marker, and the hub refreshes unedited copies at start and removes those of skills it no longer ships (a
+renamed one, `RENAMED_SKILLS` in `skills.ts`, is turned on under its new name). `KAIROS_CLAUDE_DIR` moves `~/.claude` (tests).
 Skills must stay frame-exact and match the film contract; keep each `SKILL.md` under 500 lines.
 
 **3D:** the film server serves the pinned `three` package at `/__kairos/lib/three/` (`build/` and `examples/jsm/`

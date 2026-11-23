@@ -1,9 +1,9 @@
 // @ts-expect-error: three ships without type declarations in this project.
 import * as THREE from "three";
 import { beforeAll, describe, expect, it } from "vitest";
-import { BLOCKY_CAST } from "../../templates/blocky-cinema/blocky/cast.js";
-import { figureAt } from "../../templates/blocky-cinema/blocky/figure.js";
-import { LAYOUTS, layoutOf, solidsOf } from "../../templates/blocky-cinema/blocky/layouts.js";
+import { BLOCKY_CAST } from "../../templates/blocky/blocky/cast.js";
+import { figureAt } from "../../templates/blocky/blocky/figure.js";
+import { LAYOUTS, layoutOf, solidsOf } from "../../templates/blocky/blocky/layouts.js";
 import {
   freeSpot,
   GRAVITY,
@@ -11,19 +11,15 @@ import {
   personState,
   planMotion,
   roomAt,
-} from "../../templates/blocky-cinema/blocky/motion.js";
-import { loadPhysics } from "../../templates/blocky-cinema/blocky/physics.js";
-import { gaitPose, legFK } from "../../templates/blocky-cinema/blocky/poses.js";
-import { aimArm, framePoint, rigFrames } from "../../templates/blocky-cinema/blocky/rig.js";
-import {
-  sampleTrack,
-  simulate,
-  thingSpots,
-} from "../../templates/blocky-cinema/blocky/simulation.js";
-import { UNITS_PER_METER } from "../../templates/blocky-cinema/blocky/sizes.js";
-import { planStory } from "../../templates/blocky-cinema/blocky/timing.js";
-import { hash } from "../../templates/blocky-cinema/blocky/util.js";
-import * as story from "../../templates/blocky-cinema/story.js";
+} from "../../templates/blocky/blocky/motion.js";
+import { loadPhysics } from "../../templates/blocky/blocky/physics.js";
+import { gaitPose, legFK } from "../../templates/blocky/blocky/poses.js";
+import { aimArm, framePoint, rigFrames } from "../../templates/blocky/blocky/rig.js";
+import { sampleTrack, simulate, thingSpots } from "../../templates/blocky/blocky/simulation.js";
+import { UNITS_PER_METER } from "../../templates/blocky/blocky/sizes.js";
+import { planStory } from "../../templates/blocky/blocky/timing.js";
+import { hash } from "../../templates/blocky/blocky/util.js";
+import * as story from "../../templates/blocky/story.js";
 
 type Shot = Record<string, unknown>;
 type Track = { data: Float32Array; n: number };
@@ -116,7 +112,7 @@ function frameState(planned: ReturnType<typeof plan>, sim: Sim, t: number) {
   return out;
 }
 
-describe("Blocky Cinema: physics any frame can read", () => {
+describe("Blocky: physics any frame can read", () => {
   const things = story.THINGS as Record<string, unknown>;
 
   it("is the same every time, in any order, like separate render workers", () => {
@@ -209,7 +205,7 @@ describe("Blocky Cinema: physics any frame can read", () => {
   });
 });
 
-describe("Blocky Cinema: moves and actions", () => {
+describe("Blocky: moves and actions", () => {
   it("never stops inside furniture: an end point there moves out", () => {
     const home = layoutOf("home");
     const table = home.blocks.find((b: { name: string }) => b.name === "the coffee table");
@@ -474,7 +470,7 @@ const TOUR = {
   ],
 };
 
-describe("Blocky Cinema: every place", () => {
+describe("Blocky: every place", () => {
   it("has its spots clear of the furniture, standing on its ground", () => {
     for (const [name, layout] of Object.entries(LAYOUTS) as [
       string,
