@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { ExportInfo, RenderJob, RendersOverview } from "../../shared/types.ts";
+import type { ExportInfo, FilmShape, RenderJob, RendersOverview } from "../../shared/types.ts";
 import { createFilm } from "../films.ts";
 import { RenderError } from "../renderer.ts";
 import { addRender } from "../renders.ts";
@@ -28,7 +28,10 @@ const info: ExportInfo = {
 
 const fakeRenderer = {
   jobs: () => jobs,
-  start: async (filmId: string, input: { quality: "high" | "small"; gpu: boolean }) => {
+  start: async (
+    filmId: string,
+    input: { quality: "high" | "small"; gpu: boolean; shape?: FilmShape; fit?: "bars" | "crop" },
+  ) => {
     if (refuse) throw new RenderError(refuse);
     const job: RenderJob = {
       id: `r_${jobs.length + 1}`,
@@ -38,6 +41,8 @@ const fakeRenderer = {
       quality: input.quality,
       encoder: input.gpu ? "h264_nvenc" : "libx264",
       gpu: input.gpu,
+      shape: input.shape ?? null,
+      fit: input.fit ?? "bars",
       done: 0,
       total: 150,
       queuedAt: new Date().toISOString(),
@@ -112,7 +117,20 @@ describe("render routes", () => {
     expect(started.json()).toMatchObject({ filmId: "intro", quality: "small", encoder: "libx264" });
     // Defaults: high quality, graphics card when there is one.
     const defaults = await app.inject({ method: "POST", url: "/api/films/intro/renders" });
-    expect(defaults.json()).toMatchObject({ quality: "high", encoder: "h264_nvenc" });
+    expect(defaults.json()).toMatchObject({ quality: "high", encoder: "h264_nvenc", shape: null });
+    // For another shape, fitted in or cropped; a shape that isn't one is refused.
+    const tall = await app.inject({
+      method: "POST",
+      url: "/api/films/intro/renders",
+      payload: { shape: "tall", fit: "crop" },
+    });
+    expect(tall.json()).toMatchObject({ shape: "tall", fit: "crop" });
+    const round = await app.inject({
+      method: "POST",
+      url: "/api/films/intro/renders",
+      payload: { shape: "round" },
+    });
+    expect(round.statusCode).toBe(400);
 
     expect((await app.inject({ method: "POST", url: "/api/renders/r_1/cancel" })).statusCode).toBe(
       204,

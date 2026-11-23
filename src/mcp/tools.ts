@@ -11,6 +11,8 @@ import { DEV_WEB_PORT, HOST } from "../shared/ports.ts";
 import { scriptLineStatus } from "../shared/script.ts";
 import {
   type Asset,
+  type FilmShape,
+  FilmShapeSchema,
   FilmStatusSchema,
   type FilmSummary,
   FpsSchema,
@@ -56,6 +58,9 @@ const filmArg = z
   .string()
   .optional()
   .describe("Film id (its folder name). Leave out to use the film this session runs in.");
+
+/** wide (16:9), tall (9:16) or square (1:1). */
+const shapeArg = FilmShapeSchema;
 
 class ToolProblem extends Error {}
 
@@ -297,17 +302,20 @@ export function createKairosServer(context: ToolContext): McpServer {
     {
       title: "Look at a frame",
       description:
-        "A fresh picture of the frame at time t (seconds), drawn by the film right now. Use it to check a change. If the film throws while drawing, the error comes back as text.",
+        "A fresh picture of the frame at time t (seconds), drawn by the film right now. Use it to check a change. If the film throws while drawing, the error comes back as text. With shape, the frame in another shape than the film's own (wide 16:9, tall 9:16, square 1:1), as a render for that shape draws it: only a film that reframes itself (window.KAIROS_RESHAPE, like Blocky films) can.",
       inputSchema: {
         film: filmArg,
         t: z.number().min(0).describe("Time of the frame, in seconds from the start."),
+        shape: shapeArg
+          .optional()
+          .describe("Another shape to see it in (default: the film's own)."),
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    safely(async ({ film, t }: { film?: string; t: number }) => {
+    safely(async ({ film, t, shape }: { film?: string; t: number; shape?: FilmShape }) => {
       const id = await filmId(film);
       const summary = await hub.film(id);
-      const { png, length } = await hub.frame(id, t);
+      const { png, length } = await hub.frame(id, t, shape);
       const config = summary.config;
       const where = config
         ? ` (frame ${frameNumber(t, config.fps)} of ${Math.max(1, Math.round(config.duration * config.fps))})`
@@ -318,7 +326,8 @@ export function createKairosServer(context: ToolContext): McpServer {
         story !== null && config && Math.abs(story - config.duration) >= 0.05
           ? `\nNote: the story lasts ${seconds(story)}, but the film is ${seconds(config.duration)} long. Set duration to ${story} with kairos_film_settings.`
           : "";
-      return { content: [text(`"${id}" at t = ${seconds(t)}${where}:${fit}`), image(png)] };
+      const as = shape ? `, ${shape}` : "";
+      return { content: [text(`"${id}" at t = ${seconds(t)}${where}${as}:${fit}`), image(png)] };
     }),
   );
 
@@ -399,27 +408,46 @@ export function createKairosServer(context: ToolContext): McpServer {
     {
       title: "Render a video",
       description:
-        "Puts the film in the Kairos render queue to make an MP4 (in the film's renders/ folder). Rendering draws every frame and takes a while: check on it with kairos_renders. Render when the user asks for a video, not to check a frame (use kairos_frame for that).",
+        "Puts the film in the Kairos render queue to make an MP4 (in the film's renders/ folder). Rendering draws every frame and takes a while: check on it with kairos_renders. Render when the user asks for a video, not to check a frame (use kairos_frame for that). shape makes it for somewhere else than the film's own shape: wide (YouTube, 1920x1080), tall (Shorts, TikTok, Reels, 1080x1920) or square (a square post, 1080x1080). A film that reframes itself (Blocky) is filmed again for it; any other film is fitted in with bars or a crop (fit).",
       inputSchema: {
         film: filmArg,
         quality: z
           .enum(["high", "small"])
           .default("high")
           .describe('"high" looks like the film; "small" makes a smaller file.'),
+        shape: shapeArg.optional().describe("The shape it goes out in (default: the film's own)."),
+        fit: z
+          .enum(["bars", "crop"])
+          .default("bars")
+          .describe(
+            'For a film that can\'t reframe itself, in another shape: "bars" shows the whole picture, "crop" fills the frame.',
+          ),
       },
       annotations: { readOnlyHint: false, openWorldHint: false },
     },
-    safely(async ({ film, quality }: { film?: string; quality: "high" | "small" }) => {
-      const id = await filmId(film);
-      const job = await hub.startRender(id, quality);
-      return {
-        content: [
-          text(
-            `Render ${job.id} of "${id}" is ${job.state === "queued" ? "in the queue" : "running"}: ${job.total} frames. The user can follow it on the Renders page; check with kairos_renders.`,
-          ),
-        ],
-      };
-    }),
+    safely(
+      async ({
+        film,
+        quality,
+        shape,
+        fit,
+      }: {
+        film?: string;
+        quality: "high" | "small";
+        shape?: FilmShape;
+        fit: "bars" | "crop";
+      }) => {
+        const id = await filmId(film);
+        const job = await hub.startRender(id, { quality, shape, fit });
+        return {
+          content: [
+            text(
+              `Render ${job.id} of "${id}"${shape ? ` (${shape})` : ""} is ${job.state === "queued" ? "in the queue" : "running"}: ${job.total} frames. The user can follow it on the Renders page; check with kairos_renders.`,
+            ),
+          ],
+        };
+      },
+    ),
   );
 
   server.registerTool(
@@ -455,7 +483,7 @@ export function createKairosServer(context: ToolContext): McpServer {
       }
       for (const video of videos.slice(0, 10)) {
         lines.push(
-          `Video "${video.filmId}" v${video.version}: ${video.file}, ${video.width}×${video.height}, ${video.fps} fps, ${seconds(video.duration)}, made ${video.createdAt}`,
+          `Video "${video.filmId}" v${video.version}: ${video.file}, ${video.width}×${video.height}${video.shape ? ` (${video.shape}${video.fit && video.fit !== "own" ? `, ${video.fit}` : ""})` : ""}, ${video.fps} fps, ${seconds(video.duration)}, made ${video.createdAt}`,
         );
       }
       return { content: [text(lines.length ? lines.join("\n") : "No renders yet.")] };

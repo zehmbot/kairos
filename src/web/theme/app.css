@@ -523,6 +523,10 @@ code {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.render-shapes-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .rate-value {
   display: grid;
   place-items: center;
@@ -1506,7 +1510,8 @@ a.render-title:hover {
     gap: 8px;
   }
 
-  .rate-cards {
+  .rate-cards,
+  .render-shapes-4 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

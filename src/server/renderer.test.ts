@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -292,6 +292,79 @@ describe.runIf(browser && ffmpeg)("Renderer (real browser and ffmpeg)", () => {
     );
     expect(types.sort()).toEqual(["audio", "video"]);
   }, 120_000);
+
+  it("goes out in another shape: drawn at that size by a film that reframes, else fitted in", async () => {
+    // A green film that draws at the size it's asked (window.__kairos.size), saying so or not.
+    const page = (reshape: boolean) => `<!doctype html>
+<html><body style="margin:0;background:#000"><canvas id="c" style="display:block"></canvas><script>
+  const size = window.__kairos?.size ?? { width: 320, height: 180 };
+  const canvas = document.getElementById("c");
+  canvas.width = size.width;
+  canvas.height = size.height;
+  const ctx = canvas.getContext("2d");
+  window.KAIROS_RESHAPE = ${reshape};
+  window.renderOut = () => { ctx.fillStyle = "#00ff00"; ctx.fillRect(0, 0, size.width, size.height); };
+</script></body></html>`;
+    for (const [id, reshape] of [
+      ["reframes", true],
+      ["fits", false],
+    ] as const) {
+      const dir = join(filmsDir, id);
+      await mkdir(dir, { recursive: true });
+      const config = { title: id, width: 320, height: 180, fps: 30, duration: 0.5 };
+      await writeFile(join(dir, "kairos.json"), JSON.stringify(config));
+      await writeFile(join(dir, "index.html"), page(reshape));
+    }
+    const renderer = makeRenderer();
+    const render = async (id: string, shape: "wide" | "tall", fit: "bars" | "crop" = "bars") => {
+      const started = await renderer.start(id, { quality: "small", gpu: false, shape, fit });
+      const job = await waitFor(renderer, started.id);
+      expect(job.error).toBeNull();
+      const [video] = await listRenders(join(filmsDir, id));
+      if (!video) throw new Error("no video");
+      return video;
+    };
+    /** The color at (x, y) of a video's frame at 0.2 s. */
+    const pixel = async (id: string, file: string, width: number, x: number, y: number) => {
+      const { stdout } = await execBuffer(ffmpeg ?? "", [
+        ...["-v", "error", "-ss", "0.2", "-i", join(filmsDir, id, file), "-frames:v", "1"],
+        ...["-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+      ]);
+      const at = (y * width + x) * 3;
+      return [stdout[at] ?? 0, stdout[at + 1] ?? 0, stdout[at + 2] ?? 0];
+    };
+    const green = ([r, g, b]: number[]) => (g ?? 0) > 180 && (r ?? 0) < 90 && (b ?? 0) < 90;
+    const black = (color: number[]) => color.every((value) => value < 40);
+
+    // The film that reframes is drawn tall: green to the top.
+    const reframed = await render("reframes", "tall");
+    expect(reframed).toMatchObject({
+      file: "renders/reframes-v1-tall.mp4",
+      width: 1080,
+      height: 1920,
+      shape: "tall",
+      fit: "reframe",
+    });
+    expect(green(await pixel("reframes", reframed.file, 1080, 540, 20))).toBe(true);
+
+    // The other one gets bars above and below, or is cropped to fill the frame.
+    const bars = await render("fits", "tall");
+    expect(bars).toMatchObject({ width: 1080, height: 1920, shape: "tall", fit: "bars" });
+    expect(black(await pixel("fits", bars.file, 1080, 540, 20))).toBe(true);
+    expect(green(await pixel("fits", bars.file, 1080, 540, 960))).toBe(true);
+    const crop = await render("fits", "tall", "crop");
+    expect(crop).toMatchObject({ file: "renders/fits-v2-tall.mp4", fit: "crop" });
+    expect(green(await pixel("fits", crop.file, 1080, 540, 20))).toBe(true);
+
+    // Its own shape: its own size, and no shape in the name.
+    expect(await render("fits", "wide")).toMatchObject({
+      file: "renders/fits-v3.mp4",
+      width: 320,
+      height: 180,
+      shape: "wide",
+      fit: "own",
+    });
+  }, 180_000);
 
   it("reports the frame where the film breaks", async () => {
     const dir = join(filmsDir, "render-test");

@@ -5,6 +5,7 @@ import {
   type Asset,
   AssetSchema,
   type FilmChange,
+  type FilmShape,
   type FilmSummary,
   FilmSummarySchema,
   type FilmVoices,
@@ -19,12 +20,12 @@ import {
   ReferenceSchema,
   type RenderJob,
   RenderJobSchema,
-  type RenderQuality,
   type RendersOverview,
   RendersOverviewSchema,
   type Script,
   type ScriptInput,
   ScriptSchema,
+  type StartRender,
   type VoiceInfo,
   VoiceInfoSchema,
   type VoiceLine,
@@ -98,9 +99,10 @@ export interface Hub {
     options?: { place?: string; who?: string },
   ): Promise<{ png: Buffer; checks: string[] }>;
   /** A frame, and how long the film says its story lasts (null when it doesn't say). */
-  frame(id: string, t: number): Promise<{ png: Buffer; length: number | null }>;
+  /** Frame `t`, in another shape when `shape` is given (only a film that reframes itself can). */
+  frame(id: string, t: number, shape?: FilmShape): Promise<{ png: Buffer; length: number | null }>;
   changeFilm(id: string, change: FilmChange): Promise<FilmSummary>;
-  startRender(id: string, quality: RenderQuality): Promise<RenderJob>;
+  startRender(id: string, options: StartRender): Promise<RenderJob>;
   renders(): Promise<RendersOverview>;
   /** The asset library. */
   assets(): Promise<Asset[]>;
@@ -212,8 +214,10 @@ export class HubClient implements Hub {
     return { png: Buffer.from(await response.arrayBuffer()), checks };
   }
 
-  async frame(id: string, t: number) {
-    const response = await this.#fetch(`/api/films/${encodeURIComponent(id)}/frame?t=${t}`);
+  async frame(id: string, t: number, shape?: FilmShape) {
+    const response = await this.#fetch(
+      `/api/films/${encodeURIComponent(id)}/frame?t=${t}${shape ? `&shape=${shape}` : ""}`,
+    );
     const length = Number(response.headers.get(STORY_LENGTH_HEADER));
     return {
       png: Buffer.from(await response.arrayBuffer()),
@@ -229,11 +233,11 @@ export class HubClient implements Hub {
     );
   }
 
-  startRender(id: string, quality: RenderQuality) {
+  startRender(id: string, options: StartRender) {
     return this.#json(
       RenderJobSchema,
       `/api/films/${encodeURIComponent(id)}/renders`,
-      this.#send("POST", { quality }),
+      this.#send("POST", options),
     );
   }
 

@@ -18,8 +18,17 @@ export class RendersFileError extends Error {}
 
 const listFile = (filmDir: string) => join(filmDir, KAIROS_DIR, RENDERS_FILE);
 
-/** `my-intro` + 3 -> `my-intro-v3.mp4` */
-export const videoName = (filmId: string, version: number) => `${filmId}-v${version}.mp4`;
+/** `my-intro` + 3 -> `my-intro-v3.mp4`; in another shape than the film's own: `my-intro-v3-tall.mp4`. */
+export const videoName = (filmId: string, version: number, shape?: string | null) =>
+  `${filmId}-v${version}${shape ? `-${shape}` : ""}.mp4`;
+
+/** The version in a file name this film's renders use (`my-intro-v3.mp4`, `my-intro-v3-tall.srt`), or null. */
+export function versionIn(filmId: string, name: string): number | null {
+  const prefix = `${filmId}-v`;
+  if (!name.startsWith(prefix)) return null;
+  const match = /^(\d+)(?:-(?:wide|tall|square))?\.(?:mp4|srt)$/.exec(name.slice(prefix.length));
+  return match ? Number(match[1]) : null;
+}
 
 async function readList(filmDir: string): Promise<Render[]> {
   let text: string;
@@ -68,14 +77,12 @@ export async function listRenders(filmDir: string): Promise<Render[]> {
   return present.sort((a, b) => b.version - a.version);
 }
 
-/** The next free version: above every listed render and every `<id>-vN.mp4` already in `renders/`. */
+/** The next free version: above every listed render and every `<id>-vN…` file already in `renders/`. */
 export async function nextVersion(filmDir: string, filmId: string): Promise<number> {
   const listed = (await readList(filmDir)).map((render) => render.version);
-  const prefix = `${filmId}-v`;
   const onDisk = (await readdir(join(filmDir, RENDERS_DIR)).catch(() => []))
-    .filter((name) => name.startsWith(prefix) && name.endsWith(".mp4"))
-    .map((name) => Number(name.slice(prefix.length, -4)))
-    .filter((version) => Number.isInteger(version));
+    .map((name) => versionIn(filmId, name))
+    .filter((version) => version !== null);
   return Math.max(0, ...listed, ...onDisk) + 1;
 }
 

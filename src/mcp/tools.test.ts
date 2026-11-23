@@ -13,10 +13,10 @@ import type {
   NoteStatus,
   Reference,
   RenderJob,
-  RenderQuality,
   RendersOverview,
   Script,
   ScriptInput,
+  StartRender,
   VoiceLine,
   VoiceType,
 } from "../shared/types.ts";
@@ -119,8 +119,10 @@ class FakeHub implements Hub {
     return { png: PNG, checks: this.sheetChecks };
   }
   storyLength: number | null = null;
-  async frame() {
+  frameShapes: (string | undefined)[] = [];
+  async frame(_id: string, _t: number, shape?: string) {
     this.#check();
+    this.frameShapes.push(shape);
     if (this.frameError) throw new HubError(this.frameError, 422);
     return { png: PNG, length: this.storyLength };
   }
@@ -301,8 +303,11 @@ class FakeHub implements Hub {
     };
   }
   jobs: RenderJob[] = [];
-  async startRender(id: string, quality: RenderQuality) {
+  renderOptions: StartRender[] = [];
+  async startRender(id: string, options: StartRender) {
     await this.film(id);
+    this.renderOptions.push(options);
+    const quality = options.quality ?? "high";
     const job: RenderJob = {
       id: `r_${this.jobs.length + 1}`,
       filmId: id,
@@ -311,6 +316,8 @@ class FakeHub implements Hub {
       quality,
       encoder: "h264_nvenc",
       gpu: true,
+      shape: null,
+      fit: "bars",
       done: 0,
       total: 150,
       queuedAt: "2026-11-19T10:00:00.000Z",
@@ -475,6 +482,11 @@ describe("Kairos tools", () => {
     expect(texts(result)).not.toContain("the story lasts");
     expect(images(result)).toHaveLength(1);
 
+    // In another shape (a film that reframes itself).
+    const tall = await call("kairos_frame", { t: 2, shape: "tall" });
+    expect(texts(tall)).toContain('"intro" at t = 2 s (frame 61 of 150), tall:');
+    expect(hub.frameShapes).toEqual([undefined, "tall"]);
+
     // A film that times itself to its voices says when its story and the film's length differ.
     hub.storyLength = 6.42;
     const longer = await call("kairos_frame", { t: 2 });
@@ -512,6 +524,13 @@ describe("Kairos tools", () => {
       'Render r_1 of "intro" is in the queue: 150 frames',
     );
     expect(hub.jobs[0]?.quality).toBe("high");
+    expect(hub.renderOptions[0]).toEqual({ quality: "high", fit: "bars" });
+    // For somewhere else than the film's own shape.
+    expect(texts(await call("kairos_render", { shape: "tall", fit: "crop" }))).toContain(
+      'Render r_2 of "intro" (tall) is in the queue',
+    );
+    expect(hub.renderOptions[1]).toEqual({ quality: "high", shape: "tall", fit: "crop" });
+    expect((await call("kairos_render", { shape: "round" })).isError).toBe(true);
     const report = texts(await call("kairos_renders"));
     expect(report).toContain('Render r_1 of "intro": queued');
     expect(report).toContain('Video "intro" v2: renders/intro-v2.mp4, 1920×1080, 30 fps, 5 s');

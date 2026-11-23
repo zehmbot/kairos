@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  type FilmAbilities,
   FilmMessageSchema,
   type FilmScene,
   type FilmSound,
@@ -35,6 +36,8 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
   // The effect sounds the film places, when it says (Blocky).
   const [sounds, setSounds] = useState<FilmSound[] | null>(null);
   const [places, setPlaces] = useState<string[] | null>(null);
+  // What the film can do for an export (reframe itself, give its captions): null until its first `ready`.
+  const [abilities, setAbilities] = useState<FilmAbilities | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [frameError, setFrameError] = useState<string | null>(null);
 
@@ -142,6 +145,11 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
         setLength(message.length ?? null);
         setSounds(message.sounds ?? null);
         setPlaces(message.places ?? null);
+        setAbilities((now) =>
+          now?.reshape === Boolean(message.reshape) && now.captions === Boolean(message.captions)
+            ? now
+            : { reshape: Boolean(message.reshape), captions: Boolean(message.captions) },
+        );
         requestFrame(s.pending ?? s.frame);
       } else if (message.type === "frame") {
         s.inflight = false;
@@ -204,6 +212,7 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
     length,
     sounds,
     places,
+    abilities,
     error: pageError ?? frameError,
     toggle,
     pause,

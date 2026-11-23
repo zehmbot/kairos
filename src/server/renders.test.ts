@@ -10,6 +10,7 @@ import {
   RendersFileError,
   removeRender,
   renderPath,
+  versionIn,
   videoName,
 } from "./renders.ts";
 
@@ -59,6 +60,21 @@ describe("renders", () => {
     await addVideo(1);
     await writeFile(join(dir, "renders", "intro-v7.mp4"), "made elsewhere");
     expect(await nextVersion(dir, "intro")).toBe(8);
+    // Videos in another shape, and their subtitles, count too; other films' files don't.
+    await writeFile(join(dir, "renders", "intro-v9-tall.mp4"), "tall");
+    await writeFile(join(dir, "renders", "intro-v11-square.srt"), "subtitles");
+    await writeFile(join(dir, "renders", "intro-extra-v40.mp4"), "another film");
+    await writeFile(join(dir, "renders", "intro-v50-round.mp4"), "not a shape");
+    expect(await nextVersion(dir, "intro")).toBe(12);
+  });
+
+  it("names a video in another shape after it", () => {
+    expect(videoName("intro", 3)).toBe("intro-v3.mp4");
+    expect(videoName("intro", 3, "tall")).toBe("intro-v3-tall.mp4");
+    expect(versionIn("intro", "intro-v3-tall.mp4")).toBe(3);
+    expect(versionIn("intro", "intro-v3.srt")).toBe(3);
+    expect(versionIn("intro", "intro-v3.png")).toBeNull();
+    expect(versionIn("intro", "outro-v3.mp4")).toBeNull();
   });
 
   it("deletes a video and its entry", async () => {

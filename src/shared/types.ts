@@ -953,9 +953,20 @@ export const ExportInfoSchema = z.object({
 });
 export type ExportInfo = z.infer<typeof ExportInfoSchema>;
 
+/**
+ * How a video got its shape: `own` (the film's own), `reframe` (the film drew itself at the new size), `bars` (the
+ * whole picture, with bars) or `crop` (fills the frame, the middle kept).
+ */
+export const RenderFitSchema = z.enum(["own", "reframe", "bars", "crop"]);
+export type RenderFit = z.infer<typeof RenderFitSchema>;
+
 /** POST /api/films/:id/renders */
 export const StartRenderSchema = z.object({
   quality: RenderQualitySchema.default("high"),
+  /** The shape it goes out in (src/shared/export.ts); none: the film's own. */
+  shape: FilmShapeSchema.optional(),
+  /** A film that can't reframe itself is fitted into another shape: with bars, or cropped. */
+  fit: z.enum(["bars", "crop"]).default("bars"),
   /**
    * Use the graphics card when one works: it draws the frames (films get their richest look) and encodes the video.
    * Off: the processor does both, slower, and films draw a lighter look.
@@ -974,6 +985,9 @@ export const RenderJobSchema = z.object({
   encoder: RenderEncoderSchema,
   /** The graphics card draws the frames (false: the processor draws them). */
   gpu: z.boolean().default(true),
+  /** The shape asked for (null: the film's own), and how a film that can't reframe is fitted into it. */
+  shape: FilmShapeSchema.nullable().default(null),
+  fit: z.enum(["bars", "crop"]).default("bars"),
   /** Frames drawn so far, of `total`. */
   done: z.number().int(),
   total: z.number().int(),
@@ -997,6 +1011,9 @@ export const RenderSchema = z.object({
   encoder: RenderEncoderSchema,
   width: z.number().int(),
   height: z.number().int(),
+  /** The shape it went out in (null: a shape of its own, like 4:5), and how it got it. */
+  shape: FilmShapeSchema.nullable().optional(),
+  fit: RenderFitSchema.optional(),
   fps: z.number(),
   duration: z.number(),
   frames: z.number().int(),

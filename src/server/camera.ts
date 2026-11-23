@@ -10,8 +10,15 @@ import { clipImagesAt } from "./clips.ts";
 
 declare global {
   interface Window {
-    /** Added by the Kairos bridge (src/film/bridge.js). */
-    __kairos?: { render(t: number): Promise<void> };
+    /**
+     * Added by the Kairos bridge (src/film/bridge.js): draws a frame, and says the size the film is asked to draw
+     * at (null: its own) and whether to draw its captions (src/shared/export.ts).
+     */
+    __kairos?: {
+      render(t: number): Promise<void>;
+      size: { width: number; height: number } | null;
+      captions: boolean;
+    };
   }
 }
 
@@ -153,6 +160,20 @@ export interface CaptureRequest {
   maxSide?: number;
   /** The film's folder and settings: its video clips are put over the frame (under the marks). */
   film?: { dir: string; config: Pick<FilmConfig, "video" | "width" | "height"> };
+  /**
+   * The address asks the film for another shape (`kairos-size`, src/shared/export.ts): only a film that reframes
+   * itself (`window.KAIROS_RESHAPE`) can, and the picture is refused otherwise.
+   */
+  reshaped?: boolean;
+}
+
+/** The film can't draw itself in another shape. The message is shown as-is. */
+export class CannotReshape extends Error {
+  constructor() {
+    super(
+      "This film can't show itself in another shape: only a film that reframes itself (window.KAIROS_RESHAPE, like Blocky films) can. Its render in another shape gets bars or a crop.",
+    );
+  }
 }
 
 export class Camera {
@@ -232,6 +253,12 @@ export class Camera {
         (request.maxSide ?? 1280) / Math.max(request.width, request.height),
       );
       const film = await openFilm(page, request.url, request.width, request.height, scale);
+      if (request.reshaped) {
+        const reframes = await page.evaluate(
+          () => (window as { KAIROS_RESHAPE?: unknown }).KAIROS_RESHAPE === true,
+        );
+        if (!reframes) throw new CannotReshape();
+      }
       await film.draw(request.t);
       const { length, checks } = await page.evaluate(() => {
         const page = window as { KAIROS_LENGTH?: unknown; KAIROS_CHECKS?: unknown };
@@ -246,7 +273,8 @@ export class Camera {
       const clips = request.film?.config.video.length
         ? await clipImagesAt(
             request.film.dir,
-            request.film.config,
+            // Placed in the picture's own size (another shape places them as the preview does).
+            { ...request.film.config, width: request.width, height: request.height },
             request.t,
             await this.#ffmpeg().catch(() => null),
           )

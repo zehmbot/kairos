@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { RenderQuality } from "../../shared/types.ts";
+import { exportSize, SHAPE_USES, SHORTS_MAX_SECONDS, shapeOf } from "../../shared/export.ts";
+import { FILM_SHAPES, type FilmShape, type RenderQuality } from "../../shared/types.ts";
 import { useExportInfo, useStartRender } from "../api.ts";
+import { formatLength } from "../player/time.ts";
 import { Notice } from "./Notice.tsx";
 import { PixelButton } from "./PixelButton.tsx";
 
@@ -9,20 +11,49 @@ const QUALITIES: { id: RenderQuality; label: string; sub: string }[] = [
   { id: "small", label: "Smaller file", sub: "A little softer, about half the size" },
 ];
 
+const FITS: { id: "bars" | "crop"; label: string; sub: string }[] = [
+  { id: "bars", label: "Bars", sub: "The whole picture, with bars around it" },
+  { id: "crop", label: "Crop", sub: "Fills the frame, the middle kept" },
+];
+
+const SHAPES = Object.keys(FILM_SHAPES) as FilmShape[];
+
+/** The little picture of a shape in its card (the same as New film's). */
+const SHAPE_BOX = 64;
+
 interface RenderDialogProps {
   open: boolean;
   onClose: () => void;
   filmId: string;
   title: string;
+  /** The film's size and length. */
+  size: { width: number; height: number };
+  duration: number;
+  /** The film reframes itself for another shape (else it gets bars or a crop). */
+  reshape: boolean;
+  /** The shape you're looking at it in (null: its own): chosen to start with. */
+  shown: FilmShape | null;
 }
 
-/** Choose the quality (and the graphics card), then put the film in the render queue. */
-export function RenderDialog({ open, onClose, filmId, title }: RenderDialogProps) {
+/** Choose where the video goes (its shape), the quality and the graphics card, then put it in the render queue. */
+export function RenderDialog({
+  open,
+  onClose,
+  filmId,
+  title,
+  size,
+  duration,
+  reshape,
+  shown,
+}: RenderDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingId = useId();
   const name = useId();
   const info = useExportInfo();
   const start = useStartRender(filmId);
+  const own = shapeOf(size);
+  const [shape, setShape] = useState<FilmShape | null>(shown ?? own);
+  const [fit, setFit] = useState<"bars" | "crop">("bars");
   const [quality, setQuality] = useState<RenderQuality>("high");
   const [gpu, setGpu] = useState(true);
   const { reset } = start;
@@ -32,14 +63,19 @@ export function RenderDialog({ open, onClose, filmId, title }: RenderDialogProps
     if (!dialog) return;
     if (open && !dialog.open) {
       reset();
+      setShape(shown ?? own);
       dialog.showModal();
     } else if (!open && dialog.open) {
       dialog.close();
     }
-  }, [open, reset]);
+  }, [open, reset, shown, own]);
 
   const card = info.data?.encoders.find((encoder) => encoder.gpu);
   const ready = Boolean(info.data?.ffmpeg && info.data.encoders.length > 0);
+  const out = exportSize(size, shape);
+  const elsewhere = shape !== null && shape !== own;
+  // A film of a shape of its own (like 4:5) can also go out as it is.
+  const choices: (FilmShape | null)[] = own === null ? [null, ...SHAPES] : SHAPES;
 
   return (
     <dialog
@@ -52,7 +88,7 @@ export function RenderDialog({ open, onClose, filmId, title }: RenderDialogProps
         className="form"
         onSubmit={(event) => {
           event.preventDefault();
-          start.mutate({ quality, gpu }, { onSuccess: onClose });
+          start.mutate({ quality, gpu, shape: shape ?? undefined, fit }, { onSuccess: onClose });
         }}
       >
         <h2 id={headingId} className="dialog-title">
@@ -73,13 +109,85 @@ export function RenderDialog({ open, onClose, filmId, title }: RenderDialogProps
         ) : (
           <>
             <fieldset className="choice-picker">
+              <legend className="field-label">Made for</legend>
+              <div className={`choice-cards${choices.length === 4 ? " render-shapes-4" : ""}`}>
+                {choices.map((entry) => {
+                  const box = entry ? FILM_SHAPES[entry] : size;
+                  const scale = SHAPE_BOX / Math.max(box.width, box.height);
+                  return (
+                    <label key={entry ?? "own"} className="choice-card">
+                      <input
+                        type="radio"
+                        name={`${name}-shape`}
+                        checked={shape === entry}
+                        onChange={() => setShape(entry)}
+                        className="visually-hidden"
+                      />
+                      <span className="shape-box">
+                        <span
+                          className="shape-preview"
+                          style={{
+                            width: Math.round(box.width * scale),
+                            height: Math.round(box.height * scale),
+                          }}
+                        />
+                      </span>
+                      <span className="choice-label">
+                        {entry ? SHAPE_USES[entry].label : "As it is"}
+                      </span>
+                      <span className="choice-sub">
+                        {entry ? FILM_SHAPES[entry].ratio : `${size.width} × ${size.height}`}
+                        {entry !== null && entry === own && " · your film's shape"}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            {elsewhere &&
+              (reshape ? (
+                <p className="hint">
+                  The film frames every shot again for this shape: nothing is cut off. It comes out
+                  at {out.width} × {out.height}.
+                </p>
+              ) : (
+                <fieldset className="choice-picker">
+                  <legend className="field-label">
+                    This film can't reframe itself. Fit it in with
+                  </legend>
+                  <div className="choice-cards render-qualities">
+                    {FITS.map((entry) => (
+                      <label key={entry.id} className="choice-card">
+                        <input
+                          type="radio"
+                          name={`${name}-fit`}
+                          checked={fit === entry.id}
+                          onChange={() => setFit(entry.id)}
+                          className="visually-hidden"
+                        />
+                        <span className="choice-label">{entry.label}</span>
+                        <span className="choice-sub">{entry.sub}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ))}
+            {shape === "tall" && duration > SHORTS_MAX_SECONDS && (
+              <p className="hint">
+                Shorts and Reels take up to {formatLength(SHORTS_MAX_SECONDS)}: this film lasts{" "}
+                {formatLength(duration)}.
+              </p>
+            )}
+
+            <fieldset className="choice-picker">
               <legend className="field-label">Quality</legend>
               <div className="choice-cards render-qualities">
                 {QUALITIES.map((entry) => (
                   <label key={entry.id} className="choice-card">
                     <input
                       type="radio"
-                      name={name}
+                      name={`${name}-quality`}
                       checked={quality === entry.id}
                       onChange={() => setQuality(entry.id)}
                       className="visually-hidden"

@@ -82,6 +82,28 @@ describe("ffmpeg commands", () => {
     expect(args).toEqual(expect.arrayContaining(["concat", "-c", "copy", "+faststart"]));
     expect(concatLine("C:\\films\\it's\\chunk.mp4")).toBe("file 'C:/films/it'\\''s/chunk.mp4'");
   });
+
+  it("fits a film into another shape while joining: with bars, or cropped", () => {
+    const encoding = { encoder: "libx264" as const, quality: "high" as const, fps: 30 };
+    const join = (fit: "bars" | "crop") =>
+      joinArgs("list.txt", "out.mp4", undefined, {
+        clips: [],
+        encoding,
+        duration: 2,
+        frame: { width: 1080, height: 1920, fit },
+      });
+    const bars = join("bars");
+    expect(bars[bars.indexOf("-filter_complex") + 1]).toBe(
+      "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p[vout]",
+    );
+    // The picture is encoded again (not copied).
+    expect(bars).toEqual(expect.arrayContaining(["-map", "[vout]", "libx264"]));
+    expect(bars).not.toContain("copy");
+    const crop = join("crop");
+    expect(crop[crop.indexOf("-filter_complex") + 1]).toContain(
+      "force_original_aspect_ratio=increase:force_divisible_by=2,crop=1080:1920",
+    );
+  });
 });
 
 describe("probing", () => {

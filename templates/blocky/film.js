@@ -2,11 +2,14 @@
 import { createEngine } from "./blocky/engine.js";
 import * as story from "./story.js";
 
-// The film's size, from kairos.json (filled in when the film was made).
-const WIDTH = Number("{{width}}");
-const HEIGHT = Number("{{height}}");
+// The film's size, from kairos.json (filled in when the film was made). Kairos may ask for another shape (a wide
+// film going out for Shorts): the engine then frames every shot for that size.
+const size = window.__kairos?.size ?? { width: Number("{{width}}"), height: Number("{{height}}") };
 
-const engine = createEngine({ width: WIDTH, height: HEIGHT, story });
+const engine = createEngine({ width: size.width, height: size.height, story });
+
+// It draws itself at any size it's asked: Kairos can show it, and render it, in other shapes.
+window.KAIROS_RESHAPE = true;
 
 // Kairos waits for this (the caption font and the film's voices) before taking pictures. Then each place in the
 // story shows as a scene on the Kairos timeline, Kairos knows how long the story lasts, the effects' sounds go on

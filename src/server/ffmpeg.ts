@@ -218,12 +218,36 @@ export function clipInputs(clips: readonly OverlayClip[], fps: number): string[]
   );
 }
 
+/** A film that can't reframe itself, fitted into another shape: whole with black bars, or cropped to fill it. */
+export interface FrameFit {
+  width: number;
+  height: number;
+  fit: "bars" | "crop";
+}
+
+/** The filter steps that fit a picture into `frame` (sizes kept even for H.264). */
+export function fitSteps(frame: FrameFit): string[] {
+  const { width: w, height: h } = frame;
+  return frame.fit === "crop"
+    ? [
+        `scale=${w}:${h}:force_original_aspect_ratio=increase:force_divisible_by=2`,
+        `crop=${w}:${h}`,
+        "setsar=1",
+      ]
+    : [
+        `scale=${w}:${h}:force_original_aspect_ratio=decrease:force_divisible_by=2`,
+        `pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black`,
+        "setsar=1",
+      ];
+}
+
 /**
  * The video filter that draws each clip (inputs `first`, `first + 1`, ...) over the film (input 0): scaled into
  * its box (fill: cropped to cover it; fit: whole, centered), see-through and faded with its alpha, moved to its
- * start, and shown only during its time. Colors are converted the same way as the film's frames (BT.709).
+ * start, and shown only during its time. Colors are converted the same way as the film's frames (BT.709). Then,
+ * for another shape, the whole picture is fitted into `frame` (the clips stay where they are in the film).
  */
-export function clipFilter(clips: readonly OverlayClip[], first: number): string {
+export function clipFilter(clips: readonly OverlayClip[], first: number, frame?: FrameFit): string {
   let base = "0:v";
   const parts = clips.map((clip, i) => {
     const w = Math.max(2, Math.round(clip.box.width / 2) * 2);
@@ -255,7 +279,8 @@ export function clipFilter(clips: readonly OverlayClip[], first: number): string
     base = out;
     return chain;
   });
-  return [...parts, `[${base}]format=yuv420p[vout]`].join(";");
+  const last = [...(frame ? fitSteps(frame) : []), "format=yuv420p"];
+  return [...parts, `[${base}]${last.join(",")}[vout]`].join(";");
 }
 
 /** How the picture is encoded again when clips are drawn over it (the render's own settings). */
@@ -267,14 +292,19 @@ export interface JoinEncoding {
 
 /**
  * Joins the chunks listed in `listFile` (ffmpeg concat format) into the final video. With sound, the tracks are
- * mixed in (AAC) and cut at the film's `duration`. Without clips the picture is copied as it is; with clips they
- * are drawn over it and the picture is encoded again.
+ * mixed in (AAC) and cut at the film's `duration`. Without clips the picture is copied as it is; with clips (or a
+ * `frame` to fit it into another shape) they are drawn over it and the picture is encoded again.
  */
 export function joinArgs(
   listFile: string,
   output: string,
   sound?: { tracks: readonly SoundTrack[]; duration: number },
-  video?: { clips: readonly OverlayClip[]; encoding: JoinEncoding; duration: number },
+  video?: {
+    clips: readonly OverlayClip[];
+    encoding: JoinEncoding;
+    duration: number;
+    frame?: FrameFit;
+  },
 ): string[] {
   const head = [
     "-hide_banner",
@@ -291,14 +321,16 @@ export function joinArgs(
   const tail = ["-movflags", "+faststart", "-f", "mp4", output];
   const tracks = sound?.tracks ?? [];
   const clips = video?.clips ?? [];
-  if (tracks.length === 0 && clips.length === 0) return [...head, "-c", "copy", ...tail];
+  const frame = video?.frame;
+  const drawn = clips.length > 0 || frame !== undefined;
+  if (tracks.length === 0 && !drawn) return [...head, "-c", "copy", ...tail];
 
   const filters = [
     ...(sound && tracks.length ? [mixFilter(tracks, sound.duration)] : []),
-    ...(clips.length ? [clipFilter(clips, tracks.length + 1)] : []),
+    ...(drawn ? [clipFilter(clips, tracks.length + 1, frame)] : []),
   ];
   const picture =
-    clips.length && video
+    drawn && video
       ? [
           "-map",
           "[vout]",

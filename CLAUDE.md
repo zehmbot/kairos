@@ -56,7 +56,11 @@ A film is a folder in `<workspace>/films/` with `kairos.json` (title, size, fps 
 page) and a page that defines `window.renderOut(t)`, a pure function of `t` that may return a Promise. The film
 server serves it on its own origin (so film code can't reach the API), never caches, and injects
 `src/film/bridge.js`. The player talks to the bridge with `postMessage` (`src/shared/film-protocol.ts`): it sends
-`seek`, the film answers `frame`. File changes reach the UI as Server-Sent Events on `/api/events` and reload the
+`seek`, the film answers `frame`. **Other shapes** (`src/shared/export.ts`): the page's address may ask for another
+size (`kairos-size=1080x1920`) and no captions (`kairos-captions=off`); the bridge puts them in `window.__kairos.size`
+and `window.__kairos.captions`. A film that draws itself at any size says so with `window.KAIROS_RESHAPE = true`
+(sent with `ready` as `reshape`): the film page then shows a Wide / Tall / Square switch above the player
+(`ShapeSwitch`), with the page at that size (notes and their marks stay on the film's own shape). File changes reach the UI as Server-Sent Events on `/api/events` and reload the
 preview. The app changes `kairos.json` only through `changeFilm` in `src/server/films.ts`, which keeps unknown
 fields and never touches a broken file.
 
@@ -230,7 +234,13 @@ film's `assets/`).
 ## Rendering
 
 `src/server/renderer.ts` turns a film into `renders/<id>-v<N>.mp4` (versions only go up; the list is
-`.kairos/renders.json`, `src/server/renders.ts`). The Render dialog's one switch, **Use the graphics card** (`gpu`),
+`.kairos/renders.json`, `src/server/renders.ts`). **Made for:** the Render dialog's first choice is where the video
+goes, which sets its shape: YouTube (wide), Shorts · TikTok · Reels (tall) or a square post (`shape`). Its own shape
+renders at the film's size; another at 1920×1080, 1080×1920 or 1080×1080 (`exportSize`), named `<id>-v<N>-tall.mp4`.
+The first worker opens the page at that size and reads `KAIROS_RESHAPE`: a film that reframes itself is drawn at it
+(`fit: "reframe"`), any other is drawn at its own size and the join fits it in (`fit: "bars"` or `"crop"`,
+`fitSteps` in `ffmpeg.ts`, after the clip overlays); the other workers open their pages once that is known. The
+frame route and `kairos_frame` take a `shape` too (a film that can't reframe is refused: `CannotReshape`). The Render dialog's one switch, **Use the graphics card** (`gpu`),
 covers both the drawing and the encoding: off, the workers' browsers start with `--disable-gpu` (the processor
 draws, and films can pick a lighter look) and the processor encodes. Frames are split into chunks of about 4 s. Up to 4 workers
 (about one per 3 CPU cores and per 1.5 GB of free memory) each start **their own hidden browser**: one browser takes screenshots one at a time,

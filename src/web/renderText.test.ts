@@ -18,6 +18,8 @@ const job = (extra: Partial<RenderJob>): RenderJob => ({
   quality: "high",
   encoder: "h264_nvenc",
   gpu: true,
+  shape: null,
+  fit: "bars",
   done: 0,
   total: 300,
   queuedAt: "2026-11-19T10:00:00.000Z",

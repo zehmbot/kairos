@@ -9,8 +9,9 @@ import { LAYOUTS } from "../../templates/blocky/blocky/layouts.js";
 import { planStory } from "../../templates/blocky/blocky/timing.js";
 import { voiceLinesFrom } from "../../templates/blocky/blocky/voice.js";
 import { clipBox } from "../shared/clips.ts";
+import { showingQuery, withQuery } from "../shared/export.ts";
 import { FilmConfigSchema } from "../shared/types.ts";
-import { Camera, findBrowser, launchHeadless, openFilm } from "./camera.ts";
+import { Camera, CannotReshape, findBrowser, launchHeadless, openFilm } from "./camera.ts";
 import { findFfmpeg } from "./ffmpeg.ts";
 import { buildFilmServer } from "./film-server.ts";
 import { createFilm } from "./films.ts";
@@ -414,6 +415,74 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
       expect(most, `frame at ${t} s`).toBeLessThanOrEqual(2);
     }
   }, 300_000);
+
+  it("shows a Blocky film in another shape, and refuses a film that can't reframe itself", async () => {
+    const blocky = fileURLToPath(new URL("../../templates/blocky/", import.meta.url));
+    const id = await createFilm(
+      filmsDir,
+      blocky,
+      { title: "Shape check", shape: "tall" },
+      { size: { width: 360, height: 640 } },
+    );
+    // Asked for wide, the tall film draws itself wide: both its layers at 640 × 360.
+    const browserInfo = findBrowser();
+    if (!browserInfo) throw new Error("no browser");
+    const worker = await launchHeadless(browserInfo);
+    try {
+      const page = await worker.newPage();
+      const url = withQuery(
+        `http://127.0.0.1:${port}/${id}/`,
+        showingQuery({ size: { width: 640, height: 360 } }),
+      );
+      const film = await openFilm(page, url, 640, 360);
+      await film.draw(3.4);
+      expect(
+        await page.evaluate(() => ({
+          reshape: (window as { KAIROS_RESHAPE?: unknown }).KAIROS_RESHAPE,
+          size: window.__kairos?.size,
+          layers: [...document.querySelectorAll("canvas")].map((c) => [c.width, c.height]),
+        })),
+      ).toEqual({
+        reshape: true,
+        size: { width: 640, height: 360 },
+        layers: [
+          [640, 360],
+          [640, 360],
+        ],
+      });
+    } finally {
+      await worker.close();
+    }
+    // The camera takes it in that shape.
+    const png = await camera.capture({
+      url: withQuery(
+        `http://127.0.0.1:${port}/${id}/`,
+        showingQuery({ size: { width: 640, height: 360 } }),
+      ),
+      width: 640,
+      height: 360,
+      t: 3.4,
+      maxSide: 640,
+      reshaped: true,
+    });
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([640, 360]);
+
+    // A film that doesn't say it reframes itself is refused, in plain words.
+    const starter = fileURLToPath(new URL("../../templates/starter/", import.meta.url));
+    const plain = await createFilm(filmsDir, starter, { title: "Plain shape", shape: "wide" });
+    await expect(
+      camera.capture({
+        url: withQuery(
+          `http://127.0.0.1:${port}/${plain}/`,
+          showingQuery({ size: { width: 1080, height: 1920 } }),
+        ),
+        width: 360,
+        height: 640,
+        t: 0,
+        reshaped: true,
+      }),
+    ).rejects.toThrow(CannotReshape);
+  }, 240_000);
 
   it("draws with the processor when the graphics card is turned off", async () => {
     const browserInfo = findBrowser();

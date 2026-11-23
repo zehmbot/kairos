@@ -120,6 +120,28 @@
     return { sounds };
   }
 
+  /**
+   * What Kairos asks of this showing, in the page's address (src/shared/export.ts): another size
+   * (`kairos-size=1080x1920`, for a film that reframes itself) and no captions (`kairos-captions=off`).
+   */
+  const asked = new URLSearchParams(location.search);
+  const sizeMatch = /^(\d{2,5})x(\d{2,5})$/.exec(asked.get("kairos-size") ?? "");
+  const askedSize = sizeMatch
+    ? Object.freeze({ width: Number(sizeMatch[1]), height: Number(sizeMatch[2]) })
+    : null;
+  const askedCaptions = asked.get("kairos-captions") !== "off";
+
+  /**
+   * What the film can do for an export: draw itself at any size (`window.KAIROS_RESHAPE = true`) and give the
+   * captions it shows (`window.KAIROS_CAPTIONS`, which also means it leaves them out when asked).
+   */
+  function readAbilities() {
+    return {
+      ...(window.KAIROS_RESHAPE === true ? { reshape: true } : {}),
+      ...(Array.isArray(window.KAIROS_CAPTIONS) ? { captions: true } : {}),
+    };
+  }
+
   /** The places the film's engine can show (`window.KAIROS_PLACES`), when it says (Blocky). */
   function readPlaces() {
     const raw = window.KAIROS_PLACES;
@@ -154,8 +176,11 @@
   // Frames are drawn one at a time, in the order they were asked for.
   let queue = Promise.resolve();
 
-  // For Kairos' frame camera and renderer, which open the film page directly (not in the player).
+  // For Kairos' frame camera and renderer, which open the film page directly (not in the player), and for the
+  // film itself: the size it is asked to draw at (null: its own) and whether to draw its captions.
   window.__kairos = Object.freeze({
+    size: askedSize,
+    captions: askedCaptions,
     render(t) {
       const done = queue.then(() => draw(t));
       queue = done.catch(() => undefined);
@@ -182,6 +207,7 @@
           ...readLength(),
           ...readSounds(),
           ...readPlaces(),
+          ...readAbilities(),
         });
       });
     } else if (message.type === "seek" && Number.isFinite(message.t)) {

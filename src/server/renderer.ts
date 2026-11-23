@@ -16,8 +16,16 @@ import { dirname, join } from "node:path";
 import type { Browser, Page } from "puppeteer-core";
 import { clipBox, clipLength, drawOrder, isPicture } from "../shared/clips.ts";
 import { duckExpression, talkSpans, voiceSpans } from "../shared/duck.ts";
+import { exportSize, isReshaped, shapeOf, showingQuery, withQuery } from "../shared/export.ts";
 import { frameCount, timeOf } from "../shared/frames.ts";
-import type { ExportInfo, RenderEncoder, RenderJob, RenderQuality } from "../shared/types.ts";
+import type {
+  ExportInfo,
+  FilmShape,
+  RenderEncoder,
+  RenderFit,
+  RenderJob,
+  RenderQuality,
+} from "../shared/types.ts";
 import { type BrowserInfo, launchHeadless, type OpenFilm, openFilm } from "./camera.ts";
 import {
   chunkArgs,
@@ -99,6 +107,13 @@ interface Active {
   children: Set<ChildProcess>;
 }
 
+/** How a film's page is opened for a render: its address and the size it draws at. */
+interface Showing {
+  url: string;
+  width: number;
+  height: number;
+}
+
 /** How long each voice clip's file is: from the film's voice lines, else measured with ffprobe. */
 async function voiceLengths(
   filmDir: string,
@@ -134,7 +149,10 @@ export class Renderer {
   }
 
   /** Puts a film in the queue. Throws RenderError when it can't be rendered. */
-  async start(filmId: string, input: { quality: RenderQuality; gpu: boolean }): Promise<RenderJob> {
+  async start(
+    filmId: string,
+    input: { quality: RenderQuality; gpu: boolean; shape?: FilmShape; fit?: "bars" | "crop" },
+  ): Promise<RenderJob> {
     const info = await this.#options.exportInfo();
     if (!info.ffmpeg) {
       throw new RenderError(
@@ -158,6 +176,8 @@ export class Renderer {
       quality: input.quality,
       encoder,
       gpu: input.gpu,
+      shape: input.shape ?? null,
+      fit: input.fit ?? "bars",
       done: 0,
       total: frameCount(config.duration, config.fps),
       queuedAt: new Date().toISOString(),
@@ -263,22 +283,55 @@ export class Renderer {
       const url = `${this.#options.filmServerUrl}${path}`;
       const browserInfo = this.#options.browser;
 
+      // The size it goes out at. In another shape, a film that reframes itself (window.KAIROS_RESHAPE) draws at that
+      // size; any other film draws at its own and is fitted into it when the chunks are joined.
+      const size = exportSize(config, job.shape);
+      const own: Showing = { url, width: config.width, height: config.height };
+      const asked: Showing = { url: withQuery(url, showingQuery({ size })), ...size };
+      const reshaped = isReshaped(config, size);
+      // The first page to open finds out which, and the other workers open theirs once it knows.
+      let decide: (showing: Showing) => void = () => undefined;
+      let undecided: (error: unknown) => void = () => undefined;
+      const decided: Promise<Showing> = reshaped
+        ? new Promise((resolve, reject) => {
+            decide = resolve;
+            undecided = reject;
+          })
+        : Promise.resolve(own);
+      decided.catch(() => undefined);
+      let showing = own;
+
       // Workers take chunks from a shared list. The first failure stops the others.
       let next = 0;
       // The first page open says which effect sounds the film places (before the sound is mixed).
       let soundsRead: Promise<unknown> | null = null;
       let failure: unknown = null;
       const dir = partsDir;
-      const worker = async () => {
+      const worker = async (index: number) => {
         // Each worker gets its own browser: one browser takes its screenshots one at a time,
         // so separate browsers render about 3x faster than windows of one browser.
         // Without the graphics card, the browser draws with the processor (films pick a lighter look).
-        const browser = await launchHeadless(browserInfo, { gpu: job.gpu });
+        const browser = await launchHeadless(browserInfo, { gpu: job.gpu }).catch((error) => {
+          if (index === 0) undecided(error);
+          throw error;
+        });
         active.browsers.add(browser);
         try {
           if (active.cancelled) return;
           const page = await browser.newPage();
-          const view = await openFilm(page, url, config.width, config.height, 1);
+          let view: OpenFilm;
+          if (index === 0 && reshaped) {
+            view = await openFilm(page, asked.url, asked.width, asked.height, 1);
+            const reframes = await page
+              .evaluate(() => (window as { KAIROS_RESHAPE?: unknown }).KAIROS_RESHAPE === true)
+              .catch(() => false);
+            showing = reframes ? asked : own;
+            if (!reframes) view = await openFilm(page, own.url, own.width, own.height, 1);
+            decide(showing);
+          } else {
+            const how = await decided;
+            view = await openFilm(page, how.url, how.width, how.height, 1);
+          }
           soundsRead ??= page
             .evaluate(() => (window as { KAIROS_SOUNDS?: unknown }).KAIROS_SOUNDS ?? null)
             .then((sounds) =>
@@ -292,8 +345,8 @@ export class Renderer {
               ffmpeg,
               output: join(dir, chunkFile(chunk)),
               fps: config.fps,
-              width: config.width,
-              height: config.height,
+              width: showing.width,
+              height: showing.height,
             });
           }
         } catch (error) {
@@ -301,12 +354,14 @@ export class Renderer {
           active.cancelled = true;
           for (const child of active.children) child.kill();
         } finally {
+          // Workers waiting on the first page never wait for nothing (after it decided, this does nothing).
+          if (index === 0) undecided(new RenderError("The render stopped."));
           await browser.close().catch(() => undefined);
           active.browsers.delete(browser);
         }
       };
       const count = Math.min(this.#options.workers ?? workerCount(), chunks.length);
-      await Promise.all(Array.from({ length: count }, worker));
+      await Promise.all(Array.from({ length: count }, (_, index) => worker(index)));
       if (failure) throw failure;
       if (active.cancelled) {
         this.#end(job, "cancelled", null);
@@ -349,7 +404,11 @@ export class Renderer {
             ]
           : [];
       });
-      // Video clips are drawn over the film, in track order; a video's own sound joins the mix.
+      // How the video got its shape; a film that didn't reframe is fitted into the size asked for.
+      const fit: RenderFit = !reshaped ? "own" : showing === asked ? "reframe" : job.fit;
+      const frame = fit === "bars" || fit === "crop" ? { ...size, fit } : undefined;
+      // Video clips are drawn over the film (at the size it was drawn), in track order; a video's own sound joins
+      // the mix.
       const clips: OverlayClip[] = [];
       for (const clip of drawOrder(config.video)) {
         const path = resolveInside(film.path, clip.file);
@@ -365,7 +424,7 @@ export class Renderer {
           start: clip.start,
           length: shown,
           from: clip.from,
-          box: clipBox(clip, config.width, config.height),
+          box: clipBox(clip, showing.width, showing.height),
           fit: clip.fit,
           opacity: clip.opacity,
           fade: clip.fade,
@@ -388,6 +447,7 @@ export class Renderer {
           clips,
           encoding: { encoder: job.encoder, quality: job.quality, fps: config.fps },
           duration: config.duration,
+          frame,
         },
       );
       // Cancel stops the join too. A join that gets stuck is stopped and runs again, once.
@@ -416,7 +476,8 @@ export class Renderer {
         }
       }
       const version = await nextVersion(film.path, film.id);
-      const name = videoName(film.id, version);
+      const shape = shapeOf(size);
+      const name = videoName(film.id, version, reshaped ? shape : null);
       await rename(joined, join(film.path, RENDERS_DIR, name));
       await addRender(film.path, {
         version,
@@ -424,8 +485,10 @@ export class Renderer {
         createdAt: new Date().toISOString(),
         quality: job.quality,
         encoder: job.encoder,
-        width: config.width,
-        height: config.height,
+        width: size.width,
+        height: size.height,
+        shape,
+        fit,
         fps: config.fps,
         duration: config.duration,
         frames: job.total,

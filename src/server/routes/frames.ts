@@ -1,7 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { exportSize, isReshaped, showingQuery, withQuery } from "../../shared/export.ts";
 import { CHECKS_HEADER, STORY_LENGTH_HEADER } from "../../shared/film-protocol.ts";
-import type { Camera } from "../camera.ts";
+import { FilmShapeSchema } from "../../shared/types.ts";
+import { type Camera, CannotReshape } from "../camera.ts";
 import { type Film, readFilm, SHEET_PAGE } from "../films.ts";
 import type { Studio } from "../studio.ts";
 import { filmThumbnail, thumbnailTime } from "../thumbnails.ts";
@@ -18,6 +20,8 @@ const FrameQuerySchema = z.object({
   t: z.coerce
     .number({ error: "Say which moment to show: t, in seconds." })
     .min(0, "t can't be before the start of the film."),
+  /** Another shape than the film's own (a film that reframes itself draws at that size). */
+  shape: FilmShapeSchema.optional(),
 });
 
 /** Leaves room for float rounding on the very last frame. */
@@ -75,7 +79,7 @@ export function frameRoutes(app: FastifyInstance, options: FrameRoutesOptions): 
     if (!query.success) {
       return sendError(reply, 400, "bad-request", query.error.issues[0]?.message ?? "Bad request.");
     }
-    const { t } = query.data;
+    const { t, shape } = query.data;
     if (t > film.config.duration + TIME_SLACK) {
       return sendError(
         reply,
@@ -92,19 +96,23 @@ export function frameRoutes(app: FastifyInstance, options: FrameRoutesOptions): 
         "Kairos could not find Chrome or Edge to take pictures.",
       );
     }
+    const size = exportSize(film.config, shape);
+    const reshaped = isReshaped(film.config, size);
     try {
       const { png, length } = await camera.captureFrame({
-        url: `${options.filmServerUrl}${path}`,
-        width: film.config.width,
-        height: film.config.height,
+        url: withQuery(`${options.filmServerUrl}${path}`, reshaped ? showingQuery({ size }) : ""),
+        ...size,
         t: Math.min(t, film.config.duration),
         film: { dir: film.path, config: film.config },
+        reshaped,
       });
       // How long the film says its story lasts (Blocky follows its voices), for Claude to fit the length.
       if (length !== null)
         reply.header(STORY_LENGTH_HEADER, String(Math.round(length * 1000) / 1000));
       return reply.type("image/png").header("cache-control", "no-store").send(png);
     } catch (error) {
+      if (error instanceof CannotReshape)
+        return sendError(reply, 409, "cannot-reshape", error.message);
       // "The film could not draw this frame: ..." is the film's own error: Claude needs to read it.
       return sendError(reply, 422, "frame-failed", (error as Error).message);
     }

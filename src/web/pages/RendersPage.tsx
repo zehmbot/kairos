@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import type { RendersOverview } from "../../shared/types.ts";
+import { SHAPE_USES } from "../../shared/export.ts";
+import type { RenderFit, RendersOverview } from "../../shared/types.ts";
 import {
   useCancelRender,
   useDeleteRender,
@@ -56,6 +57,7 @@ export function RendersPage() {
                 <div className="render-head">
                   <Link to={`/films/${encodeURIComponent(job.filmId)}`} className="render-title">
                     {job.title}
+                    {job.shape && <span className="px-tag">{SHAPE_USES[job.shape].short}</span>}
                   </Link>
                   <PixelButton
                     variant="ghost"
@@ -127,6 +129,13 @@ export function RendersPage() {
   );
 }
 
+/** How a video in another shape than its film's got it. */
+const FIT_WORDS: Record<Exclude<RenderFit, "own">, string> = {
+  reframe: "reframed",
+  bars: "with bars",
+  crop: "cropped",
+};
+
 function VideoRow({ video, onPlay }: { video: Video; onPlay: (video: Video) => void }) {
   const remove = useDeleteRender();
   const openFolder = useOpenRenderFolder();
@@ -139,12 +148,14 @@ function VideoRow({ video, onPlay }: { video: Video; onPlay: (video: Video) => v
       <div className="render-head">
         <span className="render-title">
           {video.title} <span className="px-tag">v{video.version}</span>
+          {video.shape && <span className="px-tag">{SHAPE_USES[video.shape].short}</span>}
         </span>
         <span className="render-date">{new Date(video.createdAt).toLocaleString()}</span>
       </div>
       <p className="render-meta">
         {video.width} × {video.height} · {video.fps} fps · {formatLength(video.duration)} ·{" "}
-        {formatBytes(video.bytes)} · {video.quality === "high" ? "High" : "Smaller file"} · made in{" "}
+        {formatBytes(video.bytes)} · {video.quality === "high" ? "High" : "Smaller file"}
+        {video.fit && video.fit !== "own" && ` · ${FIT_WORDS[video.fit]}`} · made in{" "}
         {formatDuration(video.seconds)}
       </p>
       <div className="note-actions">

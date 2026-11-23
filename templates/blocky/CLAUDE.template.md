@@ -43,6 +43,10 @@ time a file here is saved.
 **Main character, place and mood:** follow the brief. With "Let Claude choose", pick the place that fits the
 story.
 
+**Other shapes:** the engine frames every shot for the size it's given, so the same story goes out wide for YouTube,
+tall for Shorts and square, each filmed for its shape (`kairos_render` with `shape`). To see one before rendering,
+use `kairos_frame` with the same `shape`. Stage the story so it reads in the film's own shape; the others follow.
+
 The `kairos-blocky` skill has the full style guide (narration, pacing, shot choice, staging actions,
 things, faces, effects, checks). Use it.
 

@@ -191,7 +191,10 @@ export function frameShot({
     const offsets = framed.map((s) => s.head.clone().sub(center).dot(side));
     const span = Math.max(...offsets) - Math.min(...offsets);
     fov = spec.fov;
-    const frameH = spec.height * size;
+    // A wide picture's height sets a close-up's size: a little more room, a little higher, keeps a tall hat in it
+    // (the mouth stays well above the captions).
+    const wideClose = type === "close" && aspect > 1;
+    const frameH = spec.height * size * (wideClose ? 1.2 : 1);
     const frameW = spec.width * size + span;
     const fit = Math.max(
       frameH / 2 / Math.tan(THREE.MathUtils.degToRad(fov) / 2),
@@ -201,7 +204,9 @@ export function frameShot({
     // nearest one is as far as the framing wants, instead of the camera ending up in them.
     const depth = Math.max(0, ...framed.map((s) => s.head.clone().sub(center).dot(dir)));
     const dist = fit + depth;
-    target = center.clone().add(new THREE.Vector3(0, -spec.eyes * frameH, 0));
+    target = center
+      .clone()
+      .add(new THREE.Vector3(0, -spec.eyes * frameH * (wideClose ? 0.5 : 1), 0));
     // A group with people sitting and standing: the highest head stays in the picture (even after a push in).
     if (framed.length > 1) {
       const highest = Math.max(...framed.map((s) => s.head.y + 1.2 * s.size));

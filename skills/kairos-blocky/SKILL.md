@@ -321,6 +321,10 @@ with every beat, and the bodies react with them.
   set it with `kairos_film_settings`.
 - **Render:** frames and renders use the richest look; a 30-second film takes a minute or two with a graphics
   card. Without one everything still works, slower, with a lighter look.
+- **Other shapes:** the engine frames every shot for the size it's given, so one story goes out wide (YouTube),
+  tall (Shorts, TikTok, Reels) and square, each filmed for its shape: `kairos_render` with `shape`. When the user
+  wants another shape, look at a few frames in it first (`kairos_frame` with `shape`): the busiest shots and the
+  ones with three or more people.
 
 ## Voices
 

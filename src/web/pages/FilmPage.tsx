@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { talkSpans, voiceSpans } from "../../shared/duck.ts";
-import type { FilmSound } from "../../shared/film-protocol.ts";
+import { exportSize, isReshaped, shapeOf, showingQuery, withQuery } from "../../shared/export.ts";
+import { type FilmAbilities, type FilmSound, NO_ABILITIES } from "../../shared/film-protocol.ts";
 import { mediaKindOf } from "../../shared/media.ts";
-import type { AudioTrack, Note } from "../../shared/types.ts";
+import type { AudioTrack, FilmShape, Note } from "../../shared/types.ts";
 import {
   syncFilmSounds,
   useAddEffectSound,
@@ -50,6 +51,7 @@ import { Player, type PlayerHandle } from "../components/Player.tsx";
 import { ReferencesPanel } from "../components/ReferencesPanel.tsx";
 import { RenderDialog } from "../components/RenderDialog.tsx";
 import { SaveTemplateDialog } from "../components/SaveTemplateDialog.tsx";
+import { ShapeSwitch } from "../components/ShapeSwitch.tsx";
 import { SheetsPanel } from "../components/SheetsPanel.tsx";
 import { SideTabs } from "../components/SideTabs.tsx";
 import { SoundPanel } from "../components/SoundPanel.tsx";
@@ -159,6 +161,23 @@ export function FilmPage() {
   const [storyLength, setStoryLength] = useState<number | null>(null);
   // The places the film's engine can show (Blocky), for the Sheets tab.
   const [places, setPlaces] = useState<string[] | null>(null);
+  // What the film can do for an export (reframe itself, give its captions), and the shape you're looking at it in
+  // (null: its own). Both belong to this film only.
+  const [abilitiesOf, setAbilitiesOf] = useState<{ id: string; abilities: FilmAbilities }>({
+    id,
+    abilities: NO_ABILITIES,
+  });
+  const abilities = abilitiesOf.id === id ? abilitiesOf.abilities : NO_ABILITIES;
+  const onAbilities = useCallback(
+    (next: FilmAbilities) => setAbilitiesOf({ id, abilities: next }),
+    [id],
+  );
+  const [shownOf, setShownOf] = useState<{ id: string; shape: FilmShape | null }>({
+    id,
+    shape: null,
+  });
+  // Only a film that reframes itself shows in another shape.
+  const shown = shownOf.id === id && abilities.reshape ? shownOf.shape : null;
   // The effect sounds the film places (Blocky): sent to Kairos when they change, for the Effects lane.
   const sentSounds = useRef<string | null>(null);
   const onSounds = useCallback(
@@ -261,6 +280,9 @@ export function FilmPage() {
   const filmOrigin = health.data
     ? `${window.location.protocol}//${window.location.hostname}:${health.data.filmPort}`
     : null;
+  // The size the preview shows the film at: its own, or another shape's (the film frames itself for it).
+  const shownSize = config ? exportSize(config, shown) : null;
+  const reshaped = Boolean(config && shownSize && isReshaped(config, shownSize));
   const allNotes = notes.data ?? [];
   const openNotes = allNotes.filter((note) => note.status === "open");
 
@@ -302,7 +324,7 @@ export function FilmPage() {
         <p>Fix it and the preview comes back by itself.</p>
       </Notice>
     );
-  } else if (config && previewPath && filmOrigin) {
+  } else if (config && shownSize && previewPath && filmOrigin) {
     // While a note is being written, only its own marks show. Otherwise: open notes (and the one opened).
     const overlay = (frame: number) => {
       const t = timeOf(frame, config.fps);
@@ -332,23 +354,29 @@ export function FilmPage() {
     preview = (
       <div className="stack">
         <Player
-          // A new frame rate starts the player over (frame numbers mean other times now).
-          key={`${film.data.id}@${config.fps}`}
+          // A new frame rate starts the player over (frame numbers mean other times now), and so does another shape.
+          key={`${film.data.id}@${config.fps}@${shownSize.width}x${shownSize.height}`}
           ref={playerRef}
-          // `kairos=preview`: the film may draw a lighter look while you watch (renders get its full look).
-          src={`${filmOrigin}${previewPath}?kairos=preview`}
+          // `kairos=preview`: the film may draw a lighter look while you watch (renders get its full look). In
+          // another shape, the page is asked for that size.
+          src={withQuery(
+            `${filmOrigin}${previewPath}?kairos=preview`,
+            reshaped ? showingQuery({ size: shownSize }) : "",
+          )}
           title={config.title}
-          width={config.width}
-          height={config.height}
+          width={shownSize.width}
+          height={shownSize.height}
           fps={config.fps}
           duration={config.duration}
           reloadKey={reloadKey}
-          overlay={overlay}
+          // Notes and their marks belong to the film's own shape.
+          overlay={reshaped ? undefined : overlay}
           cover={<ClaudeAtWork filmId={film.data.id} />}
           noteMarks={openNotes}
           onStoryLength={setStoryLength}
           onSounds={onSounds}
           onPlaces={setPlaces}
+          onAbilities={onAbilities}
           video={config.video.map((clip) => ({
             ...clip,
             url: filmFileUrl(filmOrigin, film.data.id, clip.file),
@@ -586,7 +614,15 @@ export function FilmPage() {
               actions={
                 !problem && (
                   <div className="panel-actions">
-                    {canReview && (
+                    {config && abilities.reshape && (
+                      <ShapeSwitch
+                        shown={shown}
+                        own={shapeOf(config)}
+                        size={config}
+                        onShow={(shape) => setShownOf({ id, shape })}
+                      />
+                    )}
+                    {canReview && !reshaped && (
                       <MarkTools
                         tool={draft.tool}
                         onTool={draftActions.setTool}
@@ -683,6 +719,10 @@ export function FilmPage() {
               onClose={() => setRenderOpen(false)}
               filmId={film.data.id}
               title={config.title}
+              size={config}
+              duration={config.duration}
+              reshape={abilities.reshape}
+              shown={shown}
             />
             <SaveTemplateDialog
               open={templateOpen}

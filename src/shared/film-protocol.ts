@@ -21,6 +21,16 @@ export const FilmSoundSchema = z.object({
 });
 export type FilmSound = z.infer<typeof FilmSoundSchema>;
 
+/** What a film can do for an export, from its `ready` message (src/shared/export.ts). */
+export interface FilmAbilities {
+  /** It draws itself at any size: it can go out in other shapes, and the player can show them. */
+  reshape: boolean;
+  /** It gives the captions it shows, and leaves them out when asked. */
+  captions: boolean;
+}
+
+export const NO_ABILITIES: FilmAbilities = Object.freeze({ reshape: false, captions: false });
+
 /** Film -> player. */
 export const FilmMessageSchema = z.discriminatedUnion("type", [
   /** The page has loaded and `window.READY` has settled. */
@@ -38,6 +48,10 @@ export const FilmMessageSchema = z.discriminatedUnion("type", [
       .array(z.string().regex(/^[A-Za-z0-9_-]{1,40}$/))
       .max(60)
       .optional(),
+    /** The film draws itself at any size it's asked (`window.KAIROS_RESHAPE`): it can go out in other shapes. */
+    reshape: z.boolean().optional(),
+    /** The film gives the captions it shows (`window.KAIROS_CAPTIONS`) and leaves them out when asked. */
+    captions: z.boolean().optional(),
   }),
   /** Answer to a `seek`: the frame is drawn (or `error` says why not). */
   z.object({

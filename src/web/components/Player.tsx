@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { FilmSound } from "../../shared/film-protocol.ts";
+import type { FilmAbilities, FilmSound } from "../../shared/film-protocol.ts";
 import type { PreviewTrack } from "../player/audioSync.ts";
 import { formatTimecode, frameAt, sceneAt, timeOf } from "../player/time.ts";
 import { useFilmAudio, useSoundSettings } from "../player/useFilmAudio.ts";
@@ -46,6 +46,8 @@ interface PlayerProps {
   onSounds?: (sounds: FilmSound[] | null) => void;
   /** The places the film's engine can show, each time it loads (null when it doesn't say). */
   onPlaces?: (places: string[] | null) => void;
+  /** What the film can do for an export (reframe itself, give its captions), once it has loaded. */
+  onAbilities?: (abilities: FilmAbilities) => void;
   ref?: Ref<PlayerHandle>;
 }
 
@@ -103,6 +105,7 @@ export function Player({
   onStoryLength,
   onSounds,
   onPlaces,
+  onAbilities,
   video = NO_CLIPS,
   ref,
 }: PlayerProps) {
@@ -110,6 +113,9 @@ export function Player({
   useEffect(() => onStoryLength?.(player.length), [onStoryLength, player.length]);
   useEffect(() => onSounds?.(player.sounds), [onSounds, player.sounds]);
   useEffect(() => onPlaces?.(player.places), [onPlaces, player.places]);
+  useEffect(() => {
+    if (player.abilities) onAbilities?.(player.abilities);
+  }, [onAbilities, player.abilities]);
   const { frame, total, toggle, step, seek, pause, currentFrame, clockFrame } = player;
   const stageRef = useRef<HTMLDivElement>(null);
   const stage = useElementSize(stageRef);

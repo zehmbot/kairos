@@ -37,6 +37,11 @@ assets/       images, fonts, sounds
 - Optional scene markers for the Kairos timeline: `window.KAIROS_SCENES = [{ name, start, end }]` (seconds).
 - Optional `window.KAIROS_LENGTH` (seconds), for a film that works out its own length (set both before
   `window.READY` settles). Kairos shows when it differs from `duration`, and `kairos_frame` says so too.
+- Optional, **other shapes**: a film that lays itself out for any size can go out wide, tall and square, each framed
+  for it. It reads its size from `window.__kairos.size` (`{ width, height }` when Kairos asks for another shape,
+  else null: use the film's own) while it starts, and sets `window.KAIROS_RESHAPE = true`. Kairos then shows it in
+  other shapes and renders them at that size. A film that doesn't say so goes out in another shape with bars or a
+  crop.
 
 Helpers that keep motion deterministic:
 
@@ -173,6 +178,10 @@ When the user asks for the video file, `kairos_render` puts the film in the rend
 `renders/`, a new version each time, never overwritten). Rendering draws every frame, so a film that throws on any
 frame fails: check a few frames with `kairos_frame` first. Follow it with `kairos_renders`, which also shows the
 reason when a render fails (the frame and the error).
+
+For somewhere else than the film's own shape, give `kairos_render` a `shape`: `wide` (YouTube), `tall` (Shorts,
+TikTok, Reels) or `square`. A film that reframes itself (`KAIROS_RESHAPE`) is drawn for it; check it first with
+`kairos_frame` and the same `shape`. Any other film gets bars (`fit: "bars"`) or a crop (`fit: "crop"`).
 
 ## Longer films: one file per scene
 
