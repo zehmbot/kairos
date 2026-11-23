@@ -15,6 +15,7 @@ Claude, and renders video files. The app UI is pixel art. The videos themselves 
 | `npm run lint` / `npm run format` | Biome check / fix                                                                               |
 | `npm run typecheck`               | `tsc --noEmit`                                                                                  |
 | `npm run favicon`                 | Regenerate `public/favicon.svg` from the `logo` icon                                            |
+| `npm run readme-images`           | Regenerate the README's logo and feature icons in `docs/readme/` from the app's icons           |
 | `npm run setup`                   | Add the Kairos tools to Claude Code (same as Settings → Claude Code → Connect)                  |
 
 Requires Node.js 24+ and, from the render milestone on, ffmpeg on PATH. The hub also starts the **film server** on

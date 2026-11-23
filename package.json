@@ -20,7 +20,8 @@
     "test": "vitest run",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "favicon": "node scripts/favicon.ts"
+    "favicon": "node scripts/favicon.ts",
+    "readme-images": "node scripts/readme-images.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-deterministic-compat": "0.21.0",
