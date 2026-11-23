@@ -20,7 +20,32 @@ const STATE_LABEL: Record<Skill["state"], string> = {
   taken: "Name taken",
 };
 
-/** Kairos skills (the defaults) and the user's own, each on or off in Claude Code. */
+/** Kairos' own skills in plain words: what each one teaches Claude. Any other shows its own description. */
+const GUIDES: Record<string, { title: string; words: string }> = {
+  kairos: { title: "Kairos films", words: "How films work in Kairos, and how to fix your notes." },
+  "kairos-directing": {
+    title: "Directing",
+    words: "The idea, the shots, the light and the rhythm of a good video.",
+  },
+  "kairos-camera": { title: "Camera", words: "Shot sizes, lenses and camera moves." },
+  "kairos-3d": {
+    title: "3D",
+    words: "3D scenes: light, materials, atmosphere and simple characters.",
+  },
+  "kairos-captions": {
+    title: "Words on screen",
+    words: "Captions, titles, labels and moving text.",
+  },
+  "kairos-blocky": {
+    title: "Blocky",
+    words: "Directing Blocky stories: acting, physics, camera and effects.",
+  },
+};
+
+/**
+ * Kairos' own skills as one switch, "Kairos' guides for Claude", with a plain sentence each under Details; your own
+ * skills below, each on or off in Claude Code.
+ */
 export function SkillsPage() {
   const skills = useSkills();
   const pick = usePickSkill();
@@ -34,8 +59,7 @@ export function SkillsPage() {
       <div className="page-head">
         <h1>Skills</h1>
         <p>
-          Skills teach Claude how to make good videos. Turned-on skills are copied into Claude Code,
-          which uses each one when it fits the work.
+          Skills teach Claude how to make good videos. Claude uses each one when it fits the work.
         </p>
       </div>
 
@@ -43,17 +67,7 @@ export function SkillsPage() {
         <Notice title="Kairos can't read the skills">{skills.error.message}</Notice>
       )}
 
-      <PixelPanel title="Kairos skills">
-        {skills.isPending ? (
-          <p>Loading skills...</p>
-        ) : (
-          <ul className="skill-list">
-            {ours.map((skill) => (
-              <SkillRow key={skill.name} skill={skill} />
-            ))}
-          </ul>
-        )}
-      </PixelPanel>
+      <KairosGuides guides={ours} loading={skills.isPending} />
 
       <PixelPanel
         title="Your skills"
@@ -103,6 +117,100 @@ export function SkillsPage() {
   );
 }
 
+/** Kairos' guides: on or off together, with each one in plain words under Details. */
+function KairosGuides({ guides, loading }: { guides: readonly Skill[]; loading: boolean }) {
+  const toggle = useSkillSwitch();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const usable = guides.filter((skill) => skill.state !== "taken");
+  const on = usable.filter((skill) => skill.state === "on" || skill.state === "update");
+  const updates = usable.filter((skill) => skill.state === "update");
+  const allOn = usable.length > 0 && on.length === usable.length;
+  const state = allOn ? "On" : on.length === 0 ? "Off" : `${on.length} of ${usable.length} on`;
+
+  /** Switches several guides, one after the other. */
+  const switchAll = async (list: readonly Skill[], to: "on" | "off" | "update") => {
+    setBusy(true);
+    try {
+      for (const skill of list) await toggle.mutateAsync({ name: skill.name, to });
+    } catch {
+      // toggle.error says what went wrong.
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <PixelPanel
+      title="Kairos' guides for Claude"
+      actions={
+        <PixelButton variant="ghost" aria-expanded={open} onClick={() => setOpen((now) => !now)}>
+          {open ? "Hide details" : "Details"}
+        </PixelButton>
+      }
+    >
+      {loading ? (
+        <p>Loading skills...</p>
+      ) : (
+        <div className="stack">
+          <div className="guides-line">
+            <span className="px-tag skill-state" data-state={allOn ? "on" : "off"}>
+              {state}
+            </span>
+            <p className="hint">
+              {allOn
+                ? "Claude follows them when it makes and changes your films."
+                : "Turn them on so Claude makes films the Kairos way."}
+            </p>
+            {allOn ? (
+              <PixelButton
+                variant="ghost"
+                data-size="small"
+                disabled={busy}
+                onClick={() => void switchAll(on, "off")}
+              >
+                Turn all off
+              </PixelButton>
+            ) : (
+              <PixelButton
+                data-size="small"
+                disabled={busy || usable.length === 0}
+                onClick={() =>
+                  void switchAll(
+                    usable.filter((skill) => !on.includes(skill)),
+                    "on",
+                  )
+                }
+              >
+                Turn all on
+              </PixelButton>
+            )}
+            {updates.length > 0 && (
+              <PixelButton
+                variant="ghost"
+                data-size="small"
+                icon="refresh"
+                disabled={busy}
+                onClick={() => void switchAll(updates, "update")}
+              >
+                Update
+              </PixelButton>
+            )}
+          </div>
+          {toggle.error && <p className="field-error">{toggle.error.message}</p>}
+          {open && (
+            <ul className="skill-list">
+              {guides.map((skill) => (
+                <SkillRow key={skill.name} skill={skill} />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </PixelPanel>
+  );
+}
+
 function SkillRow({ skill }: { skill: Skill }) {
   const toggle = useSkillSwitch();
   const remove = useDeleteSkill();
@@ -115,12 +223,14 @@ function SkillRow({ skill }: { skill: Skill }) {
   return (
     <li className="skill-row px-box" data-state={skill.state}>
       <div className="skill-head">
-        <h3 className="skill-name">/{skill.name}</h3>
+        <h3 className="skill-name">{GUIDES[skill.name]?.title ?? `/${skill.name}`}</h3>
         <span className="px-tag skill-state" data-state={skill.state}>
           {STATE_LABEL[skill.state]}
         </span>
       </div>
-      <p className="skill-description">{skill.description || "No description."}</p>
+      <p className="skill-description">
+        {GUIDES[skill.name]?.words ?? (skill.description || "No description.")}
+      </p>
       {skill.state === "taken" && (
         <p className="hint">
           Claude Code already has a different skill called {skill.name}. Kairos leaves it alone.
@@ -134,7 +244,7 @@ function SkillRow({ skill }: { skill: Skill }) {
       <div className="note-actions">
         {skill.state !== "taken" && (
           <PixelButton
-            variant={on ? "ghost" : "primary"}
+            variant="ghost"
             data-size="small"
             disabled={busy}
             onClick={() => toggle.mutate({ name: skill.name, to: on ? "off" : "on" })}

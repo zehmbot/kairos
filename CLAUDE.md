@@ -92,8 +92,10 @@ frame from `.kairos/thumb.png` (`src/server/thumbnails.ts`), taken again when th
 `PictureKeeper` takes them ahead of time (films without one after start, a changed film once it has been quiet for
 20 s, never while Claude works on it or a render runs), and a card keeps its old picture until the new one loads.
 
-Kairos' `starter` (`BLANK_TEMPLATE_ID`) is the **blank film**: New film's "Blank film" choice, and the files a new
-template starts from. It is never shown as a template card. The **Templates page** edits only the user's own
+Kairos' `starter` (`BLANK_TEMPLATE_ID`) is the **blank film**: New film's "Blank film" card, and the files a new
+template starts from. New film starts with "Blank film" or "From a template" (then a template and its kind), and its form shows the name,
+the questions a film is made from (required or long text), Voices and Claude makes it now; shape, frame rate, the
+other questions, the narrator and music wait under More choices, said on one line while it's closed. The **Templates page** edits only the user's own
 templates' `template.json` (the template editor, `src/web/templateForm.ts`: question ids come from the question text
 and saved ids are kept, so earlier briefs still match); Kairos' templates can only be duplicated.
 
@@ -453,7 +455,9 @@ or a file's contents. While Kairos runs Claude on a film, hooks for it are ignor
 `~/.claude/skills/<name>/` with a `.kairos-skill` marker (source + content hash). Kairos only changes folders that
 carry its marker, and the hub refreshes unedited copies at start and removes those of skills it no longer ships (a
 renamed one, `RENAMED_SKILLS` in `skills.ts`, is turned on under its new name). `KAIROS_CLAUDE_DIR` moves `~/.claude` (tests).
-Skills must stay frame-exact and match the film contract; keep each `SKILL.md` under 500 lines.
+The Skills page shows Kairos' skills as one "Kairos' guides for Claude" switch, each in plain words under Details
+(`GUIDES` in `SkillsPage.tsx`; a new Kairos skill gets a line there). Skills must stay frame-exact and match the film
+contract; keep each `SKILL.md` under 500 lines.
 
 **3D:** the film server serves the pinned `three` package at `/__kairos/lib/three/` (`build/` and `examples/jsm/`
 only), so films use an import map. The camera starts Chrome with `--enable-unsafe-swiftshader` so WebGL works

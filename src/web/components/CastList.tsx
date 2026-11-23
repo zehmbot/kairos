@@ -128,7 +128,7 @@ export function CastList({ filmId, voices, onChanged }: CastListProps) {
           className="px-input"
           value={name}
           maxLength={32}
-          placeholder="Add a speaker (ruby, grandpa…)"
+          placeholder="Name"
           aria-label="Speaker's name"
           onChange={(event) => setName(event.target.value)}
         />

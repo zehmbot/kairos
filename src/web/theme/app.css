@@ -1338,6 +1338,18 @@ a.render-title:hover {
   color: var(--text-muted);
 }
 
+/* Kairos' guides: their state, one sentence and one switch on a line. */
+.guides-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.guides-line .hint {
+  flex: 1 1 240px;
+}
+
 /* ---------- Film page: video on the left, notes on the right ---------- */
 
 .page.film-page {
@@ -2517,7 +2529,7 @@ video.asset-media {
 }
 
 .script-time {
-  width: 64px;
+  width: 72px;
   appearance: textfield;
 }
 
@@ -2527,10 +2539,43 @@ video.asset-media {
   appearance: none;
 }
 
+/* Who says it: a name chip (a plain select underneath). */
 .script-speaker {
+  max-width: 100%;
+  padding: 4px 8px;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--c-night);
+  background: var(--track-voice);
+  border: 0;
+  cursor: pointer;
+}
+
+.script-speaker:focus-visible {
+  outline: var(--px) solid var(--highlight);
+  outline-offset: 2px;
+}
+
+.script-when {
   flex: 1;
-  min-width: 90px;
-  width: auto;
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+/* Time and speed, open under the line's head: a label and its box on each row. */
+.script-timing {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.script-timing-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .script-text {
@@ -3068,6 +3113,48 @@ video.asset-media {
 .effects-menu-pick:focus-visible {
   color: var(--bg);
   background: var(--accent);
+}
+
+/* ---------- New film: a short form, More choices folded ---------- */
+
+.new-film-checks {
+  display: grid;
+  gap: 10px;
+}
+
+.more-choices {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: var(--bg);
+}
+
+.more-choices-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 8px;
+  padding: 0;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.more-choices-toggle:hover {
+  color: var(--highlight);
+}
+
+.more-choices-toggle:focus-visible {
+  outline: var(--px) solid var(--highlight);
+  outline-offset: 2px;
+}
+
+.more-choices-summary {
+  font-size: 16px;
 }
 
 /* ---------- Menus (More): a short list of actions drawn over the page ---------- */

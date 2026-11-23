@@ -70,6 +70,8 @@ export function LinesList({
   const [draft, setDraft] = useState<Row[] | null>(null);
   const [undo, setUndo] = useState<{ rows: Row[]; words: string } | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  // The line whose time and speed are open.
+  const [timing, setTiming] = useState<string | null>(null);
   const version = useRef(0);
   const timer = useRef<number | undefined>(undefined);
   const pending = useRef<(() => void) | null>(null);
@@ -250,22 +252,11 @@ export function LinesList({
                   data-flash={flash === row.key ? "" : undefined}
                 >
                   <div className="script-line-head">
-                    <input
-                      className="px-input script-time"
-                      type="number"
-                      min={0}
-                      step={0.1}
-                      value={row.start}
-                      aria-label="Starts at (seconds)"
-                      onChange={(event) =>
-                        change(row.key, { start: Number(event.target.value) || 0 })
-                      }
-                    />
-                    <span className="hint">s</span>
                     <select
-                      className="px-input script-speaker"
+                      className="script-speaker"
                       value={row.speaker}
                       aria-label="Who says it"
+                      data-tip="Who says it"
                       onChange={(event) => change(row.key, { speaker: event.target.value }, 0)}
                     >
                       {speakers.map((speaker) => (
@@ -274,24 +265,61 @@ export function LinesList({
                         </option>
                       ))}
                     </select>
-                    <select
-                      className="px-input script-speed"
-                      value={row.speed}
-                      aria-label="Speed"
-                      data-tip="Speed"
-                      onChange={(event) =>
-                        change(row.key, { speed: Number(event.target.value) }, 0)
-                      }
-                    >
-                      {[...new Set([...SPEEDS, row.speed])]
-                        .sort((a, b) => a - b)
-                        .map((speed) => (
-                          <option key={speed} value={speed}>
-                            {speed}×
-                          </option>
-                        ))}
-                    </select>
+                    <span className="script-when">
+                      at {formatLength(row.start)}
+                      {row.speed !== 1 && ` · ${row.speed}×`}
+                    </span>
+                    <PixelButton
+                      variant="ghost"
+                      data-size="small"
+                      icon="pen"
+                      tip="Time and speed"
+                      aria-expanded={timing === row.key}
+                      onClick={() => setTiming((now) => (now === row.key ? null : row.key))}
+                    />
                   </div>
+                  {timing === row.key && (
+                    <div className="script-timing">
+                      <label className="field-label" htmlFor={`${row.key}-start`}>
+                        Starts at
+                      </label>
+                      <span className="script-timing-field">
+                        <input
+                          id={`${row.key}-start`}
+                          className="px-input script-time"
+                          type="number"
+                          min={0}
+                          step={0.1}
+                          value={row.start}
+                          onChange={(event) =>
+                            change(row.key, { start: Number(event.target.value) || 0 })
+                          }
+                        />
+                        <span className="hint">s</span>
+                      </span>
+                      <label className="field-label" htmlFor={`${row.key}-speed`}>
+                        Speed
+                      </label>
+                      <span className="script-timing-field">
+                        <select
+                          id={`${row.key}-speed`}
+                          className="px-input script-speed"
+                          value={row.speed}
+                          onChange={(event) =>
+                            change(row.key, { speed: Number(event.target.value) }, 0)
+                          }
+                        >
+                          {[...new Set([...SPEEDS, row.speed])]
+                            .sort((a, b) => a - b)
+                            .map((speed) => (
+                              <option key={speed} value={speed}>
+                                {speed}×
+                              </option>
+                            ))}
+                        </select>
+                      </span>
+                    </div>
+                  )}
                   <textarea
                     className="px-input px-textarea script-text"
                     rows={2}

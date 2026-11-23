@@ -7,6 +7,7 @@ import {
   type FilmShape,
   type FilmVoice,
   NARRATION_LANGUAGES,
+  type TemplateField,
   type TemplateSummary,
 } from "../../shared/types.ts";
 import {
@@ -22,6 +23,7 @@ import { useSample } from "../useSample.ts";
 import { AssetPicker } from "./AssetPicker.tsx";
 import { BriefFields } from "./BriefFields.tsx";
 import { FrameRatePicker, useFrameRate } from "./FrameRatePicker.tsx";
+import { InfoTip } from "./InfoTip.tsx";
 import { PixelButton } from "./PixelButton.tsx";
 import { PixelIcon } from "./PixelIcon.tsx";
 import { TextField } from "./TextField.tsx";
@@ -40,15 +42,23 @@ interface NewFilmDialogProps {
 
 type Step = "start" | "template" | "details";
 
+/** Up front: what a film can't start without (required), and the long text a film is made from (a story, an idea). */
+const isMainField = (field: TemplateField) => field.required || field.type === "longtext";
+
+/** A short answer for the summary line. */
+const shortAnswer = (value: string) => (value.length > 28 ? `${value.slice(0, 27)}…` : value);
+
 /**
- * New film: first "Blank film" or "From a template" (then a template and its kind), then the details and
- * the template's questions.
+ * New film: first "Blank film" or "From a template" (then a template and its kind), then a short form: the name,
+ * what the film is about, voices and Claude. Everything with a good default (shape, frame rate, the template's other questions, the
+ * narrator, music) waits under More choices, said on one line while it's closed.
  */
 export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingId = useId();
   const templateName = useId();
   const kindName = useId();
+  const moreId = useId();
   const templates = useTemplates();
   const create = useCreateFilm();
   const navigate = useNavigate();
@@ -64,6 +74,7 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [voices, setVoices] = useState<"make" | "none">("make");
+  const [moreOpen, setMoreOpen] = useState(false);
   const voiceStatus = useVoiceStatus();
   // Claude makes the film right after Create, in the background (when Claude Code is installed).
   const [makeNow, setMakeNow] = useState(true);
@@ -115,6 +126,7 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
       setTitle("");
       setFormError(null);
       setVoices("make");
+      setMoreOpen(false);
       setMakeNow(true);
       setMusic(null);
       setNarrator(null);
@@ -138,11 +150,13 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
   const startBlank = () => {
     const blank = list.find((entry) => entry.id === BLANK_TEMPLATE_ID);
     if (blank) choose(blank);
+    setMoreOpen(false);
     setStep("details");
   };
   const startFromTemplate = () => {
     const first = choices.find((entry) => !entry.problem);
     if (isBlank && first) choose(first);
+    setMoreOpen(false);
     setStep("template");
   };
 
@@ -181,6 +195,22 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
   };
 
   const fixedSize = template?.defaults.size;
+  const fields = kind?.fields ?? [];
+  const mainFields = fields.filter(isMainField);
+  const otherFields = fields.filter((field) => !isMainField(field));
+  const languageWords = NARRATION_LANGUAGES.find(([code]) => code === language)?.[1];
+  // What More choices will use, on one line while it's closed.
+  const summary = [
+    fixedSize ? `${fixedSize.width} × ${fixedSize.height}` : FILM_SHAPES[shape].label,
+    rate.fps !== null ? `${rate.fps} fps` : null,
+    ...otherFields.map((field) => {
+      const value = (answers[field.id] ?? "").trim();
+      return value ? shortAnswer(value) : null;
+    }),
+    voices === "make" && narrator ? `Narrator: ${narrator.name.trim()}` : null,
+    voices === "make" && language !== "en" ? languageWords : null,
+    music ? `Music: ${shortAnswer(music.name)}` : null,
+  ].filter(Boolean);
 
   return (
     <dialog
@@ -238,7 +268,7 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
                   <Link to="/templates" onClick={onClose}>
                     Templates page
                   </Link>
-                  , or open a film and press Save as template.
+                  , or open a film and choose More → Save as template.
                 </p>
               )}
               <div className="template-cards">
@@ -320,195 +350,210 @@ export function NewFilmDialog({ open, onClose, templateId: preset }: NewFilmDial
               maxLength={80}
               autoComplete="off"
             />
-            {fixedSize ? (
-              <p className="hint">
-                Size: {fixedSize.width} × {fixedSize.height} (set by the template).
-              </p>
-            ) : (
-              <fieldset className="choice-picker">
-                <legend className="field-label">Shape</legend>
-                <div className="choice-cards">
-                  {SHAPES.map(([key, info]) => {
-                    const fit = SHAPE_BOX / Math.max(info.width, info.height);
-                    return (
-                      <label key={key} className="choice-card">
-                        <input
-                          type="radio"
-                          name="shape"
-                          value={key}
-                          checked={shape === key}
-                          onChange={() => setShape(key)}
-                          className="visually-hidden"
-                        />
-                        <span className="shape-box">
-                          <span
-                            className="shape-preview"
-                            style={{
-                              width: Math.round(info.width * fit),
-                              height: Math.round(info.height * fit),
-                            }}
-                          />
-                        </span>
-                        <span className="choice-label">{info.label}</span>
-                        <span className="choice-sub">{info.ratio}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </fieldset>
-            )}
-            <FrameRatePicker state={rate} />
-            {kind && kind.fields.length > 0 && (
+            {mainFields.length > 0 && (
               <BriefFields
-                fields={kind.fields}
+                fields={mainFields}
                 values={answers}
                 onChange={(id, value) => setAnswers((current) => ({ ...current, [id]: value }))}
               />
             )}
-            <fieldset className="voice-choice">
-              <legend className="field-label">Voices</legend>
-              <label className="check-row">
-                <input
-                  type="radio"
-                  name="voices"
-                  checked={voices === "make"}
-                  onChange={() => setVoices("make")}
-                />
-                <span>
-                  Make them with the film: Claude writes the narration and the characters' lines,
-                  and each speaker gets a fitting voice (uses fish.audio credits).
-                </span>
-              </label>
-              <label className="check-row">
-                <input
-                  type="radio"
-                  name="voices"
-                  checked={voices === "none"}
-                  onChange={() => setVoices("none")}
-                />
-                <span>No voices</span>
-              </label>
-              {voices === "make" && (
-                <>
-                  <div className="narrator-pick px-box">
-                    <span className="voice-speaker">Narrator</span>
-                    <span className="voice-cast-name">
-                      {pick.isPending
-                        ? "Picking…"
-                        : (narrator?.name ?? "Picked when the film is made")}
-                    </span>
-                    <div className="icon-row">
-                      <PixelButton
-                        variant="ghost"
-                        data-size="small"
-                        icon={sample.playing === "narrator" ? "pause" : "play"}
-                        tip={sample.playing === "narrator" ? "Stop" : "Listen"}
-                        disabled={!narrator?.sample}
-                        onClick={() =>
-                          narrator?.sample && sample.toggle("narrator", narrator.sample)
-                        }
-                      />
-                      <PixelButton
-                        variant="ghost"
-                        data-size="small"
-                        icon="dice"
-                        tip="Another voice"
-                        disabled={pick.isPending}
-                        onClick={() =>
-                          pickVoice(
-                            { type: "narrator", language, avoid: narrator ? [narrator.id] : [] },
-                            { onSuccess: (voice) => setNarrator(voice) },
-                          )
-                        }
-                      />
-                      <PixelButton
-                        variant="ghost"
-                        data-size="small"
-                        icon="search"
-                        tip="Choose a voice"
-                        onClick={() => setChoosing(true)}
-                      />
-                    </div>
-                  </div>
-                  <div className="writer-grid">
-                    <label htmlFor={languageId} className="field-label">
-                      Language
-                    </label>
-                    <select
-                      id={languageId}
-                      className="px-input"
-                      value={language}
-                      onChange={(event) => setLanguage(event.target.value)}
-                    >
-                      {NARRATION_LANGUAGES.map(([code, words]) => (
-                        <option key={code} value={code}>
-                          {words}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {pick.isError && (
-                    <p className="hint">
-                      Kairos couldn't reach fish.audio to pick one now: it picks the narrator when
-                      the film is made.
-                    </p>
-                  )}
-                </>
-              )}
+            <div className="new-film-checks">
+              <div className="check-line">
+                <label className="check-row">
+                  <input
+                    type="checkbox"
+                    checked={voices === "make"}
+                    onChange={(event) => setVoices(event.target.checked ? "make" : "none")}
+                  />
+                  <span>Voices</span>
+                </label>
+                <InfoTip text="Claude writes what the narrator and the characters say, and each speaker gets a fitting voice. Uses fish.audio credits." />
+              </div>
               {voices === "make" && voiceStatus.isSuccess && !voiceStatus.data.key && (
                 <p className="hint">
-                  Add your fish.audio key in Settings → Voice. Until then, the script and the
-                  voices' choice are made, and the voices wait for your key.
+                  Add your fish.audio key in Settings → Voice: until then, the voices wait for it.
                 </p>
               )}
-            </fieldset>
-            <fieldset className="voice-choice">
-              <legend className="field-label">Music</legend>
-              <div className="music-pick">
-                <span>{music ? music.name : "No music"}</span>
-                <PixelButton
-                  variant="ghost"
-                  data-size="small"
-                  icon="folder"
-                  onClick={() => setPickingMusic(true)}
-                >
-                  {music ? "Change" : "From your assets"}
-                </PixelButton>
-                {music && (
-                  <PixelButton
-                    variant="ghost"
-                    data-size="small"
-                    icon="trash"
-                    tip="No music"
-                    onClick={() => setMusic(null)}
+              <div className="check-line">
+                <label className="check-row">
+                  <input
+                    type="checkbox"
+                    checked={makeNow && claudeReady}
+                    disabled={!claudeReady}
+                    onChange={(event) => setMakeNow(event.target.checked)}
                   />
-                )}
+                  <span>Claude makes it now</span>
+                </label>
+                <InfoTip text="It starts as soon as you create the film, in the background (on your Claude plan). You watch it work on the film's page." />
               </div>
-              <p className="hint">
-                It plays under the voice for the whole film, quieter while voices talk.
-              </p>
-            </fieldset>
-            <fieldset className="voice-choice">
-              <legend className="field-label">Claude</legend>
-              <label className="check-row">
-                <input
-                  type="checkbox"
-                  checked={makeNow && claudeReady}
-                  disabled={!claudeReady}
-                  onChange={(event) => setMakeNow(event.target.checked)}
-                />
-                <span>
-                  Claude makes it now: it starts as soon as you create the film, in the background
-                  (on your Claude plan). You watch it work on the film's page.
-                </span>
-              </label>
               {!claudeReady && (
                 <p className="hint">
                   Install Claude Code (Settings → Claude Code) and Claude can make films right after
                   you create them.
                 </p>
               )}
-            </fieldset>
+            </div>
+
+            <div className="more-choices">
+              <button
+                type="button"
+                className="more-choices-toggle"
+                aria-expanded={moreOpen}
+                aria-controls={moreId}
+                onClick={() => setMoreOpen((now) => !now)}
+              >
+                <PixelIcon name={moreOpen ? "minus" : "plus"} size={16} />
+                {moreOpen ? "Fewer choices" : "More choices"}
+              </button>
+              {!moreOpen && <p className="hint more-choices-summary">{summary.join(" · ")}</p>}
+              {moreOpen && (
+                <div id={moreId} className="stack">
+                  {fixedSize ? (
+                    <p className="hint">
+                      Size: {fixedSize.width} × {fixedSize.height} (set by the template).
+                    </p>
+                  ) : (
+                    <fieldset className="choice-picker">
+                      <legend className="field-label">Shape</legend>
+                      <div className="choice-cards">
+                        {SHAPES.map(([key, info]) => {
+                          const fit = SHAPE_BOX / Math.max(info.width, info.height);
+                          return (
+                            <label key={key} className="choice-card">
+                              <input
+                                type="radio"
+                                name="shape"
+                                value={key}
+                                checked={shape === key}
+                                onChange={() => setShape(key)}
+                                className="visually-hidden"
+                              />
+                              <span className="shape-box">
+                                <span
+                                  className="shape-preview"
+                                  style={{
+                                    width: Math.round(info.width * fit),
+                                    height: Math.round(info.height * fit),
+                                  }}
+                                />
+                              </span>
+                              <span className="choice-label">{info.label}</span>
+                              <span className="choice-sub">{info.ratio}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+                  )}
+                  <FrameRatePicker state={rate} />
+                  {otherFields.length > 0 && (
+                    <BriefFields
+                      fields={otherFields}
+                      values={answers}
+                      onChange={(id, value) =>
+                        setAnswers((current) => ({ ...current, [id]: value }))
+                      }
+                    />
+                  )}
+                  {voices === "make" && (
+                    <fieldset className="voice-choice">
+                      <legend className="field-label">Narrator</legend>
+                      <div className="narrator-pick px-box">
+                        <span className="voice-cast-name">
+                          {pick.isPending
+                            ? "Picking…"
+                            : (narrator?.name ?? "Picked when the film is made")}
+                        </span>
+                        <div className="icon-row">
+                          <PixelButton
+                            variant="ghost"
+                            data-size="small"
+                            icon={sample.playing === "narrator" ? "pause" : "play"}
+                            tip={sample.playing === "narrator" ? "Stop" : "Listen"}
+                            disabled={!narrator?.sample}
+                            onClick={() =>
+                              narrator?.sample && sample.toggle("narrator", narrator.sample)
+                            }
+                          />
+                          <PixelButton
+                            variant="ghost"
+                            data-size="small"
+                            icon="dice"
+                            tip="Another voice"
+                            disabled={pick.isPending}
+                            onClick={() =>
+                              pickVoice(
+                                {
+                                  type: "narrator",
+                                  language,
+                                  avoid: narrator ? [narrator.id] : [],
+                                },
+                                { onSuccess: (voice) => setNarrator(voice) },
+                              )
+                            }
+                          />
+                          <PixelButton
+                            variant="ghost"
+                            data-size="small"
+                            icon="search"
+                            tip="Choose a voice"
+                            onClick={() => setChoosing(true)}
+                          />
+                        </div>
+                      </div>
+                      <div className="writer-grid">
+                        <label htmlFor={languageId} className="field-label">
+                          Language
+                        </label>
+                        <select
+                          id={languageId}
+                          className="px-input"
+                          value={language}
+                          onChange={(event) => setLanguage(event.target.value)}
+                        >
+                          {NARRATION_LANGUAGES.map(([code, words]) => (
+                            <option key={code} value={code}>
+                              {words}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {pick.isError && (
+                        <p className="hint">
+                          Kairos couldn't reach fish.audio to pick one now: it picks the narrator
+                          when the film is made.
+                        </p>
+                      )}
+                    </fieldset>
+                  )}
+                  <fieldset className="voice-choice">
+                    <legend className="field-label">Music</legend>
+                    <div className="music-pick">
+                      <span>{music ? music.name : "No music"}</span>
+                      <PixelButton
+                        variant="ghost"
+                        data-size="small"
+                        icon="folder"
+                        onClick={() => setPickingMusic(true)}
+                      >
+                        {music ? "Change" : "From your assets"}
+                      </PixelButton>
+                      {music && (
+                        <PixelButton
+                          variant="ghost"
+                          data-size="small"
+                          icon="trash"
+                          tip="No music"
+                          onClick={() => setMusic(null)}
+                        />
+                      )}
+                      <InfoTip text="It plays under the voice for the whole film, quieter while voices talk." />
+                    </div>
+                  </fieldset>
+                </div>
+              )}
+            </div>
+
             {(formError ?? create.error) && (
               <p className="field-error">{formError ?? create.error?.message}</p>
             )}
