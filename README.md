@@ -98,9 +98,9 @@ npm run build
 npm start
 ```
 
-Open <http://127.0.0.1:7340>, choose the folder for your films, then go to **Settings → Claude Code → Connect**.
-For the full experience, add your fish.audio API key in **Settings → Voice** too: your films get their voices. That's
-it: press **New film**.
+Open <http://127.0.0.1:7340>. The **Get set up** card on the Films page walks you through the rest: your films
+folder, connecting Claude Code, your fish.audio key (for the full experience) and anything your computer still needs.
+Then press **New film**.
 
 ## Your first film
 
