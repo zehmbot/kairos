@@ -111,7 +111,7 @@ cap and a range in `JOINTS`; `apply(pose)` clamps and reports what a pose asked 
 the problems their checks found (unsized or mis-sized props, joints past their limits, parts off the body, doors,
 tables and seats at the wrong size) in `window.KAIROS_CHECKS`. The film server adds the bridge to a film's other
 top-level pages, `GET /api/films/:id/sheet` draws one with the camera (problems in `x-kairos-checks`), the film
-page's Sheets tab shows them (`hasSheets`; its places come from the engine, `window.KAIROS_PLACES`, sent with
+page's Cast and places tab (under More) shows them (`hasSheets`; its places come from the engine, `window.KAIROS_PLACES`, sent with
 `ready`), and Claude uses `kairos_sheet`. **The voice leads:** `blocky/voice.js`
 reads the film's voices while it loads (`kairos.json` clips, `voice/script.json`, `voice/lines.json`), and
 `blocky/timing.js` cuts the shots on the voice's real words (below). Captions show those words, and the speaker's
@@ -222,15 +222,18 @@ The browser sends a file as the request body (`application/octet-stream`, the na
 clean, free name (`rain-2.mp3`), one at a time per folder; it refuses unknown types (`src/shared/media.ts`) and
 files over 2 GB. The **asset library** is `<workspace>/assets/{images,videos,sounds,fonts}/`; using an asset in a
 film copies it into `assets/<kind>/` (sounds into `audio/` and a track in `kairos.json`). The film page's
-**Sound panel** writes `audio` with `changeFilm`, and every track file must be inside the film.
+**Sound panel** writes `audio` with `changeFilm`, and every track file must be inside the film. It lists music and
+the sounds you added (`isOwnSound`); voice lines are tuned in the Voice tab, effect sounds on the timeline.
 **References** live in `<film>/references/` (the watcher ignores it; Save as template leaves it out). Their list
 is `.kairos/references.json`; `src/server/references.ts` finds the shots with ffmpeg scene detection, pictures
 the middle of each (at most 36) and tiles them into sheets in `.kairos/references/<id>/`, in the background.
 Claude sees them with `kairos_references` (6 sheets per page), and the library with `kairos_assets` and
 `kairos_use_asset`.
 
-On the film page, the side column has tabs (Claude, Notes, Sound, Voice, References, Brief, Sheets; the last one shown is
-remembered per film). On wide screens the page fills the window (`App.tsx` keeps `--main-h`) and both columns
+On the film page, the side column has tabs (Claude, Notes, Voice, Sound, and under More: References, Brief, Cast and
+places; the last one shown is remembered per film, and a film opened for the first time shows Claude). The header
+keeps Add and Render; Open Claude here, Open folder, Save as template and Delete film are in its More menu
+(`PixelMenu`). The drawing tools above the picture show with the Notes tab. On wide screens the page fills the window (`App.tsx` keeps `--main-h`) and both columns
 scroll by themselves, so a long side tab never pushes the timeline away. The video keeps its size. Files dropped anywhere on the page, or added with **Add**, go where they fit: dropped on the Sound or
 References tab they go straight in, elsewhere Kairos asks what they are for (`src/web/filmAdd.ts`: the choices
 for each kind of file and where each is sent; `POST /api/films/:id/files` puts a picture, video or font in the

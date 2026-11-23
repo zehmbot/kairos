@@ -6,11 +6,15 @@ import { queryKeys, useAddSoundFromAsset, useSaveAudio } from "../api.ts";
 import { formatLength } from "../player/time.ts";
 import { AssetPicker } from "./AssetPicker.tsx";
 import { FileButton, UploadStatus, useUploads } from "./DropZone.tsx";
+import { InfoTip } from "./InfoTip.tsx";
 import { PixelButton } from "./PixelButton.tsx";
 import { PixelPanel } from "./PixelPanel.tsx";
 
 const SOUNDS = acceptFor(["sound"]);
 const fileName = (file: string) => file.split("/").pop() ?? file;
+
+/** Music and the sounds you added: not a voice line (the Voice tab) or an effect sound (the Effects lane). */
+export const isOwnSound = (track: AudioTrack) => !track.sfx && !track.file.startsWith("voice/");
 
 /** How long each sound file lasts (read by the browser), by URL. */
 function useDurations(urls: readonly string[]): Record<string, number> {
@@ -46,10 +50,23 @@ interface SoundPanelProps {
   now: () => number;
   /** A clip clicked on the timeline: its sound comes into view and lights up. */
   focus?: { file: string; n: number } | null;
+  /** Shows the Voice tab. */
+  onShowVoice: () => void;
 }
 
-/** The film's sound: tracks with their start and volume, add from the computer or the asset library. */
-export function SoundPanel({ filmId, tracks, duration, fileUrl, now, focus }: SoundPanelProps) {
+/**
+ * The film's music and the sounds you added, with their start and volume; add from the computer or the asset
+ * library. Voice lines (Voice tab) and effect sounds (Effects lane) are only counted: they're tuned where they live.
+ */
+export function SoundPanel({
+  filmId,
+  tracks,
+  duration,
+  fileUrl,
+  now,
+  focus,
+  onShowVoice,
+}: SoundPanelProps) {
   const queryClient = useQueryClient();
   const save = useSaveAudio(filmId);
   const fromAsset = useAddSoundFromAsset(filmId);
@@ -79,8 +96,11 @@ export function SoundPanel({ filmId, tracks, duration, fileUrl, now, focus }: So
     setDraft(JSON.parse(saved));
   }, [saved]);
 
-  const durations = useDurations(draft.map((track) => fileUrl(track.file)));
+  const durations = useDurations(draft.filter(isOwnSound).map((track) => fileUrl(track.file)));
   const seen: Record<string, number> = {};
+  const own = draft.filter(isOwnSound).length;
+  const effects = draft.filter((track) => track.sfx).length;
+  const voices = draft.filter((track) => !track.sfx && track.file.startsWith("voice/")).length;
 
   const commit = (next: AudioTrack[]) => {
     setDraft(next);
@@ -101,10 +121,9 @@ export function SoundPanel({ filmId, tracks, duration, fileUrl, now, focus }: So
       {/* The film page takes files dropped here as sounds (see FilmPage). */}
       <div data-drop="sound">
         <div className="stack">
-          {draft.length === 0 ? (
+          {own === 0 ? (
             <p className="hint">
-              No sound yet. Add a voice, music or sound effects: they play with the preview and go
-              into the video.
+              No music or sounds yet. Add some: they play with the preview and go into the video.
             </p>
           ) : (
             <ul className="sound-list">
@@ -112,6 +131,7 @@ export function SoundPanel({ filmId, tracks, duration, fileUrl, now, focus }: So
                 // A key that stays the same while the start or volume changes: the file and which copy it is.
                 seen[track.file] = (seen[track.file] ?? 0) + 1;
                 const key = `${track.file}#${seen[track.file]}`;
+                if (!isOwnSound(track)) return null;
                 const length = durations[fileUrl(track.file)];
                 const left = Math.min(100, (track.start / duration) * 100);
                 // Music that loops plays to the end of the film.
@@ -173,8 +193,8 @@ export function SoundPanel({ filmId, tracks, duration, fileUrl, now, focus }: So
                         }
                       />
                     </div>
-                    {!track.file.startsWith("voice/") && !track.sfx && (
-                      <label className="check-row sound-music">
+                    <div className="check-line sound-music">
+                      <label className="check-row">
                         <input
                           type="checkbox"
                           checked={Boolean(track.loop && track.duck)}
@@ -187,11 +207,10 @@ export function SoundPanel({ filmId, tracks, duration, fileUrl, now, focus }: So
                             )
                           }
                         />
-                        <span>
-                          Music under the voice: it loops, and gets quieter while voices talk
-                        </span>
+                        <span>Music under the voice</span>
                       </label>
-                    )}
+                      <InfoTip text="It loops to the end, and gets quieter while voices talk." />
+                    </div>
                     <div className="sound-controls">
                       <label htmlFor={volumeId} className="field-label">
                         Volume
@@ -239,6 +258,23 @@ export function SoundPanel({ filmId, tracks, duration, fileUrl, now, focus }: So
             error={uploads.error ?? save.error?.message ?? null}
           />
           <p className="hint">New sounds start at the player's current time.</p>
+          {(effects > 0 || voices > 0) && (
+            <p className="hint">
+              Also on the timeline:{" "}
+              {effects > 0 && `${effects} effect sound${effects === 1 ? "" : "s"} (Effects lane)`}
+              {effects > 0 && voices > 0 && " and "}
+              {voices > 0 && (
+                <>
+                  {voices} voice line{voices === 1 ? "" : "s"} (
+                  <button type="button" className="link-button" onClick={onShowVoice}>
+                    Voice tab
+                  </button>
+                  )
+                </>
+              )}
+              .
+            </p>
+          )}
         </div>
       </div>
       <AssetPicker

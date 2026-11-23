@@ -3083,6 +3083,71 @@ video.asset-media {
   background: var(--accent);
 }
 
+/* ---------- Menus (More): a short list of actions drawn over the page ---------- */
+
+.px-menu {
+  position: fixed;
+  z-index: 900;
+  display: grid;
+  gap: 2px;
+  min-width: 220px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--surface);
+}
+
+.px-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.px-menu-item:hover,
+.px-menu-item:focus-visible {
+  outline: none;
+  color: var(--c-night);
+  background: var(--accent);
+}
+
+.px-menu-item[aria-current="true"] {
+  color: var(--accent);
+}
+
+.px-menu-item[aria-current="true"]:hover,
+.px-menu-item[aria-current="true"]:focus-visible {
+  color: var(--c-night);
+}
+
+/* Deleting sits apart, at the bottom, and turns red when reached. */
+.px-menu-item[data-tone="danger"] {
+  margin-top: 6px;
+  box-shadow: 0 calc(var(--px) * -1) 0 0 var(--line);
+}
+
+.px-menu-item[data-tone="danger"]:hover,
+.px-menu-item[data-tone="danger"]:focus-visible {
+  color: var(--text);
+  background: var(--danger);
+}
+
+.px-menu-item:disabled {
+  color: var(--line);
+  background: transparent;
+  cursor: default;
+}
+
 /* ---------- Music under the voice ---------- */
 
 .music-pick {

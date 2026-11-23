@@ -31,7 +31,8 @@ export function Tooltips() {
   useEffect(() => {
     const show = (anchor: Element) => {
       const text = anchor.getAttribute("data-tip");
-      if (!text) return;
+      // A button whose menu is open doesn't cover it with its name.
+      if (!text || anchor.getAttribute("aria-expanded") === "true") return;
       setPlace(null);
       setShown({ text, anchor, container: anchor.closest("dialog[open]") ?? document.body });
     };

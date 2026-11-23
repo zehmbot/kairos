@@ -54,6 +54,7 @@ import { NotesPanel } from "../components/NotesPanel.tsx";
 import { Notice } from "../components/Notice.tsx";
 import { PixelButton } from "../components/PixelButton.tsx";
 import { PixelIcon } from "../components/PixelIcon.tsx";
+import { PixelMenu } from "../components/PixelMenu.tsx";
 import { PixelPanel } from "../components/PixelPanel.tsx";
 import { Player, type PlayerHandle } from "../components/Player.tsx";
 import { ReferencesPanel } from "../components/ReferencesPanel.tsx";
@@ -62,7 +63,7 @@ import { SaveTemplateDialog } from "../components/SaveTemplateDialog.tsx";
 import { ShapeSwitch } from "../components/ShapeSwitch.tsx";
 import { SheetsPanel } from "../components/SheetsPanel.tsx";
 import { SideTabs } from "../components/SideTabs.tsx";
-import { SoundPanel } from "../components/SoundPanel.tsx";
+import { isOwnSound, SoundPanel } from "../components/SoundPanel.tsx";
 import { Timeline } from "../components/Timeline.tsx";
 import { VoicePanel } from "../components/VoicePanel.tsx";
 import { groupFiles, type Purpose, purposesFor } from "../filmAdd.ts";
@@ -86,7 +87,10 @@ const SIDE_TABS: readonly SideTab[] = [
 ];
 const NO_TRACKS: readonly AudioTrack[] = [];
 
-/** The side tab shown for a film, remembered per film in this browser. */
+/**
+ * The side tab shown for a film, remembered per film in this browser. A film you haven't opened before starts on
+ * the Claude tab: where Claude makes it (or is making it) and where you ask for changes.
+ */
 function useFilmTab(id: string): [SideTab, (tab: SideTab) => void] {
   const key = `kairos.film-tab.${id}`;
   const read = useCallback((): SideTab => {
@@ -94,7 +98,7 @@ function useFilmTab(id: string): [SideTab, (tab: SideTab) => void] {
       const saved = localStorage.getItem(key) as SideTab | null;
       if (saved && SIDE_TABS.includes(saved)) return saved;
     } catch {}
-    return "notes";
+    return "claude";
   }, [key]);
   const [state, setState] = useState(() => ({ id, tab: read() }));
   const tab = state.id === id ? state.tab : read();
@@ -487,9 +491,15 @@ export function FilmPage() {
               wordsBusy={transcribe.isPending ? transcribe.variables : null}
               wordsError={transcribe.error?.message ?? null}
               onClipClick={(file, kind) => {
-                // Video clips have no tab: their settings are under the timeline.
+                // Video clips and effect sounds have no tab: their settings are under the timeline.
                 if (kind === "video") return;
-                setTab(file.startsWith("voice/") ? "voice" : "sound");
+                const track = config.audio.find((entry) => entry.file === file);
+                if (!track || !isOwnSound(track)) {
+                  if (!file.startsWith("voice/")) return;
+                  setTab("voice");
+                } else {
+                  setTab("sound");
+                }
                 setFocus({ file, n: Date.now() });
               }}
               selectFile={selectClip}
@@ -556,16 +566,24 @@ export function FilmPage() {
   const tabs = [
     { id: "claude" as const, label: "Claude" },
     { id: "notes" as const, label: "Notes", count: openNotes.length },
-    { id: "sound" as const, label: "Sound", count: config?.audio.length ?? 0 },
     // Lines that need a new voice show in amber; otherwise, how many lines there are.
     voiceSummary.toVoice > 0
       ? { id: "voice" as const, label: "Voice", count: voiceSummary.toVoice, alert: true }
       : { id: "voice" as const, label: "Voice", count: voiceSummary.lines.length },
+    // Music and the sounds you added (voice lines are in Voice, effects on their lane).
+    {
+      id: "sound" as const,
+      label: "Sound",
+      count: config?.audio.filter(isOwnSound).length ?? 0,
+    },
+  ];
+  // Opened less often: under More.
+  const moreTabs = [
     { id: "references" as const, label: "References", count: references.data?.length ?? 0 },
     ...(film.data.hasBrief ? [{ id: "brief" as const, label: "Brief" }] : []),
-    ...(film.data.hasSheets ? [{ id: "sheets" as const, label: "Sheets" }] : []),
+    ...(film.data.hasSheets ? [{ id: "sheets" as const, label: "Cast and places" }] : []),
   ];
-  const shownTab = tabs.some((entry) => entry.id === tab) ? tab : "notes";
+  const shownTab = [...tabs, ...moreTabs].some((entry) => entry.id === tab) ? tab : "claude";
 
   return (
     <DropZone
@@ -602,56 +620,66 @@ export function FilmPage() {
               <PixelButton
                 variant="ghost"
                 icon="plus"
-                title="Add a sound, a reference or a file to this film"
+                tip="Add a sound, a reference or a file to this film"
                 disabled={!canReview}
                 onClick={() => setAddOpen(true)}
               >
                 Add
               </PixelButton>
               <PixelButton
-                variant="ghost"
                 icon="render"
-                title="Make an MP4 video of this film"
+                tip="Make a video of this film"
                 disabled={!canReview}
                 onClick={() => setRenderOpen(true)}
               >
                 Render
               </PixelButton>
-              <PixelButton
-                icon="terminal"
-                title="Open a terminal in this film's folder with Claude Code running"
-                disabled={openClaude.isPending}
-                onClick={() => openClaude.mutate(film.data.id)}
+              <PixelMenu
+                label="More for this film"
+                items={[
+                  {
+                    id: "claude",
+                    label: "Open Claude here",
+                    icon: "terminal",
+                    tip: "A terminal in this film's folder, with Claude Code",
+                    disabled: openClaude.isPending,
+                    onSelect: () => openClaude.mutate(film.data.id),
+                  },
+                  {
+                    id: "folder",
+                    label: "Open folder",
+                    icon: "folder",
+                    tip: path,
+                    disabled: openFolder.isPending,
+                    onSelect: () => openFolder.mutate(film.data.id),
+                  },
+                  {
+                    id: "template",
+                    label: "Save as template",
+                    icon: "template",
+                    tip: "Start new films from this one",
+                    disabled: !canReview,
+                    onSelect: () => setTemplateOpen(true),
+                  },
+                  {
+                    id: "delete",
+                    label: "Delete film",
+                    icon: "trash",
+                    danger: true,
+                    onSelect: () => setDeleteOpen(true),
+                  },
+                ]}
               >
-                Open Claude here
-              </PixelButton>
-              <PixelButton
-                variant="ghost"
-                icon="folder"
-                title={path}
-                disabled={openFolder.isPending}
-                onClick={() => openFolder.mutate(film.data.id)}
-              >
-                Open folder
-              </PixelButton>
-              <PixelButton
-                variant="ghost"
-                icon="plus"
-                title="Start new films from this one"
-                disabled={!canReview}
-                onClick={() => setTemplateOpen(true)}
-              >
-                Save as template
-              </PixelButton>
-              <PixelButton
-                variant="ghost"
-                data-tone="danger"
-                icon="trash"
-                title="Move this film to the trash"
-                onClick={() => setDeleteOpen(true)}
-              >
-                Delete film
-              </PixelButton>
+                {(trigger) => (
+                  <PixelButton
+                    variant="ghost"
+                    icon="more"
+                    aria-label="More"
+                    tip="More"
+                    {...trigger}
+                  />
+                )}
+              </PixelMenu>
             </div>
           </div>
           {adds.status && <p className="upload-status">{adds.status}</p>}
@@ -744,7 +772,8 @@ export function FilmPage() {
                         }}
                       />
                     )}
-                    {canReview && !reshaped && (
+                    {/* The drawing tools belong to notes: they show with the Notes tab, or once you draw. */}
+                    {canReview && !reshaped && (shownTab === "notes" || drawing) && (
                       <MarkTools
                         tool={draft.tool}
                         onTool={draftActions.setTool}
@@ -752,7 +781,6 @@ export function FilmPage() {
                         onUndo={draftActions.undo}
                       />
                     )}
-                    <span className="px-tag">Live</span>
                   </div>
                 )
               }
@@ -763,7 +791,13 @@ export function FilmPage() {
 
           {canReview && (
             <div className="review-side">
-              <SideTabs tabs={tabs} current={shownTab} onChange={setTab} label="Film panels">
+              <SideTabs
+                tabs={tabs}
+                more={moreTabs}
+                current={shownTab}
+                onChange={setTab}
+                label="Film panels"
+              >
                 {shownTab === "claude" && (
                   <ClaudePanel
                     filmId={film.data.id}
@@ -805,6 +839,7 @@ export function FilmPage() {
                     fileUrl={(file) => filmFileUrl(filmOrigin, film.data.id, file)}
                     now={now}
                     focus={focus}
+                    onShowVoice={() => setTab("voice")}
                   />
                 )}
                 {shownTab === "voice" && config && filmOrigin && (

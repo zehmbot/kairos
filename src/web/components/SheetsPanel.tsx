@@ -44,7 +44,7 @@ export function SheetsPanel({ filmId, places }: { filmId: string; places?: strin
 
   return (
     <PixelPanel
-      title="Sheets"
+      title="Cast and places"
       actions={
         <PixelButton
           variant="ghost"
