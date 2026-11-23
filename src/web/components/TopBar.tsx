@@ -10,9 +10,8 @@ export function TopBar() {
 
   return (
     <header className="topbar">
-      <Link to="/" className="logo">
-        <PixelIcon name="hourglass" size={32} />
-        <span className="logo-word">KAIROS</span>
+      <Link to="/" className="logo" aria-label="Kairos: your films">
+        <PixelIcon name="logo" size={32} />
       </Link>
       <div className="topbar-spacer" />
       {label && (

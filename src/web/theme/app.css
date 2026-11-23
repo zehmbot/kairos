@@ -47,19 +47,17 @@
   z-index: 1;
 }
 
+/* The Kairos mark alone, linking to your films. */
 .logo {
   display: flex;
   align-items: center;
-  gap: 14px;
   color: var(--text);
   text-decoration: none;
 }
 
-.logo-word {
-  font-family: var(--font-pixel);
-  font-size: 18px;
-  letter-spacing: 2px;
-  text-shadow: 3px 3px 0 var(--c-plum);
+.logo:focus-visible {
+  outline: var(--px) solid var(--highlight);
+  outline-offset: 4px;
 }
 
 .topbar-spacer {
@@ -1562,10 +1560,6 @@ a.render-title:hover {
 
   .main {
     padding: 20px 16px;
-  }
-
-  .logo-word {
-    font-size: 14px;
   }
 
   .stage {

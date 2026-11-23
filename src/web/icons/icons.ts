@@ -5,25 +5,29 @@ import { MONO, type PixelIconDef } from "./grid.ts";
  * "." = transparent, "#" = text color, "+" = accent color (see MONO), other letters = `colors`.
  */
 export const ICONS = {
-  hourglass: {
-    colors: { F: "#ef7d57", G: "#73eff7", S: "#ffcd75" },
+  /**
+   * The Kairos mark: viewfinder corners catch a spark. Kairos is Greek for the right moment, the frame you stop
+   * on, mark and get right. These are its colors on dark; the favicon also has light ones (scripts/favicon.ts).
+   */
+  logo: {
+    colors: { M: "#73eff7", Y: "#ffcd75", W: "#f4f4f4" },
     grid: [
-      ".FFFFFFFFFFFFFF.",
-      "..FFFFFFFFFFFF..",
-      "..G..........G..",
-      "..G..........G..",
-      "...GSSSSSSSSG...",
-      "....GSSSSSSG....",
-      ".....GSSSSG.....",
-      "......GSSG......",
-      "......GSSG......",
-      ".....G.S..G.....",
-      "....G..S...G....",
-      "...G...S....G...",
-      "..G...SSSS...G..",
-      "..GSSSSSSSSSSG..",
-      "..FFFFFFFFFFFF..",
-      ".FFFFFFFFFFFFFF.",
+      "MMMM........MMMM",
+      "MMMM........MMMM",
+      "MM............MM",
+      "MM.....YY.....MM",
+      ".......YY.......",
+      "......YYYY......",
+      ".....YYWWYY.....",
+      "...YYYWWWWYYY...",
+      "...YYYWWWWYYY...",
+      ".....YYWWYY.....",
+      "......YYYY......",
+      ".......YY.......",
+      "MM.....YY.....MM",
+      "MM............MM",
+      "MMMM........MMMM",
+      "MMMM........MMMM",
     ],
   },
 

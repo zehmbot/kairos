@@ -14,7 +14,7 @@ Claude, and renders video files. The app UI is pixel art. The videos themselves 
 | `npm test`                        | Vitest unit tests (`src/**/*.test.ts`)                                                          |
 | `npm run lint` / `npm run format` | Biome check / fix                                                                               |
 | `npm run typecheck`               | `tsc --noEmit`                                                                                  |
-| `npm run favicon`                 | Regenerate `public/favicon.svg` from the hourglass icon                                         |
+| `npm run favicon`                 | Regenerate `public/favicon.svg` from the `logo` icon                                            |
 | `npm run setup`                   | Add the Kairos tools to Claude Code (same as Settings → Claude Code → Connect)                  |
 
 Requires Node.js 24+ and, from the render milestone on, ffmpeg on PATH. The hub also starts the **film server** on
@@ -485,7 +485,8 @@ without a GPU.
 - Fonts: `--font-pixel` (Press Start 2P) for headings, labels and buttons; `--font-body` (Pixelify Sans) for text.
   Pixel font sizes should be multiples of 2px (8, 10, 12, 18 ...).
 - Icons are 16x16 ASCII grids in `src/web/icons/icons.ts`, drawn by `<PixelIcon>`. `#` = text color,
-  `+` = accent, `.` = transparent. Render them at multiples of 16px. After changing `hourglass`, run `npm run favicon`.
+  `+` = accent, `.` = transparent. Render them at multiples of 16px. The Kairos mark is `logo` (viewfinder corners catching a spark: kairos is the right moment), shown alone in the
+  top bar; after changing it, run `npm run favicon`.
 - Keep screens simple for end users: plain words, one main action per panel.
 
 ## Commits
