@@ -33,6 +33,10 @@ interface RenderDialogProps {
   reshape: boolean;
   /** The shape you're looking at it in (null: its own): chosen to start with. */
   shown: FilmShape | null;
+  /** The film has words to show as subtitles (its own captions, or voices with word timings). */
+  words: boolean;
+  /** The film draws its own captions (and can leave them out of the picture). */
+  captions: boolean;
 }
 
 /** Choose where the video goes (its shape), the quality and the graphics card, then put it in the render queue. */
@@ -45,6 +49,8 @@ export function RenderDialog({
   duration,
   reshape,
   shown,
+  words,
+  captions,
 }: RenderDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingId = useId();
@@ -56,6 +62,8 @@ export function RenderDialog({
   const [fit, setFit] = useState<"bars" | "crop">("bars");
   const [quality, setQuality] = useState<RenderQuality>("high");
   const [gpu, setGpu] = useState(true);
+  const [subtitles, setSubtitles] = useState(words);
+  const [inPicture, setInPicture] = useState(true);
   const { reset } = start;
 
   useEffect(() => {
@@ -64,11 +72,13 @@ export function RenderDialog({
     if (open && !dialog.open) {
       reset();
       setShape(shown ?? own);
+      setSubtitles(words);
+      setInPicture(true);
       dialog.showModal();
     } else if (!open && dialog.open) {
       dialog.close();
     }
-  }, [open, reset, shown, own]);
+  }, [open, reset, shown, own, words]);
 
   const card = info.data?.encoders.find((encoder) => encoder.gpu);
   const ready = Boolean(info.data?.ffmpeg && info.data.encoders.length > 0);
@@ -88,7 +98,17 @@ export function RenderDialog({
         className="form"
         onSubmit={(event) => {
           event.preventDefault();
-          start.mutate({ quality, gpu, shape: shape ?? undefined, fit }, { onSuccess: onClose });
+          start.mutate(
+            {
+              quality,
+              gpu,
+              shape: shape ?? undefined,
+              fit,
+              subtitles: words && subtitles,
+              captions: !captions || inPicture,
+            },
+            { onSuccess: onClose },
+          );
         }}
       >
         <h2 id={headingId} className="dialog-title">
@@ -179,6 +199,36 @@ export function RenderDialog({
                 {formatLength(duration)}.
               </p>
             )}
+
+            <fieldset className="choice-picker">
+              <legend className="field-label">Words</legend>
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  checked={words && subtitles}
+                  disabled={!words}
+                  onChange={(event) => setSubtitles(event.target.checked)}
+                />
+                <span>
+                  {words
+                    ? "A subtitles file (.srt) next to the video, from the words it says. YouTube and TikTok take it as captions viewers can turn on."
+                    : "A subtitles file needs words: this film has no voice with word timings yet."}
+                </span>
+              </label>
+              {captions && (
+                <label className="check-row">
+                  <input
+                    type="checkbox"
+                    checked={inPicture}
+                    onChange={(event) => setInPicture(event.target.checked)}
+                  />
+                  <span>
+                    Captions in the picture. Off: a clean picture, for when the platform shows the
+                    subtitles instead.
+                  </span>
+                </label>
+              )}
+            </fieldset>
 
             <fieldset className="choice-picker">
               <legend className="field-label">Quality</legend>

@@ -3,9 +3,13 @@ import { Link } from "react-router";
 import { SHAPE_USES } from "../../shared/export.ts";
 import type { RenderFit, RendersOverview } from "../../shared/types.ts";
 import {
+  pictureUrl,
+  subtitlesUrl,
   useCancelRender,
+  useDeletePicture,
   useDeleteRender,
   useExportInfo,
+  useOpenPictureFolder,
   useOpenRenderFolder,
   useRenders,
   videoUrl,
@@ -19,6 +23,7 @@ import { formatBytes, formatDuration, isActive, jobStatus, progressOf } from "..
 import { useNow } from "../useNow.ts";
 
 type Video = RendersOverview["videos"][number];
+type SavedPicture = RendersOverview["pictures"][number];
 
 export function RendersPage() {
   const renders = useRenders();
@@ -28,6 +33,7 @@ export function RendersPage() {
   const jobs = renders.data?.jobs ?? [];
   const active = jobs.filter(isActive);
   const failed = jobs.filter((job) => job.state === "failed");
+  const pictures = renders.data?.pictures ?? [];
   const videos = renders.data?.videos ?? [];
   const now = useNow(active.length > 0);
 
@@ -124,6 +130,16 @@ export function RendersPage() {
         )}
       </PixelPanel>
 
+      {pictures.length > 0 && (
+        <PixelPanel title="Pictures">
+          <ul className="render-list">
+            {pictures.map((picture) => (
+              <PictureRow key={`${picture.filmId}@${picture.number}`} picture={picture} />
+            ))}
+          </ul>
+        </PixelPanel>
+      )}
+
       <VideoDialog video={playing} onClose={() => setPlaying(null)} />
     </div>
   );
@@ -149,13 +165,15 @@ function VideoRow({ video, onPlay }: { video: Video; onPlay: (video: Video) => v
         <span className="render-title">
           {video.title} <span className="px-tag">v{video.version}</span>
           {video.shape && <span className="px-tag">{SHAPE_USES[video.shape].short}</span>}
+          {video.subtitles && <span className="px-tag">Subtitles</span>}
         </span>
         <span className="render-date">{new Date(video.createdAt).toLocaleString()}</span>
       </div>
       <p className="render-meta">
         {video.width} × {video.height} · {video.fps} fps · {formatLength(video.duration)} ·{" "}
         {formatBytes(video.bytes)} · {video.quality === "high" ? "High" : "Smaller file"}
-        {video.fit && video.fit !== "own" && ` · ${FIT_WORDS[video.fit]}`} · made in{" "}
+        {video.fit && video.fit !== "own" && ` · ${FIT_WORDS[video.fit]}`}
+        {video.captions === false && " · no captions in the picture"} · made in{" "}
         {formatDuration(video.seconds)}
       </p>
       <div className="note-actions">
@@ -201,7 +219,81 @@ function VideoRow({ video, onPlay }: { video: Video; onPlay: (video: Video) => v
   );
 }
 
-/** Plays a finished video in the app. */
+/** A frame saved as a picture: a small look at it, where it is, and Delete. */
+function PictureRow({ picture }: { picture: SavedPicture }) {
+  const remove = useDeletePicture();
+  const openFolder = useOpenPictureFolder();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const target = { filmId: picture.filmId, number: picture.number };
+  const error = remove.error ?? openFolder.error;
+
+  return (
+    <li className="render-row px-box picture-row">
+      <img
+        className="picture-thumb"
+        src={pictureUrl(picture.filmId, picture.number)}
+        alt={`${picture.title} at ${formatLength(picture.t)}`}
+        width={picture.width}
+        height={picture.height}
+      />
+      <div className="stack">
+        <div className="render-head">
+          <span className="render-title">
+            {picture.title} <span className="px-tag">Picture {picture.number}</span>
+            {picture.shape && <span className="px-tag">{SHAPE_USES[picture.shape].short}</span>}
+          </span>
+          <span className="render-date">{new Date(picture.createdAt).toLocaleString()}</span>
+        </div>
+        <p className="render-meta">
+          {picture.width} × {picture.height} · at {formatLength(picture.t)} ·{" "}
+          {formatBytes(picture.bytes)} · {picture.file}
+        </p>
+        <div className="note-actions">
+          <PixelButton
+            variant="ghost"
+            data-size="small"
+            icon="folder"
+            onClick={() => openFolder.mutate(target)}
+          >
+            Open folder
+          </PixelButton>
+          {confirmDelete ? (
+            <>
+              <span className="note-confirm">Delete this picture?</span>
+              <PixelButton
+                data-size="small"
+                icon="trash"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate(target)}
+              >
+                Delete
+              </PixelButton>
+              <PixelButton
+                variant="ghost"
+                data-size="small"
+                onClick={() => setConfirmDelete(false)}
+              >
+                Keep
+              </PixelButton>
+            </>
+          ) : (
+            <PixelButton
+              variant="ghost"
+              data-size="small"
+              icon="trash"
+              aria-label="Delete"
+              tip="Delete"
+              onClick={() => setConfirmDelete(true)}
+            />
+          )}
+        </div>
+        {error && <p className="field-error">{error.message}</p>}
+      </div>
+    </li>
+  );
+}
+
+/** Plays a finished video in the app (with its subtitles, when it has some). */
 function VideoDialog({ video, onClose }: { video: Video | null; onClose: () => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -224,13 +316,22 @@ function VideoDialog({ video, onClose }: { video: Video | null; onClose: () => v
           <h2 className="dialog-title">
             {video.title} · v{video.version}
           </h2>
-          {/* biome-ignore lint/a11y/useMediaCaption: the films have no caption tracks yet. */}
+          {/* biome-ignore lint/a11y/useMediaCaption: a video without a subtitles file has no caption track. */}
           <video
             className="video-player"
             src={videoUrl(video.filmId, video.version)}
             controls
             autoPlay
-          />
+          >
+            {video.subtitles && (
+              <track
+                kind="subtitles"
+                label="Subtitles"
+                src={subtitlesUrl(video.filmId, video.version)}
+                default
+              />
+            )}
+          </video>
           <div className="form-actions">
             <PixelButton variant="ghost" onClick={onClose}>
               Close

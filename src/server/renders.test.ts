@@ -2,14 +2,21 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { Render } from "../shared/types.ts";
+import type { Picture, Render } from "../shared/types.ts";
 import {
+  addPicture,
   addRender,
+  listPictures,
   listRenders,
+  nextPictureNumber,
   nextVersion,
+  pictureName,
+  picturePath,
   RendersFileError,
+  removePicture,
   removeRender,
   renderPath,
+  subtitlesFileOf,
   versionIn,
   videoName,
 } from "./renders.ts";
@@ -82,6 +89,74 @@ describe("renders", () => {
     expect(await removeRender(dir, 1)).toBe(true);
     expect(await listRenders(dir)).toEqual([]);
     expect(await removeRender(dir, 1)).toBe(false);
+  });
+
+  it("keeps a video's subtitles next to it, and deletes them with it", async () => {
+    await mkdir(join(dir, "renders"), { recursive: true });
+    const file = `renders/${videoName("intro", 1, "tall")}`;
+    const subtitles = subtitlesFileOf(file);
+    expect(subtitles).toBe("renders/intro-v1-tall.srt");
+    await writeFile(join(dir, file), "mp4!");
+    await writeFile(join(dir, subtitles), "1\r\n...");
+    await addRender(dir, { ...render(1), file, subtitles });
+    expect((await listRenders(dir))[0]?.subtitles).toBe(subtitles);
+    // A subtitles file deleted by hand reads as none.
+    await rm(join(dir, subtitles));
+    expect((await listRenders(dir))[0]?.subtitles).toBeNull();
+    await writeFile(join(dir, subtitles), "back");
+    expect(await removeRender(dir, 1)).toBe(true);
+    await expect(readFile(join(dir, subtitles))).rejects.toThrow();
+    await expect(readFile(join(dir, file))).rejects.toThrow();
+  });
+
+  it("keeps saved pictures beside the videos, numbered upwards", async () => {
+    const picture = (number: number): Picture => ({
+      number,
+      file: `renders/${pictureName("intro", number)}`,
+      createdAt: "2026-11-23T10:00:00.000Z",
+      t: 2.5,
+      width: 1080,
+      height: 1920,
+      shape: "tall",
+      bytes: 5,
+    });
+    expect(await nextPictureNumber(dir, "intro")).toBe(1);
+    await addVideo(1);
+    await writeFile(join(dir, "renders", pictureName("intro", 1)), "png!!");
+    await addPicture(dir, picture(1));
+    // A picture made elsewhere still takes its number.
+    await writeFile(join(dir, "renders", "intro-picture-4.png"), "png!!");
+    expect(await nextPictureNumber(dir, "intro")).toBe(5);
+    await writeFile(join(dir, "renders", pictureName("intro", 5)), "png!!");
+    await addPicture(dir, picture(5));
+    // Videos and pictures don't push each other out of the list.
+    await addVideo(2);
+    expect((await listRenders(dir)).map((entry) => entry.version)).toEqual([2, 1]);
+    expect((await listPictures(dir)).map((entry) => entry.number)).toEqual([5, 1]);
+    expect(await picturePath(dir, 5)).toBe(join(dir, "renders", "intro-picture-5.png"));
+
+    expect(await removePicture(dir, 1)).toBe(true);
+    expect(await removePicture(dir, 1)).toBe(false);
+    expect(await picturePath(dir, 1)).toBeNull();
+    expect((await listPictures(dir)).map((entry) => entry.number)).toEqual([5]);
+    expect((await listRenders(dir)).map((entry) => entry.version)).toEqual([2, 1]);
+  });
+
+  it("reads a list of videos made before pictures and subtitles", async () => {
+    await mkdir(join(dir, ".kairos"), { recursive: true });
+    await mkdir(join(dir, "renders"), { recursive: true });
+    await writeFile(join(dir, "renders", "intro-v1.mp4"), "mp4!");
+    const { shape: _shape, fit: _fit, subtitles: _subtitles, ...old } = render(1);
+    await writeFile(
+      join(dir, ".kairos", "renders.json"),
+      JSON.stringify({ version: 1, renders: [old] }),
+    );
+    expect(await listRenders(dir)).toEqual([old]);
+    expect(await listPictures(dir)).toEqual([]);
+    // Written back without an empty list of pictures.
+    await addVideo(2);
+    const saved = JSON.parse(await readFile(join(dir, ".kairos", "renders.json"), "utf8"));
+    expect(Object.keys(saved)).toEqual(["version", "renders"]);
   });
 
   it("never overwrites a broken list", async () => {

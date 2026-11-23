@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { exportSize, isReshaped, showingQuery, withQuery } from "../../shared/export.ts";
 import { CHECKS_HEADER, STORY_LENGTH_HEADER } from "../../shared/film-protocol.ts";
-import { FilmShapeSchema } from "../../shared/types.ts";
+import { type FilmShape, FilmShapeSchema } from "../../shared/types.ts";
 import { type Camera, CannotReshape } from "../camera.ts";
 import { type Film, readFilm, SHEET_PAGE } from "../films.ts";
 import type { Studio } from "../studio.ts";
@@ -49,6 +49,29 @@ export function filmPicture(options: FrameRoutesOptions) {
         film: { dir: film.path, config },
       }),
     );
+  };
+}
+
+/**
+ * A full-size picture of a film's frame at `t` (a cover, a thumbnail), in another shape when asked: only a film that
+ * reframes itself can (else CannotReshape). With its video clips, without marks.
+ */
+export function framePicture(options: FrameRoutesOptions) {
+  return async (film: Film, t: number, shape?: FilmShape) => {
+    const path = options.studio.previewPath(film);
+    const config = film.config;
+    if (!config || !path) throw new Error(film.problem ?? "This film can't be shown yet.");
+    const size = exportSize(config, shape);
+    const reshaped = isReshaped(config, size);
+    const png = await options.camera.capture({
+      url: withQuery(`${options.filmServerUrl}${path}`, reshaped ? showingQuery({ size }) : ""),
+      ...size,
+      t,
+      maxSide: Math.max(size.width, size.height),
+      film: { dir: film.path, config },
+      reshaped,
+    });
+    return { png, ...size };
   };
 }
 

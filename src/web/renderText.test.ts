@@ -20,6 +20,8 @@ const job = (extra: Partial<RenderJob>): RenderJob => ({
   gpu: true,
   shape: null,
   fit: "bars",
+  subtitles: false,
+  captions: true,
   done: 0,
   total: 300,
   queuedAt: "2026-11-19T10:00:00.000Z",

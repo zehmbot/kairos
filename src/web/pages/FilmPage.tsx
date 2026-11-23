@@ -21,6 +21,7 @@ import {
   useOpenFilmFolder,
   useReferences,
   useRenders,
+  useSavePicture,
   useSaveTracks,
   useTranscribe,
 } from "../api.ts";
@@ -199,6 +200,8 @@ export function FilmPage() {
   const [focus, setFocus] = useState<{ file: string; n: number } | null>(null);
   const [selectClip, setSelectClip] = useState<{ file: string; n: number } | null>(null);
   const filmWords = useFilmWords(id);
+  // A frame saved as a picture (a cover, a thumbnail), in the shape you're looking at.
+  const savePicture = useSavePicture(id);
   const lines = useLines(id);
   const addEffect = useAddEffectSound(id);
   const transcribe = useTranscribe(id);
@@ -283,6 +286,15 @@ export function FilmPage() {
   // The size the preview shows the film at: its own, or another shape's (the film frames itself for it).
   const shownSize = config ? exportSize(config, shown) : null;
   const reshaped = Boolean(config && shownSize && isReshaped(config, shownSize));
+  // Words a subtitles file can show: the film's own captions, or sounds on its timeline with word timings.
+  const hasWords =
+    abilities.captions ||
+    Boolean(
+      config?.audio.some(
+        (track) =>
+          !track.muted && !track.sfx && (filmWords.data?.[track.file]?.words.length ?? 0) > 0,
+      ),
+    );
   const allNotes = notes.data ?? [];
   const openNotes = allNotes.filter((note) => note.status === "open");
 
@@ -596,6 +608,24 @@ export function FilmPage() {
           {config && (
             <StoryLength filmId={film.data.id} story={storyLength} duration={config.duration} />
           )}
+          {(savePicture.isPending || savePicture.data || savePicture.error) && (
+            <p
+              className="render-line"
+              data-state={savePicture.isPending ? "running" : savePicture.error ? "failed" : "done"}
+            >
+              {savePicture.isPending
+                ? "Saving the picture..."
+                : savePicture.error
+                  ? `The picture wasn't saved: ${savePicture.error.message}`
+                  : `Picture saved: ${savePicture.data?.file}`}
+              {savePicture.data && !savePicture.isPending && (
+                <>
+                  {" · "}
+                  <Link to="/renders">See it in Renders</Link>
+                </>
+              )}
+            </p>
+          )}
           {renderJob && (
             <p className="render-line" data-state={renderJob.state}>
               {jobStatus(renderJob, clock)}
@@ -620,6 +650,20 @@ export function FilmPage() {
                         own={shapeOf(config)}
                         size={config}
                         onShow={(shape) => setShownOf({ id, shape })}
+                      />
+                    )}
+                    {canReview && (
+                      <PixelButton
+                        variant="ghost"
+                        icon="picture"
+                        aria-label="Save this frame as a picture"
+                        tip="Save this frame as a picture (a cover)"
+                        disabled={savePicture.isPending}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          pause();
+                          savePicture.mutate({ t: now(), shape: shown ?? undefined });
+                        }}
                       />
                     )}
                     {canReview && !reshaped && (
@@ -723,6 +767,8 @@ export function FilmPage() {
               duration={config.duration}
               reshape={abilities.reshape}
               shown={shown}
+              words={hasWords}
+              captions={abilities.captions}
             />
             <SaveTemplateDialog
               open={templateOpen}

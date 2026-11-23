@@ -257,6 +257,8 @@ acted. Runs already bring dust and their footsteps.
 - Mark at most one or two `*key words*` per film section (a name, a number, the twist): they stay yellow.
 - Dialogue inside narration keeps its quotes: `say: '"Made you look!"'`.
 - The default `words` style fits narrated stories; `lines` suits slower, calmer ones.
+- The same words make the film's subtitles file when the user asks for one (`kairos_render` with `subtitles: true`),
+  so full sentences with their punctuation read well there too.
 
 ## A worked example
 

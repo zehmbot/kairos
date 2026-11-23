@@ -318,6 +318,8 @@ class FakeHub implements Hub {
       gpu: true,
       shape: null,
       fit: "bars",
+      subtitles: false,
+      captions: true,
       done: 0,
       total: 150,
       queuedAt: "2026-11-19T10:00:00.000Z",
@@ -347,10 +349,12 @@ class FakeHub implements Hub {
           frames: 150,
           bytes: 1000,
           seconds: 4,
+          subtitles: "renders/intro-v2.srt",
           filmId: "intro",
           title: "INTRO",
         },
       ],
+      pictures: [],
     };
   }
 }
@@ -524,16 +528,26 @@ describe("Kairos tools", () => {
       'Render r_1 of "intro" is in the queue: 150 frames',
     );
     expect(hub.jobs[0]?.quality).toBe("high");
-    expect(hub.renderOptions[0]).toEqual({ quality: "high", fit: "bars" });
+    expect(hub.renderOptions[0]).toEqual({
+      quality: "high",
+      fit: "bars",
+      subtitles: false,
+      captions: true,
+    });
     // For somewhere else than the film's own shape.
     expect(texts(await call("kairos_render", { shape: "tall", fit: "crop" }))).toContain(
       'Render r_2 of "intro" (tall) is in the queue',
     );
-    expect(hub.renderOptions[1]).toEqual({ quality: "high", shape: "tall", fit: "crop" });
+    expect(hub.renderOptions[1]).toMatchObject({ shape: "tall", fit: "crop" });
+    // With a subtitles file, and the film's own captions left out of the picture.
+    await call("kairos_render", { subtitles: true, captions: false });
+    expect(hub.renderOptions[2]).toMatchObject({ subtitles: true, captions: false });
     expect((await call("kairos_render", { shape: "round" })).isError).toBe(true);
     const report = texts(await call("kairos_renders"));
     expect(report).toContain('Render r_1 of "intro": queued');
-    expect(report).toContain('Video "intro" v2: renders/intro-v2.mp4, 1920×1080, 30 fps, 5 s');
+    expect(report).toContain(
+      'Video "intro" v2: renders/intro-v2.mp4, 1920×1080, 30 fps, 5 s, subtitles renders/intro-v2.srt',
+    );
     expect(texts(await call("kairos_renders", { film: "outro" }))).toBe("No renders yet.");
   });
 

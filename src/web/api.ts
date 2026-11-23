@@ -30,9 +30,11 @@ import {
   type NoteUpdate,
   PickSkillResultSchema,
   PickWorkspaceResultSchema,
+  PictureSchema,
   ReferenceSchema,
   RenderJobSchema,
   RendersOverviewSchema,
+  type SavePicture,
   type SaveTemplate,
   type ScriptInput,
   ScriptSchema,
@@ -503,6 +505,9 @@ const videoPath = (filmId: string, version: number) =>
 
 /** Address of a finished video, for the in-app player. */
 export const videoUrl = (filmId: string, version: number) => `${videoPath(filmId, version)}/video`;
+/** A video's subtitles as WebVTT (what the browser's player reads). */
+export const subtitlesUrl = (filmId: string, version: number) =>
+  `${videoPath(filmId, version)}/subtitles.vtt`;
 
 export function useDeleteRender() {
   const queryClient = useQueryClient();
@@ -517,6 +522,43 @@ export function useOpenRenderFolder() {
   return useMutation({
     mutationFn: ({ filmId, version }: { filmId: string; version: number }) =>
       callNoContent(`${videoPath(filmId, version)}/open-folder`, { method: "POST" }),
+  });
+}
+
+// ---------- Saved pictures (a frame at full size, for a cover or a thumbnail) ----------
+
+const picturePath = (filmId: string, number: number) =>
+  `/api/films/${encodeURIComponent(filmId)}/pictures/${number}`;
+export const pictureUrl = (filmId: string, number: number) =>
+  `${picturePath(filmId, number)}/image`;
+
+/** Saves the frame at `t` (in another shape when asked) as a picture in the film's renders folder. */
+export function useSavePicture(filmId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SavePicture) =>
+      call(
+        PictureSchema,
+        `/api/films/${encodeURIComponent(filmId)}/pictures`,
+        sendJson("POST", input),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.renders }),
+  });
+}
+
+export function useDeletePicture() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ filmId, number }: { filmId: string; number: number }) =>
+      callNoContent(picturePath(filmId, number), { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.renders }),
+  });
+}
+
+export function useOpenPictureFolder() {
+  return useMutation({
+    mutationFn: ({ filmId, number }: { filmId: string; number: number }) =>
+      callNoContent(`${picturePath(filmId, number)}/open-folder`, { method: "POST" }),
   });
 }
 

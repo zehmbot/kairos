@@ -60,8 +60,11 @@ server serves it on its own origin (so film code can't reach the API), never cac
 size (`kairos-size=1080x1920`) and no captions (`kairos-captions=off`); the bridge puts them in `window.__kairos.size`
 and `window.__kairos.captions`. A film that draws itself at any size says so with `window.KAIROS_RESHAPE = true`
 (sent with `ready` as `reshape`): the film page then shows a Wide / Tall / Square switch above the player
-(`ShapeSwitch`), with the page at that size (notes and their marks stay on the film's own shape). File changes reach the UI as Server-Sent Events on `/api/events` and reload the
-preview. The app changes `kairos.json` only through `changeFilm` in `src/server/films.ts`, which keeps unknown
+(`ShapeSwitch`), with the page at that size (notes and their marks stay on the film's own shape). A film that gives
+the words its captions show, timed, sets `window.KAIROS_CAPTIONS = [{ text, start, end }]` (sent with `ready` as
+`captions`) and leaves its captions out when `window.__kairos.captions` is false.
+
+File changes reach the UI as Server-Sent Events on `/api/events` and reload the preview. The app changes `kairos.json` only through `changeFilm` in `src/server/films.ts`, which keeps unknown
 fields and never touches a broken file.
 
 **Deleting** a film moves its folder in one step to `<workspace>/.trash/<deleted at, ms>-<id>/` (`src/server/trash.ts`),
@@ -240,7 +243,21 @@ renders at the film's size; another at 1920×1080, 1080×1920 or 1080×1080 (`ex
 The first worker opens the page at that size and reads `KAIROS_RESHAPE`: a film that reframes itself is drawn at it
 (`fit: "reframe"`), any other is drawn at its own size and the join fits it in (`fit: "bars"` or `"crop"`,
 `fitSteps` in `ffmpeg.ts`, after the clip overlays); the other workers open their pages once that is known. The
-frame route and `kairos_frame` take a `shape` too (a film that can't reframe is refused: `CannotReshape`). The Render dialog's one switch, **Use the graphics card** (`gpu`),
+frame route and `kairos_frame` take a `shape` too (a film that can't reframe is refused: `CannotReshape`).
+
+**Subtitles:** the Render dialog's Words switches ask for a subtitles file (`subtitles`) and can leave a film's own
+captions out of the picture (`captions: false`, sent to every page as `kairos-captions=off`). After the join, the
+renderer writes `renders/<video name>.srt` (`subtitlesFileOf`) from the words the film's captions show
+(`KAIROS_CAPTIONS`, read on the first page), else from every unmuted, non-effect sound on the timeline with word
+timings (`timelineWords`: placed at its clip's start, cut at its trim). `src/shared/subtitles.ts` makes the cues
+(`subtitleCues`: whole sentences when they fit, at most 2 lines of 42 letters and about 6 s, broken at pauses and,
+for long ones, commas) and the SRT (`toSrt`, CRLF). Deleting a video deletes its subtitles; the Renders page plays a
+video with them (`GET .../renders/:version/subtitles.vtt`, `srtToVtt`). **Pictures:** Save picture by the player
+(`POST /api/films/:id/pictures { t, shape }`) takes the frame at full size, in the shape you're looking at, with its
+video clips (`framePicture` in `routes/frames.ts`), as `renders/<id>-picture-<n>.png`; they are listed in
+`.kairos/renders.json` (`pictures`) and on the Renders page.
+
+The Render dialog's **Use the graphics card** switch (`gpu`)
 covers both the drawing and the encoding: off, the workers' browsers start with `--disable-gpu` (the processor
 draws, and films can pick a lighter look) and the processor encodes. Frames are split into chunks of about 4 s. Up to 4 workers
 (about one per 3 CPU cores and per 1.5 GB of free memory) each start **their own hidden browser**: one browser takes screenshots one at a time,

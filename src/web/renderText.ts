@@ -8,7 +8,7 @@ export const RECENT_MS = 10 * 60_000;
  * A finished render is only mentioned while its video still exists (it may have been deleted since).
  */
 export function filmRender(
-  overview: RendersOverview | undefined,
+  overview: Pick<RendersOverview, "jobs" | "videos"> | undefined,
   filmId: string,
   now: number,
 ): RenderJob | null {

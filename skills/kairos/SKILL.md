@@ -42,6 +42,10 @@ assets/       images, fonts, sounds
   else null: use the film's own) while it starts, and sets `window.KAIROS_RESHAPE = true`. Kairos then shows it in
   other shapes and renders them at that size. A film that doesn't say so goes out in another shape with bars or a
   crop.
+- Optional, **captions as subtitles**: a film that draws its own captions can give their words, timed:
+  `window.KAIROS_CAPTIONS = [{ text, start, end }]` (set before `window.READY` settles). It then leaves the captions
+  out of the picture when `window.__kairos.captions` is false. A render's subtitles file uses those words (else the
+  word timings of the voices on the timeline).
 
 Helpers that keep motion deterministic:
 
@@ -182,6 +186,8 @@ reason when a render fails (the frame and the error).
 For somewhere else than the film's own shape, give `kairos_render` a `shape`: `wide` (YouTube), `tall` (Shorts,
 TikTok, Reels) or `square`. A film that reframes itself (`KAIROS_RESHAPE`) is drawn for it; check it first with
 `kairos_frame` and the same `shape`. Any other film gets bars (`fit: "bars"`) or a crop (`fit: "crop"`).
+`subtitles: true` also writes an `.srt` next to the video, and `captions: false` leaves a film's own captions out of
+the picture (for when the platform shows the subtitles instead). Only when the user asks for them.
 
 ## Longer films: one file per scene
 

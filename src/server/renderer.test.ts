@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -364,6 +364,92 @@ describe.runIf(browser && ffmpeg)("Renderer (real browser and ffmpeg)", () => {
       shape: "wide",
       fit: "own",
     });
+  }, 180_000);
+
+  it("writes subtitles next to the video: the captions the film gives, else what its voices say", async () => {
+    // A film that gives its captions, and draws red when asked to leave them out (green otherwise).
+    const captioned = join(filmsDir, "captioned");
+    await mkdir(captioned, { recursive: true });
+    const config = { width: 320, height: 180, fps: 30, duration: 1 };
+    await writeFile(join(captioned, "kairos.json"), JSON.stringify({ title: "C", ...config }));
+    await writeFile(
+      join(captioned, "index.html"),
+      `<!doctype html><html><body style="margin:0"><canvas id="c" width="320" height="180"></canvas><script>
+  const ctx = document.getElementById("c").getContext("2d");
+  window.KAIROS_CAPTIONS = [
+    { text: "Hello", start: 0.1, end: 0.3 },
+    { text: "there.", start: 0.3, end: 0.45 },
+  ];
+  window.renderOut = () => {
+    ctx.fillStyle = window.__kairos.captions ? "#00ff00" : "#ff0000";
+    ctx.fillRect(0, 0, 320, 180);
+  };
+</script></body></html>`,
+    );
+    // A film with a voice clip whose words are timed, placed at 0.2 s.
+    const voiced = join(filmsDir, "voiced");
+    await mkdir(join(voiced, "voice"), { recursive: true });
+    await run(ffmpeg ?? "", [
+      ...["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi"],
+      ...["-i", "anullsrc=r=44100:cl=mono", "-t", "1", join(voiced, "voice", "narrator-1.wav")],
+    ]);
+    await writeFile(
+      join(voiced, "voice", "narrator-1.words.json"),
+      JSON.stringify({
+        version: 1,
+        text: "Hi friend.",
+        duration: 1,
+        source: "speech",
+        words: [
+          { text: "Hi", start: 0.1, end: 0.3 },
+          { text: "friend.", start: 0.35, end: 0.7 },
+        ],
+      }),
+    );
+    await writeFile(
+      join(voiced, "kairos.json"),
+      JSON.stringify({
+        title: "V",
+        ...config,
+        audio: [{ file: "voice/narrator-1.wav", start: 0.2 }],
+      }),
+    );
+    await writeFile(
+      join(voiced, "index.html"),
+      "<!doctype html><script>window.renderOut = () => {};</script>",
+    );
+
+    const renderer = makeRenderer();
+    const render = async (id: string, options: { subtitles: boolean; captions?: boolean }) => {
+      const started = await renderer.start(id, { quality: "small", gpu: false, ...options });
+      const job = await waitFor(renderer, started.id);
+      expect(job.error).toBeNull();
+      const [video] = await listRenders(join(filmsDir, id));
+      if (!video) throw new Error("no video");
+      return video;
+    };
+
+    const left = await render("captioned", { subtitles: true, captions: false });
+    expect(left).toMatchObject({ subtitles: "renders/captioned-v1.srt", captions: false });
+    expect(await readFile(join(captioned, "renders", "captioned-v1.srt"), "utf8")).toBe(
+      "1\r\n00:00:00,100 --> 00:00:00,900\r\nHello there.\r\n",
+    );
+    // The page was asked to leave its captions out: it drew red.
+    const { stdout } = await execBuffer(ffmpeg ?? "", [
+      ...["-v", "error", "-ss", "0.5", "-i", join(captioned, left.file), "-frames:v", "1"],
+      ...["-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+    ]);
+    expect(stdout[0] ?? 0).toBeGreaterThan(180);
+    expect(stdout[1] ?? 255).toBeLessThan(90);
+
+    const spoken = await render("voiced", { subtitles: true });
+    expect(spoken.subtitles).toBe("renders/voiced-v1.srt");
+    expect(spoken.captions).toBeUndefined();
+    expect(await readFile(join(voiced, "renders", "voiced-v1.srt"), "utf8")).toBe(
+      "1\r\n00:00:00,300 --> 00:00:01,200\r\nHi friend.\r\n",
+    );
+    // Without subtitles asked for, none.
+    expect((await render("voiced", { subtitles: false })).subtitles).toBeUndefined();
   }, 180_000);
 
   it("reports the frame where the film breaks", async () => {

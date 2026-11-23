@@ -408,7 +408,7 @@ export function createKairosServer(context: ToolContext): McpServer {
     {
       title: "Render a video",
       description:
-        "Puts the film in the Kairos render queue to make an MP4 (in the film's renders/ folder). Rendering draws every frame and takes a while: check on it with kairos_renders. Render when the user asks for a video, not to check a frame (use kairos_frame for that). shape makes it for somewhere else than the film's own shape: wide (YouTube, 1920x1080), tall (Shorts, TikTok, Reels, 1080x1920) or square (a square post, 1080x1080). A film that reframes itself (Blocky) is filmed again for it; any other film is fitted in with bars or a crop (fit).",
+        "Puts the film in the Kairos render queue to make an MP4 (in the film's renders/ folder). Rendering draws every frame and takes a while: check on it with kairos_renders. Render when the user asks for a video, not to check a frame (use kairos_frame for that). shape makes it for somewhere else than the film's own shape: wide (YouTube, 1920x1080), tall (Shorts, TikTok, Reels, 1080x1920) or square (a square post, 1080x1080). A film that reframes itself (Blocky) is filmed again for it; any other film is fitted in with bars or a crop (fit). subtitles also writes an .srt file next to the video, from the words the film's captions show or its voices say; captions: false leaves a film's own captions out of the picture (for when the platform shows the subtitles instead).",
       inputSchema: {
         film: filmArg,
         quality: z
@@ -422,6 +422,14 @@ export function createKairosServer(context: ToolContext): McpServer {
           .describe(
             'For a film that can\'t reframe itself, in another shape: "bars" shows the whole picture, "crop" fills the frame.',
           ),
+        subtitles: z
+          .boolean()
+          .default(false)
+          .describe("Also write a subtitles file (.srt) next to the video."),
+        captions: z
+          .boolean()
+          .default(true)
+          .describe("Draw the film's own captions in the picture (false leaves them out)."),
       },
       annotations: { readOnlyHint: false, openWorldHint: false },
     },
@@ -431,14 +439,18 @@ export function createKairosServer(context: ToolContext): McpServer {
         quality,
         shape,
         fit,
+        subtitles,
+        captions,
       }: {
         film?: string;
         quality: "high" | "small";
         shape?: FilmShape;
         fit: "bars" | "crop";
+        subtitles: boolean;
+        captions: boolean;
       }) => {
         const id = await filmId(film);
-        const job = await hub.startRender(id, { quality, shape, fit });
+        const job = await hub.startRender(id, { quality, shape, fit, subtitles, captions });
         return {
           content: [
             text(
@@ -483,7 +495,7 @@ export function createKairosServer(context: ToolContext): McpServer {
       }
       for (const video of videos.slice(0, 10)) {
         lines.push(
-          `Video "${video.filmId}" v${video.version}: ${video.file}, ${video.width}×${video.height}${video.shape ? ` (${video.shape}${video.fit && video.fit !== "own" ? `, ${video.fit}` : ""})` : ""}, ${video.fps} fps, ${seconds(video.duration)}, made ${video.createdAt}`,
+          `Video "${video.filmId}" v${video.version}: ${video.file}, ${video.width}×${video.height}${video.shape ? ` (${video.shape}${video.fit && video.fit !== "own" ? `, ${video.fit}` : ""})` : ""}, ${video.fps} fps, ${seconds(video.duration)}${video.subtitles ? `, subtitles ${video.subtitles}` : ""}${video.captions === false ? ", without captions in the picture" : ""}, made ${video.createdAt}`,
         );
       }
       return { content: [text(lines.length ? lines.join("\n") : "No renders yet.")] };

@@ -22,7 +22,7 @@ import { claudeRoutes } from "./routes/claude.ts";
 import { claudeWorkRoutes } from "./routes/claude-work.ts";
 import { eventRoutes } from "./routes/events.ts";
 import { filmRoutes } from "./routes/films.ts";
-import { filmPicture, frameRoutes } from "./routes/frames.ts";
+import { filmPicture, framePicture, frameRoutes } from "./routes/frames.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { noteRoutes } from "./routes/notes.ts";
 import { referenceRoutes } from "./routes/references.ts";
@@ -156,7 +156,12 @@ const renderer = new Renderer({
     if (parsed.success) await syncEffectSounds(dir, parsed.data);
   },
 });
-renderRoutes(app, { studio, renderer, exportInfo: () => exportInfo });
+renderRoutes(app, {
+  studio,
+  renderer,
+  exportInfo: () => exportInfo,
+  picture: camera.browser ? framePicture({ studio, camera, filmServerUrl }) : undefined,
+});
 assetRoutes(app, studio);
 soundRoutes(app, studio);
 voiceRoutes(app, studio);

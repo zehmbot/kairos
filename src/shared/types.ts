@@ -967,6 +967,10 @@ export const StartRenderSchema = z.object({
   shape: FilmShapeSchema.optional(),
   /** A film that can't reframe itself is fitted into another shape: with bars, or cropped. */
   fit: z.enum(["bars", "crop"]).default("bars"),
+  /** Also write a subtitles file (`.srt`) next to the video, from the words the film shows or its voices say. */
+  subtitles: z.boolean().default(false),
+  /** Draw the film's own captions in the picture (a film that gives its captions can leave them out). */
+  captions: z.boolean().default(true),
   /**
    * Use the graphics card when one works: it draws the frames (films get their richest look) and encodes the video.
    * Off: the processor does both, slower, and films draw a lighter look.
@@ -988,6 +992,9 @@ export const RenderJobSchema = z.object({
   /** The shape asked for (null: the film's own), and how a film that can't reframe is fitted into it. */
   shape: FilmShapeSchema.nullable().default(null),
   fit: z.enum(["bars", "crop"]).default("bars"),
+  /** A subtitles file is asked for; the film's captions are drawn in the picture. */
+  subtitles: z.boolean().default(false),
+  captions: z.boolean().default(true),
   /** Frames drawn so far, of `total`. */
   done: z.number().int(),
   total: z.number().int(),
@@ -1014,6 +1021,10 @@ export const RenderSchema = z.object({
   /** The shape it went out in (null: a shape of its own, like 4:5), and how it got it. */
   shape: FilmShapeSchema.nullable().optional(),
   fit: RenderFitSchema.optional(),
+  /** Its subtitles file inside the film folder (`renders/my-intro-v3.srt`), when one was made. */
+  subtitles: z.string().nullable().optional(),
+  /** false: the film's own captions were left out of the picture. */
+  captions: z.boolean().optional(),
   fps: z.number(),
   duration: z.number(),
   frames: z.number().int(),
@@ -1023,15 +1034,41 @@ export const RenderSchema = z.object({
 });
 export type Render = z.infer<typeof RenderSchema>;
 
+/** A frame saved as a picture (a cover or a thumbnail), kept in `.kairos/renders.json` beside the videos. */
+export const PictureSchema = z.object({
+  /** Numbers only go up: `renders/my-intro-picture-3.png`. */
+  number: z.number().int().positive(),
+  file: z.string(),
+  createdAt: z.string(),
+  /** The moment of the film it shows, in seconds. */
+  t: z.number(),
+  width: z.number().int(),
+  height: z.number().int(),
+  /** The shape it was taken in (null: a shape of its own). */
+  shape: FilmShapeSchema.nullable(),
+  bytes: z.number().int(),
+});
+export type Picture = z.infer<typeof PictureSchema>;
+
 export const RendersFileSchema = z.object({
   version: z.literal(1),
   renders: z.array(RenderSchema),
+  pictures: z.array(PictureSchema).default([]),
 });
+
+/** POST /api/films/:id/pictures: save the frame at `t` (in another shape when asked) as a picture. */
+export const SavePictureSchema = z.object({
+  t: z.number().min(0, "t can't be before the start of the film."),
+  shape: FilmShapeSchema.optional(),
+});
+export type SavePicture = z.input<typeof SavePictureSchema>;
 
 /** GET /api/renders: what is rendering, and the finished videos of every film (newest first). */
 export const RendersOverviewSchema = z.object({
   jobs: z.array(RenderJobSchema),
   videos: z.array(RenderSchema.extend({ filmId: z.string(), title: z.string() })),
+  /** Saved pictures of every film (newest first). */
+  pictures: z.array(PictureSchema.extend({ filmId: z.string(), title: z.string() })).default([]),
 });
 export type RendersOverview = z.infer<typeof RendersOverviewSchema>;
 

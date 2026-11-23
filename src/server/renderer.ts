@@ -18,6 +18,7 @@ import { clipBox, clipLength, drawOrder, isPicture } from "../shared/clips.ts";
 import { duckExpression, talkSpans, voiceSpans } from "../shared/duck.ts";
 import { exportSize, isReshaped, shapeOf, showingQuery, withQuery } from "../shared/export.ts";
 import { frameCount, timeOf } from "../shared/frames.ts";
+import { subtitleCues, type TimedWord, timelineWords, toSrt } from "../shared/subtitles.ts";
 import type {
   ExportInfo,
   FilmShape,
@@ -38,9 +39,9 @@ import {
   type SoundTrack,
 } from "./ffmpeg.ts";
 import { type Film, readFilm } from "./films.ts";
-import { addRender, nextVersion, RENDERS_DIR, videoName } from "./renders.ts";
+import { addRender, nextVersion, RENDERS_DIR, subtitlesFileOf, videoName } from "./renders.ts";
 import type { Studio } from "./studio.ts";
-import { readLines } from "./voices.ts";
+import { readLines, readWords } from "./voices.ts";
 import { resolveInside } from "./workspace.ts";
 
 /** A render can't start. The message is shown to the user as-is. */
@@ -114,6 +115,32 @@ interface Showing {
   height: number;
 }
 
+/** The captions a film gives (`window.KAIROS_CAPTIONS`), checked: `[{ text, start, end }]`, or null. */
+export function filmCaptions(raw: unknown): TimedWord[] | null {
+  if (!Array.isArray(raw)) return null;
+  return raw
+    .filter(
+      (word): word is TimedWord =>
+        typeof word?.text === "string" && Number.isFinite(word.start) && Number.isFinite(word.end),
+    )
+    .slice(0, 50_000)
+    .map((word) => ({ text: word.text.slice(0, 200), start: word.start, end: word.end }));
+}
+
+/** The words the film's sounds say on its clock (every unmuted sound on the timeline with word timings). */
+async function soundWords(
+  filmDir: string,
+  tracks: readonly { file: string; start: number; muted?: boolean; sfx?: boolean }[],
+): Promise<TimedWord[]> {
+  const words = new Map<string, TimedWord[]>();
+  for (const track of tracks) {
+    if (track.muted || track.sfx || words.has(track.file)) continue;
+    const file = await readWords(filmDir, track.file).catch(() => null);
+    if (file) words.set(track.file, file.words);
+  }
+  return timelineWords(tracks, (file) => words.get(file));
+}
+
 /** How long each voice clip's file is: from the film's voice lines, else measured with ffprobe. */
 async function voiceLengths(
   filmDir: string,
@@ -151,7 +178,14 @@ export class Renderer {
   /** Puts a film in the queue. Throws RenderError when it can't be rendered. */
   async start(
     filmId: string,
-    input: { quality: RenderQuality; gpu: boolean; shape?: FilmShape; fit?: "bars" | "crop" },
+    input: {
+      quality: RenderQuality;
+      gpu: boolean;
+      shape?: FilmShape;
+      fit?: "bars" | "crop";
+      subtitles?: boolean;
+      captions?: boolean;
+    },
   ): Promise<RenderJob> {
     const info = await this.#options.exportInfo();
     if (!info.ffmpeg) {
@@ -178,6 +212,8 @@ export class Renderer {
       gpu: input.gpu,
       shape: input.shape ?? null,
       fit: input.fit ?? "bars",
+      subtitles: input.subtitles ?? false,
+      captions: input.captions ?? true,
       done: 0,
       total: frameCount(config.duration, config.fps),
       queuedAt: new Date().toISOString(),
@@ -286,8 +322,14 @@ export class Renderer {
       // The size it goes out at. In another shape, a film that reframes itself (window.KAIROS_RESHAPE) draws at that
       // size; any other film draws at its own and is fitted into it when the chunks are joined.
       const size = exportSize(config, job.shape);
-      const own: Showing = { url, width: config.width, height: config.height };
-      const asked: Showing = { url: withQuery(url, showingQuery({ size })), ...size };
+      // Captions left out of the picture (their words go in the subtitles file) are asked for in the address too.
+      const captions = job.captions;
+      const own: Showing = {
+        url: withQuery(url, showingQuery({ captions })),
+        width: config.width,
+        height: config.height,
+      };
+      const asked: Showing = { url: withQuery(url, showingQuery({ size, captions })), ...size };
       const reshaped = isReshaped(config, size);
       // The first page to open finds out which, and the other workers open theirs once it knows.
       let decide: (showing: Showing) => void = () => undefined;
@@ -303,8 +345,10 @@ export class Renderer {
 
       // Workers take chunks from a shared list. The first failure stops the others.
       let next = 0;
-      // The first page open says which effect sounds the film places (before the sound is mixed).
+      // The first page open says which effect sounds the film places (before the sound is mixed), and the words
+      // its captions show (for the subtitles).
       let soundsRead: Promise<unknown> | null = null;
+      let captionsRead: Promise<TimedWord[] | null> | null = null;
       let failure: unknown = null;
       const dir = partsDir;
       const worker = async (index: number) => {
@@ -337,6 +381,10 @@ export class Renderer {
             .then((sounds) =>
               Array.isArray(sounds) ? this.#options.syncSounds?.(film.path, sounds) : null,
             )
+            .catch(() => null);
+          captionsRead ??= page
+            .evaluate(() => (window as { KAIROS_CAPTIONS?: unknown }).KAIROS_CAPTIONS ?? null)
+            .then(filmCaptions)
             .catch(() => null);
           for (;;) {
             const chunk = chunks[next++];
@@ -479,6 +527,16 @@ export class Renderer {
       const shape = shapeOf(size);
       const name = videoName(film.id, version, reshaped ? shape : null);
       await rename(joined, join(film.path, RENDERS_DIR, name));
+      // Subtitles: the words the film's captions show, else what its sounds say; none when there are no words.
+      let subtitles: string | null = null;
+      if (job.subtitles) {
+        const words = (await captionsRead) ?? (await soundWords(film.path, sound.audio));
+        const cues = subtitleCues(words.filter((word) => word.start < config.duration));
+        if (cues.length > 0) {
+          subtitles = subtitlesFileOf(`${RENDERS_DIR}/${name}`);
+          await writeFile(join(film.path, subtitles), toSrt(cues), "utf8");
+        }
+      }
       await addRender(film.path, {
         version,
         file: `${RENDERS_DIR}/${name}`,
@@ -489,6 +547,8 @@ export class Renderer {
         height: size.height,
         shape,
         fit,
+        ...(job.subtitles ? { subtitles } : {}),
+        ...(job.captions ? {} : { captions: false }),
         fps: config.fps,
         duration: config.duration,
         frames: job.total,

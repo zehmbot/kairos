@@ -1052,6 +1052,27 @@ a.render-title:hover {
   box-shadow: inset 0 calc(var(--px) * -1) 0 0 rgb(0 0 0 / 0.25);
 }
 
+.render-row.picture-row {
+  flex-direction: row;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.picture-row > .stack {
+  flex: 1;
+  min-width: 0;
+}
+
+.picture-thumb {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 160px;
+  max-height: 120px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 var(--px) var(--line);
+}
+
 .render-line {
   font-family: var(--font-pixel);
   font-size: 10px;
@@ -1463,6 +1484,10 @@ a.render-title:hover {
 /* ---------- Small screens ---------- */
 
 @media (max-width: 760px) {
+  .render-row.picture-row {
+    flex-direction: column;
+  }
+
   .app {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto minmax(0, 1fr);

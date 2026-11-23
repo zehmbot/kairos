@@ -222,7 +222,11 @@ function contactShadowTexture() {
 /** Icons the effects draw now (fx.js); the others ("!", "?", "idea") stay icons. */
 const FX_ICONS = new Set(["music", "heart", "sparkle", "zzz", "sweat", "anger"]);
 
-export function createEngine({ width: W, height: H, story }) {
+/**
+ * The film's engine for a picture of W × H. `captions: false` leaves the captions out of the picture (a render whose
+ * subtitles go in a file instead); their words are still there (`captions` below).
+ */
+export function createEngine({ width: W, height: H, story, captions: showCaptions = true }) {
   const shots = story.SHOTS ?? [];
   const cast = { ...BLOCKY_CAST, ...(story.CAST ?? {}) };
   const settings = story.SETTINGS ?? {};
@@ -956,7 +960,7 @@ export function createEngine({ width: W, height: H, story }) {
       focusId,
     );
     drawEffects(ctx, events, index, t, { W, H, headAt, ringAt, focus: focusId });
-    drawCaptions(ctx, words, t, W, H, settings.captions);
+    if (showCaptions) drawCaptions(ctx, words, t, W, H, settings.captions);
   }
 
   const font = new FontFace("Blocky Caption", "url(assets/fonts/Poppins-ExtraBoldItalic.ttf)", {
@@ -986,6 +990,12 @@ export function createEngine({ width: W, height: H, story }) {
     },
     /** The places this engine can show (the Sheets tab lists them). */
     places: PLACE_NAMES,
+    /** The words the captions show, timed (after `ready`: the voices'): `[{ text, start, end }]`, for subtitles. */
+    get captions() {
+      return timeline.flatMap((entry) =>
+        entry.words.map((word) => ({ text: word.text, start: word.start, end: word.end })),
+      );
+    },
     /** The effects, timed (for sheets and tests). */
     get effects() {
       return events;

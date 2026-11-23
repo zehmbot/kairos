@@ -428,6 +428,20 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
     const browserInfo = findBrowser();
     if (!browserInfo) throw new Error("no browser");
     const worker = await launchHeadless(browserInfo);
+    /** How much the 2D layer (captions and extras) covers, and the film's caption words. */
+    const look = () => {
+      const layer = document.querySelector(".film-2d") as HTMLCanvasElement;
+      const data = (layer.getContext("2d") as CanvasRenderingContext2D).getImageData(
+        0,
+        0,
+        layer.width,
+        layer.height,
+      ).data;
+      let covered = 0;
+      for (let i = 3; i < data.length; i += 4) covered += (data[i] ?? 0) > 0 ? 1 : 0;
+      const words = (window as { KAIROS_CAPTIONS?: { text: string }[] }).KAIROS_CAPTIONS;
+      return { covered, words: words?.length ?? 0 };
+    };
     try {
       const page = await worker.newPage();
       const url = withQuery(
@@ -450,6 +464,21 @@ window.renderOut = (t) => { cube.rotation.set(t, t * 1.3, 0); renderer.render(sc
           [640, 360],
         ],
       });
+      // It gives its caption words (for subtitles), and leaves the captions out of the picture when asked.
+      const shown = await page.evaluate(look);
+      const bare = await worker.newPage();
+      const off = await openFilm(
+        bare,
+        withQuery(`http://127.0.0.1:${port}/${id}/`, showingQuery({ captions: false })),
+        360,
+        640,
+      );
+      await off.draw(3.4);
+      const left = await bare.evaluate(look);
+      expect(shown.words).toBeGreaterThan(10);
+      expect(left.words).toBe(shown.words);
+      expect(shown.covered).toBeGreaterThan(500);
+      expect(left.covered).toBeLessThan(shown.covered / 4);
     } finally {
       await worker.close();
     }
