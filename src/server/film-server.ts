@@ -59,7 +59,9 @@ function notFound(reply: FastifyReply) {
 
 export async function buildFilmServer(options: FilmServerOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, forceCloseConnections: true });
-  const frameAncestors = options.parentOrigins.join(" ");
+  // A CSP source can't name an IPv6 address ([::1]): browsers ignore it with a warning. Kairos listens on
+  // 127.0.0.1 only, so those pages never exist anyway.
+  const frameAncestors = options.parentOrigins.filter((origin) => !origin.includes("[")).join(" ");
 
   app.addHook("onRequest", requestGuard(allowedHostsFor([options.port])));
   app.addHook("onSend", async (_request, reply, payload) => {

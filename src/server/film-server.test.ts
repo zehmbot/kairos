@@ -13,7 +13,9 @@ import {
 
 const PORT = 7342;
 const HOST = `127.0.0.1:${PORT}`;
-const PARENTS = ["http://127.0.0.1:7340", "http://localhost:7340"];
+const PARENTS = ["http://127.0.0.1:7340", "http://localhost:7340", "http://[::1]:7340"];
+/** The pages allowed to embed films (a CSP can't name an IPv6 address). */
+const FRAME_ANCESTORS = "http://127.0.0.1:7340 http://localhost:7340";
 
 let filmsDir: string;
 let app: FastifyInstance;
@@ -98,9 +100,7 @@ describe("film server", () => {
   it("never caches and only lets Kairos embed films", async () => {
     const response = await get("/my-intro/index.html");
     expect(response.headers["cache-control"]).toBe("no-store");
-    expect(response.headers["content-security-policy"]).toBe(
-      `frame-ancestors ${PARENTS.join(" ")}`,
-    );
+    expect(response.headers["content-security-policy"]).toBe(`frame-ancestors ${FRAME_ANCESTORS}`);
   });
 
   it("refuses paths outside the film and hidden files", async () => {
