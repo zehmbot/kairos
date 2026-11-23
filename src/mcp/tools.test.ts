@@ -81,6 +81,7 @@ class FakeHub implements Hub {
       url: "http://127.0.0.1:7340",
       dev: false,
       filmPort: 7342,
+      platform: "win32",
     };
   }
   async workspace() {

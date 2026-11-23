@@ -6,7 +6,8 @@
 import type { VoiceInfo, Word } from "../shared/types.ts";
 
 export const FISH_KEY_NAME = "FISH_AUDIO_API_KEY";
-export const DEFAULT_FISH_MODEL = "s2.1-pro";
+/** The free model: new installs start there (Settings → Voice changes it). */
+export const DEFAULT_FISH_MODEL = "s2.1-pro-free";
 export const FISH_MODELS = ["s2.1-pro", "s2.1-pro-free", "s2-pro", "s1"] as const;
 
 /** A fish.audio problem, said plainly. */

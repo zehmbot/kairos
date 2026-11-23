@@ -7,8 +7,8 @@ import { NewFilmDialog } from "../components/NewFilmDialog.tsx";
 import { Notice } from "../components/Notice.tsx";
 import { PixelButton } from "../components/PixelButton.tsx";
 import { PixelPanel } from "../components/PixelPanel.tsx";
+import { SetupCard } from "../components/SetupCard.tsx";
 import { TrashPanel } from "../components/TrashPanel.tsx";
-import { WorkspacePicker } from "../components/WorkspacePicker.tsx";
 
 export function FilmsPage() {
   const workspace = useWorkspace();
@@ -67,18 +67,12 @@ export function FilmsPage() {
             page.
           </Notice>
         </PixelPanel>
-      ) : !hasWorkspace ? (
-        <PixelPanel title="Choose your films folder">
-          <div className="stack">
-            <p>
-              Kairos keeps all your films in one folder on this computer. Choose that folder, or
-              make a new one (for example "Kairos") in the window that opens. You can change it
-              later in Settings.
-            </p>
-            <WorkspacePicker workspace={workspace.data} chooseLabel="Choose folder" />
-          </div>
-        </PixelPanel>
       ) : (
+        // Until setup is done: the folder, Claude, voices and your computer (the folder first of all).
+        <SetupCard onNewFilm={() => setCreating(true)} />
+      )}
+
+      {hasWorkspace && (
         <PixelPanel
           title="Your films"
           actions={films.data && films.data.length > 0 ? newFilmButton : undefined}

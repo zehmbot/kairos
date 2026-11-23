@@ -12,7 +12,7 @@ import { claudeTools, findClaude } from "./claude-cli.ts";
 import { HooksFileError, installHooks } from "./claude-hooks.ts";
 import { ClaudeJobs } from "./claude-jobs.ts";
 import { kairosHome } from "./config.ts";
-import { probeExport } from "./ffmpeg.ts";
+import { findFfmpeg, probeExport } from "./ffmpeg.ts";
 import { buildFilmServer } from "./film-server.ts";
 import { scanFilms } from "./films.ts";
 import { FilmSoundsSchema, syncEffectSounds } from "./fx.ts";
@@ -30,6 +30,7 @@ import { renderRoutes } from "./routes/renders.ts";
 import { scriptRoutes } from "./routes/script.ts";
 import { skillRoutes } from "./routes/skills.ts";
 import { soundRoutes } from "./routes/sounds.ts";
+import { systemRoutes } from "./routes/system.ts";
 import { templateRoutes } from "./routes/templates.ts";
 import { trashRoutes } from "./routes/trash.ts";
 import { voiceRoutes } from "./routes/voice.ts";
@@ -37,6 +38,7 @@ import { workspaceRoutes } from "./routes/workspace.ts";
 import { allowedHostsFor, requestGuard } from "./security.ts";
 import { claudeSkillsDir, Skills } from "./skills.ts";
 import { Studio } from "./studio.ts";
+import { currentPath } from "./system-path.ts";
 import { PictureKeeper } from "./thumbnails.ts";
 import { acceptUploads } from "./uploads.ts";
 import { Writers } from "./writer.ts";
@@ -95,7 +97,7 @@ const app = Fastify({ logger: false, forceCloseConnections: true });
 app.addHook("onRequest", requestGuard(uiHosts));
 acceptUploads(app);
 
-healthRoutes(app, { version: pkg.version, url, dev, filmPort });
+healthRoutes(app, { version: pkg.version, url, dev, filmPort, platform: process.platform });
 workspaceRoutes(app, studio);
 const filmServerUrl = `http://${HOST}:${filmPort}`;
 templateRoutes(app, studio);
@@ -138,18 +140,22 @@ claudeRoutes(
 );
 skillRoutes(app, skills);
 
-// Video export: find ffmpeg and test its encoders once, in the background (it takes a few seconds).
-const exportInfo = probeExport();
-void exportInfo.then((info) =>
+// Video export: find ffmpeg and test its encoders, in the background (it takes a few seconds). The setup card's
+// Check again looks once more (`recheck`), so ffmpeg installed while Kairos runs is found without a restart.
+const logExport = (info: Awaited<ReturnType<typeof probeExport>>) =>
   console.log(
     info.ffmpeg
       ? `Video export: ffmpeg ${info.ffmpeg.version}, ${info.encoders.map((encoder) => encoder.name).join(", ")}`
       : "Video export: ffmpeg not found, rendering is off",
-  ),
-);
+  );
+let exportInfo = probeExport();
+void exportInfo.then(logExport);
 const renderer = new Renderer({
   studio,
-  browser: camera.browser,
+  // The browser found now: Check again can find one later.
+  get browser() {
+    return camera.browser;
+  },
   filmServerUrl,
   exportInfo: () => exportInfo,
   syncSounds: async (dir, sounds) => {
@@ -157,11 +163,25 @@ const renderer = new Renderer({
     if (parsed.success) await syncEffectSounds(dir, parsed.data);
   },
 });
+const takePicture = framePicture({ studio, camera, filmServerUrl });
 renderRoutes(app, {
   studio,
   renderer,
   exportInfo: () => exportInfo,
-  picture: camera.browser ? framePicture({ studio, camera, filmServerUrl }) : undefined,
+  get picture() {
+    return camera.browser ? takePicture : undefined;
+  },
+});
+/** Looks for ffmpeg and the browser again, on the PATH as it is now (something installed since start counts). */
+systemRoutes(app, {
+  recheck: async () => {
+    const env = { ...process.env, PATH: await currentPath() };
+    exportInfo = probeExport(findFfmpeg(process.platform, env));
+    camera.browser = findBrowser(process.platform, env);
+    const info = await exportInfo;
+    logExport(info);
+    return { ...info, browser: camera.browser };
+  },
 });
 assetRoutes(app, studio);
 soundRoutes(app, studio);
@@ -199,21 +219,18 @@ const renderBusy = () =>
   renderer
     .jobs()
     .some((job) => job.state === "queued" || job.state === "running" || job.state === "joining");
-const pictures = camera.browser
-  ? new PictureKeeper({
-      filmsDir: () => studio.filmsDir,
-      take: filmPicture({ studio, camera, filmServerUrl }),
-      busy: (filmId) => Boolean(activity.get(filmId)) || renderBusy(),
-    })
-  : null;
-if (pictures) {
-  studio.events.subscribe((event) => {
-    if (event.type === "films-changed") pictures.changed(event.ids);
-    if (event.type === "workspace-changed") void pictures.sweep();
-  });
-  // A little after start, when the hub has settled.
-  setTimeout(() => void pictures.sweep(), 15_000).unref();
-}
+// Without a browser there's no picture to take (filmPicture answers null), until Check again finds one.
+const pictures = new PictureKeeper({
+  filmsDir: () => studio.filmsDir,
+  take: filmPicture({ studio, camera, filmServerUrl }),
+  busy: (filmId) => Boolean(activity.get(filmId)) || renderBusy(),
+});
+studio.events.subscribe((event) => {
+  if (event.type === "films-changed") pictures.changed(event.ids);
+  if (event.type === "workspace-changed") void pictures.sweep();
+});
+// A little after start, when the hub has settled.
+setTimeout(() => void pictures.sweep(), 15_000).unref();
 
 if (existsSync(webDir)) {
   await app.register(fastifyStatic, { root: webDir });
@@ -269,7 +286,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     studio.close();
     activity.close();
-    pictures?.close();
+    pictures.close();
     Promise.allSettled([
       jobs.close(),
       renderer.close(),

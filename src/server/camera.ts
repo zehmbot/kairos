@@ -177,7 +177,8 @@ export class CannotReshape extends Error {
 }
 
 export class Camera {
-  readonly browser: BrowserInfo | null;
+  /** The browser pictures are taken with; Check again (the setup card) can find one later. */
+  browser: BrowserInfo | null;
   readonly #idleMs: number;
   #running: Promise<Browser> | null = null;
   #idleTimer: NodeJS.Timeout | undefined;

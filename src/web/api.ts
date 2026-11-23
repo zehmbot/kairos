@@ -40,6 +40,7 @@ import {
   ScriptSchema,
   SkillSchema,
   type StartRender,
+  SystemCheckSchema,
   type TemplateInput,
   TemplateSummarySchema,
   TrashEntrySchema,
@@ -464,6 +465,23 @@ export function useOpenSkillFolder() {
 }
 
 /** ffmpeg and the encoders that work on this computer. */
+/**
+ * Looks for ffmpeg and the browser again (the setup card's Check again): what Kairos finds replaces what the video
+ * tools and the camera said.
+ */
+export function useRecheck() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => call(SystemCheckSchema, "/api/system/recheck", { method: "POST" }),
+    onSuccess: ({ browser, ...exportInfo }) => {
+      queryClient.setQueryData(queryKeys.export, exportInfo);
+      queryClient.setQueryData(queryKeys.camera, { browser });
+      // Claude Code may have been installed meanwhile too.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.claude });
+    },
+  });
+}
+
 export function useExportInfo() {
   return useQuery({
     queryKey: queryKeys.export,

@@ -3151,6 +3151,102 @@ video.asset-media {
   font-size: 16px;
 }
 
+/* ---------- Get set up (Films page): four steps, each green once done ---------- */
+
+.setup-steps {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.setup-step {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
+  background: var(--bg);
+  box-shadow: inset var(--px) 0 0 var(--accent);
+}
+
+.setup-step[data-done] {
+  box-shadow: inset var(--px) 0 0 var(--ok);
+}
+
+.setup-mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  color: var(--c-night);
+  background: var(--accent);
+}
+
+.setup-step[data-done] .setup-mark {
+  background: var(--ok);
+}
+
+.setup-body {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.setup-title {
+  margin: 0;
+  font-size: 12px;
+  line-height: 32px;
+}
+
+.setup-body p {
+  margin: 0;
+}
+
+.setup-summary {
+  color: var(--text-muted);
+}
+
+.setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.setup-command {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.setup-command code {
+  padding: 6px 10px;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+  background: var(--surface);
+}
+
+.setup-ready {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 20px;
+}
+
+.setup-ready p {
+  flex: 1 1 260px;
+  margin: 0;
+}
+
+/* A link drawn as a button (opens another site). */
+a.px-btn {
+  text-decoration: none;
+}
+
 /* ---------- Menus (More): a short list of actions drawn over the page ---------- */
 
 .px-menu {

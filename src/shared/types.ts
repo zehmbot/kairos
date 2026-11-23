@@ -9,6 +9,8 @@ export const HealthSchema = z.object({
   dev: z.boolean(),
   /** Port of the film server. The UI pairs it with its own host name. */
   filmPort: z.number(),
+  /** The operating system (`win32`, `darwin`, `linux`...): the setup card shows its install commands. */
+  platform: z.string(),
 });
 export type Health = z.infer<typeof HealthSchema>;
 
@@ -952,6 +954,12 @@ export const ExportInfoSchema = z.object({
   encoders: z.array(z.object({ id: RenderEncoderSchema, name: z.string(), gpu: z.boolean() })),
 });
 export type ExportInfo = z.infer<typeof ExportInfoSchema>;
+
+/** What Check again found: ffmpeg and its encoders, and the browser (null: still missing). */
+export const SystemCheckSchema = ExportInfoSchema.extend({
+  browser: z.object({ name: z.string(), path: z.string() }).nullable(),
+});
+export type SystemCheck = z.infer<typeof SystemCheckSchema>;
 
 /**
  * How a video got its shape: `own` (the film's own), `reframe` (the film drew itself at the new size), `bars` (the

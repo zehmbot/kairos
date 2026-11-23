@@ -2,10 +2,11 @@ import { useId, useState } from "react";
 import { useVoiceKey, useVoiceModel, useVoiceStatus } from "../api.ts";
 import { PixelButton } from "./PixelButton.tsx";
 import { PixelPanel } from "./PixelPanel.tsx";
+import { FISH_AUDIO_URL } from "./SetupCard.tsx";
 
 const MODEL_WORDS: Record<string, string> = {
-  "s2.1-pro": "S2.1 Pro (best, the default)",
-  "s2.1-pro-free": "S2.1 Pro Free (free developer tier)",
+  "s2.1-pro-free": "S2.1 Pro Free (free, the default)",
+  "s2.1-pro": "S2.1 Pro (best)",
   "s2-pro": "S2 Pro",
   s1: "S1 (older)",
 };
@@ -84,8 +85,10 @@ export function VoiceSettings() {
             </PixelButton>
           </div>
           <p className="hint">
-            Get a key on fish.audio (API keys, in your account). Kairos checks it with fish.audio
-            before saving it.
+            <a href={FISH_AUDIO_URL} target="_blank" rel="noreferrer">
+              Get a key on fish.audio
+            </a>{" "}
+            (API keys, in your account). Kairos checks it with fish.audio before saving it.
           </p>
           {saveKey.error && <p className="field-error">{saveKey.error.message}</p>}
         </form>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import {
   useCamera,
   useClaude,
@@ -12,6 +13,21 @@ import { PixelButton } from "../components/PixelButton.tsx";
 import { PixelPanel } from "../components/PixelPanel.tsx";
 import { VoiceSettings } from "../components/VoiceSettings.tsx";
 import { WorkspacePicker } from "../components/WorkspacePicker.tsx";
+import { setSetupHidden, useSetup } from "../setup.ts";
+
+/** Setup not finished and its card hidden: one line to bring the card back on the Films page. */
+function SetupLine() {
+  const { progress } = useSetup();
+  if (!progress.known || progress.complete) return null;
+  return (
+    <p className="hint">
+      Setup: {progress.count} of {progress.total} done.{" "}
+      <Link to="/films" onClick={() => setSetupHidden(false)}>
+        Show the setup card
+      </Link>
+    </p>
+  );
+}
 
 /** What you set up first (Claude, voices, your films folder), then the computer's details, folded away. */
 export function SettingsPage() {
@@ -22,6 +38,7 @@ export function SettingsPage() {
       <div className="page-head">
         <h1>Settings</h1>
         <p>Connect Claude, add your voice key, and choose where your films live.</p>
+        <SetupLine />
       </div>
       <ClaudePanel />
       <VoiceSettings />

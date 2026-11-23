@@ -58,7 +58,7 @@ const setNarrator = () =>
 describe("the fish.audio key", () => {
   it("saves only a key fish.audio accepts, and never shows it", async () => {
     const before = (await app.inject("/api/voice/status")).json() as VoiceStatus;
-    expect(before).toMatchObject({ key: null, hint: null, model: "s2.1-pro" });
+    expect(before).toMatchObject({ key: null, hint: null, model: "s2.1-pro-free" });
 
     const wrong = await json("PUT", "/api/voice/key", { key: "wrong-key-0000" });
     expect(wrong.statusCode).toBe(502);
@@ -72,8 +72,8 @@ describe("the fish.audio key", () => {
     );
     expect((await json("POST", "/api/voice/check")).json()).toEqual({ ok: true });
 
-    const model = await json("PUT", "/api/voice/model", { model: "s2.1-pro-free" });
-    expect(model.json().model).toBe("s2.1-pro-free");
+    const model = await json("PUT", "/api/voice/model", { model: "s2.1-pro" });
+    expect(model.json().model).toBe("s2.1-pro");
     expect((await json("DELETE", "/api/voice/key")).json()).toMatchObject({ key: null });
     expect((await json("POST", "/api/voice/check")).json().message).toContain(
       "Add your fish.audio key",

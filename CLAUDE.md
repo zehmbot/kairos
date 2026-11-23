@@ -26,7 +26,7 @@ http://127.0.0.1:7342 (`KAIROS_FILM_PORT`). App settings live in `~/.kairos/conf
 ```
 src/server/   Fastify hub: index.ts (entry), security.ts (request guard), studio.ts (workspace + watcher),
               films.ts (scan/create), trash.ts (deleted films), film-server.ts (serves film pages),
-              notes.ts (frame notes), camera.ts (frame pictures),
+              notes.ts (frame notes), camera.ts (frame pictures), system-path.ts (the PATH as it is now),
               folder-picker.ts/.ps1 (system "choose folder" window),
               claude-cli.ts (runs `claude`: version, mcp add/remove, open a terminal),
               skills.ts (copies skills into Claude Code), renderer.ts (render queue),
@@ -50,6 +50,17 @@ skills/       The Kairos skills for Claude Code (SKILL.md + supporting files; no
 scripts/      Small maintenance scripts
 public/       Static files copied as-is into the UI build
 ```
+
+## First run
+
+The Films page shows a **Get set up** card (`src/web/components/SetupCard.tsx`, its steps in `src/web/setup.ts`)
+until four steps are done: the films folder, Claude Code (install, then Connect), voices (a fish.audio key, checked
+with fish.audio before it's saved; the link is the project's fish.audio referral, `FISH_AUDIO_URL`) and the computer
+(ffmpeg and Chrome or Edge, with the install command for the system from `/api/health`'s `platform`). Its **Check
+again** calls `POST /api/system/recheck`: the hub looks for ffmpeg and the browser once more on the PATH as it is now
+(`currentPath`: on Windows read again from the registry, so something installed with winget while Kairos runs is
+found) and the renderer and the camera use what it found. When the last step turns green the card says you're ready,
+then it doesn't come back; × hides it in this browser, and Settings shows a line to bring it back.
 
 ## Films
 
@@ -345,7 +356,7 @@ speech with word timings (`POST /v1/tts/stream/with-timestamp`, an SSE stream: t
 **The key** (`FISH_AUDIO_API_KEY`) lives in `~/.kairos/.env` (`src/server/secrets.ts`: atomic, keeps other
 lines), else in the environment or the repo's git-ignored `.env`. The hub checks a key with fish.audio before
 saving it. It never goes to the browser, into an answer, a log or a film folder (status shows `…a1b2`).
-Settings → Voice also picks the model; recently used voices are in `config.json`.
+Settings → Voice also picks the model (new installs start on the free one, `s2.1-pro-free`); recently used voices are in `config.json`.
 
 **A film's voices:** `voices` in `kairos.json` maps a speaker (`narrator`, `ruby`) to a fish.audio voice.
 Lines are `voice/<speaker>-<n>.mp3`, each with `voice/<speaker>-<n>.words.json` (text, duration, words with
