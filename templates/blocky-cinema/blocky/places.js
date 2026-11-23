@@ -6,7 +6,8 @@ import * as THREE from "three";
 import { buildPieces } from "./kit.js";
 import { tiledPlane } from "./kit-parts.js";
 import { LAYOUTS } from "./layouts.js";
-import { cabin, campfire, glow, pine } from "./props.js";
+import { glow } from "./props.js";
+import { cabinSpec } from "./shapes.js";
 import { backdrop, horizonOf } from "./sky.js";
 import {
   asphalt,
@@ -19,7 +20,7 @@ import {
   tiles,
   wallpaper,
 } from "./textures.js";
-import { block, canvasTexture, freeze, mesh, paint, rng, roundedBox, speckle } from "./util.js";
+import { canvasTexture, freeze, mesh, paint, rng, roundedBox, speckle } from "./util.js";
 
 /** Light settings for each time of day. */
 // Lights have a reason (the sun, a window, a lamp) and the exposure stays near normal: shadows stay dark, lamps,
@@ -455,6 +456,59 @@ function classroom(preset) {
   };
 }
 
+function cafe(preset) {
+  const g = new THREE.Group();
+  const night = preset === "night";
+  const lampsOn = preset !== "day";
+  roomShell(g, {
+    w: 28,
+    d: 24,
+    h: 11,
+    floor: { material: surface(planks("#6b4a32", [1, 1], { count: 6 }), 1.2, 0.5), tile: 4 },
+    wall: { material: surface(plaster("#efe2cf"), 0.5), tile: 6 },
+  });
+  buildPieces(g, LAYOUTS.cafe.pieces, roomContext(preset));
+
+  // Daylight comes in at the big street windows on the left; in the evening and at night the lamps over the tables
+  // light them warmly (the two nearest cast soft shadows), and the pastry case and the shelves glow a little.
+  const daylight = sunLight(g, preset, [0, 0, -2], 16, night ? 0.3 : 0.6);
+  daylight.castShadow = false;
+  if (!night) {
+    const street = new THREE.DirectionalLight(
+      preset === "day" ? "#fff6e8" : "#ffb37a",
+      0.6 * SCALE,
+    );
+    street.position.set(-60, 22, 2);
+    street.target.position.set(0, 0, 0);
+    g.add(street, street.target);
+  }
+  if (lampsOn) {
+    for (const [x, z, shadow] of [
+      [-7.5, -1.5, true],
+      [-7.5, 5.5, false],
+      [1.5, 5.5, true],
+    ]) {
+      lampSpot(g, [x, 6.6, z], [0, -6.6, 0.01], {
+        intensity: night ? 110 : 65,
+        angle: 1.1,
+        distance: 24,
+        shadow,
+      });
+    }
+    lampLight(g, 6, 4.6, -5, night ? 5 : 3, "#fff2d0", 6);
+  }
+  lampLight(g, 3, 8, -8, night ? 6 : 4, "#ffe2b8", 16);
+  lampLight(g, 0, 9, 8, night ? 2 : 3, "#fff2dc", 22);
+
+  return {
+    group: g,
+    ...LAYOUTS.cafe,
+    indoor: true,
+    exposure: LIGHTS[preset].indoorExposure,
+    fog: null,
+  };
+}
+
 // ---------- Outdoors ----------
 
 /** Painted lines on the road: a dashed yellow middle line and white edges, one mesh. */
@@ -691,27 +745,48 @@ function forest(preset) {
     trunks.setMatrixAt(placed++, m);
   }
   g.add(trunks);
-  for (let k = 0; k < 14; k++) {
-    const a = random() * Math.PI * 2;
-    const r = 17 + random() * 30;
-    const p = pine(`fp${k}`, 1.4 + random() * 0.8, true);
-    p.position.set(Math.cos(a) * r, 0, Math.sin(a) * r - 10);
-    if (p.position.z > 10) continue;
-    g.add(p);
-  }
-  const hut = cabin(night);
-  hut.position.set(9, 0, -17);
-  hut.rotation.y = -0.4;
-  const fire = campfire();
-  fire.position.set(-4.5, 0, -2.5);
-  g.add(hut, fire);
-  for (let k = 0; k < 2; k++) {
-    const log = block(4, 0.9, 1, "#5a3a24", -4.5 + (k ? 3 : -3.2), 0, -2.5 + (k ? 1.6 : -1), {
-      radius: 0.35,
-    });
-    log.rotation.y = k ? -0.9 : 0.7;
-    g.add(log);
-  }
+  buildPieces(g, LAYOUTS.forest.pieces, {
+    lit: night,
+    night: preset === "night",
+    sky: LIGHTS[preset].windowSky,
+  });
+
+  // Where the cabin's chimney, window and lantern are (shapes.js cabinSpec, turned with the cabin).
+  const cabinPiece = LAYOUTS.forest.pieces.find((piece) => piece.kind === "cabin");
+  const cs = cabinSpec(cabinPiece);
+  const onCabin = (lx, y, lz) => {
+    const r = cabinPiece.rot ?? 0;
+    return new THREE.Vector3(
+      cabinPiece.x + lx * Math.cos(r) + lz * Math.sin(r),
+      y,
+      cabinPiece.z - lx * Math.sin(r) + lz * Math.cos(r),
+    );
+  };
+  // Smoke from the chimney: soft puffs rising and drifting with the wind, placed from t alone.
+  const chimney = onCabin(cs.chimney.x, cs.chimney.top + 0.3, cs.chimney.z);
+  const puffTexture = canvasTexture("puff", 64, (ctx, size) => {
+    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    grad.addColorStop(0, "rgba(255,255,255,0.9)");
+    grad.addColorStop(0.6, "rgba(255,255,255,0.35)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+  });
+  const smoke = new THREE.Group();
+  smoke.userData.scenery = true;
+  const puffs = Array.from({ length: 14 }, () => {
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: puffTexture,
+        color: night ? "#7d8496" : "#d8dde6",
+        transparent: true,
+        depthWrite: false,
+      }),
+    );
+    smoke.add(sprite);
+    return sprite;
+  });
+  g.add(smoke);
 
   // Northern lights.
   const aurora = new THREE.Mesh(
@@ -771,7 +846,13 @@ function forest(preset) {
   // leads at a normal exposure.
   sunLight(g, preset, [0, 0, -3], 22, night ? 0.8 : 1, outdoorBoost(preset));
   const fireLight = campfireLight(g, -4.5, 2.6, -2.5, night ? 95 : 30);
-  if (night) lampLight(g, 6.5, 3.5, -12.5, 25, "#ffb45e", 20);
+  if (night) {
+    // The cabin's lit window and its porch lantern.
+    const glowAt = onCabin(cs.windowX, 4.1, cs.d / 2 + 1.2);
+    lampLight(g, glowAt.x, glowAt.y, glowAt.z, 25, "#ffb45e", 20);
+    const lanternAt = onCabin(cs.doorX + 2.2, cs.porch.roofY - 1.4, cs.d / 2 + cs.porch.d - 0.8);
+    lampLight(g, lanternAt.x, lanternAt.y, lanternAt.z, 10, "#ffb45e", 10);
+  }
 
   return {
     group: g,
@@ -779,7 +860,19 @@ function forest(preset) {
     fog: { color: night ? "#0d1530" : "#dfe8f6", near: 30, far: 120 },
     update(t) {
       aurora.material.uniforms.uTime.value = t;
-      fire.userData.update(t);
+      // The campfire's flames (and anything else that moves by itself).
+      for (const child of g.children) child.userData.update?.(t);
+      puffs.forEach((puff, k) => {
+        const phase = (t * 0.22 + k / puffs.length) % 1;
+        puff.position.set(
+          chimney.x + phase * 2.6 + Math.sin(t * 0.7 + k) * 0.3,
+          chimney.y + phase * 8,
+          chimney.z + phase * 0.8,
+        );
+        const size = 1 + phase * 3.2;
+        puff.scale.set(size, size, 1);
+        puff.material.opacity = 0.5 * Math.sin(Math.PI * Math.min(1, phase * 1.15));
+      });
       fireLight.intensity =
         (night ? 55 : 20) * (1 + 0.15 * Math.sin(t * 11) + 0.08 * Math.sin(t * 27));
       const p = flakeGeometry.attributes.position;
@@ -798,7 +891,18 @@ function forest(preset) {
   };
 }
 
-const BUILDERS = { home, bedroom, kitchen, school, classroom, town, park, backyard, forest };
+const BUILDERS = {
+  home,
+  bedroom,
+  kitchen,
+  school,
+  classroom,
+  cafe,
+  town,
+  park,
+  backyard,
+  forest,
+};
 
 /** The names Claude can use for `place` in story.js. */
 export const PLACE_NAMES = Object.keys(BUILDERS);
@@ -810,6 +914,7 @@ export const DEFAULT_LIGHT = {
   kitchen: "evening",
   school: "day",
   classroom: "day",
+  cafe: "day",
   town: "day",
   park: "day",
   backyard: "day",

@@ -265,6 +265,77 @@ const CLASSROOM_PIECES = [
   { kind: "trashCan", x: 10.2, z: -11.6 },
 ];
 
+// ---------- The forest and the café ----------
+
+const CABIN = { kind: "cabin", x: 9, z: -17, rot: -0.4 };
+
+/** The pines around the clearing (their snowy branches hang low: walks go around them). */
+const PINES = [
+  [18.27, 1.25, 1.98],
+  [33.57, -4.91, 2.32],
+  [17.24, -8.38, 2.73],
+  [-6.74, -35.28, 2.17],
+  [-21.48, -2.53, 1.71],
+  [4.36, -35.37, 2.26],
+  [41.46, -7, 2.33],
+  [-16.02, -16.84, 1.84],
+  [24.91, 8.45, 2.73],
+  [-1.52, -56.41, 2.77],
+  [-26, -24, 2.4],
+  [22, -27, 2.5],
+  [-31, 7, 2.2],
+  [31, 15, 2.0],
+].map(([x, z, scale], k) => ({ kind: "pine", x, z, scale, seed: `fp${k}` }));
+
+const FOREST_PIECES = [
+  { kind: "campfire", x: -4.5, z: -2.5 },
+  { kind: "log", x: -7.7, z: -3.5, rot: 0.7 },
+  { kind: "log", x: -1.5, z: -0.9, rot: -0.9 },
+  CABIN,
+  { kind: "stump", x: -5.2, z: 1.6 },
+  { kind: "sled", x: 6.2, z: 1.5, rot: 0.5 },
+  { kind: "snowMound", x: -11.5, z: 7, r: 2.2 },
+  { kind: "snowMound", x: 11, z: 6.5, r: 1.8 },
+  { kind: "snowMound", x: -12, z: -9, r: 2.5 },
+  { kind: "rock", x: 12.5, z: -2, size: 1.4, seed: "fr1", snow: true },
+  { kind: "rock", x: -9.6, z: 2.2, size: 1.1, seed: "fr2", snow: true },
+  { kind: "rock", x: -13, z: -5.5, size: 1.6, seed: "fr3", snow: true },
+  { kind: "bush", x: 13, z: 9.5, size: 1.5, seed: "fb1", snow: true, color: "#2f5a40" },
+  { kind: "bush", x: -13.5, z: 10.5, size: 1.4, seed: "fb2", snow: true, color: "#2f5a40" },
+  { kind: "bush", x: 1.5, z: -13, size: 1.6, seed: "fb3", snow: true, color: "#2f5a40" },
+  ...PINES,
+];
+
+/** The café's tables, each with a chair on either side (each chair a seat). */
+const CAFE_TABLES = [
+  [-7.5, -1.5],
+  [-7.5, 5.5],
+  [1.5, 5.5],
+];
+const CAFE_CHAIRS = CAFE_TABLES.flatMap(([x, z]) => [
+  { kind: "chair", x: x - 2.2, z, rot: Math.PI / 2, color: "#2f4a3a" },
+  { kind: "chair", x: x + 2.2, z, rot: -Math.PI / 2, color: "#2f4a3a" },
+]);
+
+const CAFE_PIECES = [
+  { kind: "brickPanel", x: 3, y: 0, z: -11.97, w: 16, h: 8.2 },
+  { kind: "backCounter", x: 3, z: -11.05, w: 14 },
+  { kind: "serviceCounter", x: 3, z: -5.4, w: 12 },
+  { kind: "menuBoard", x: -7.5, y: 4.6, z: -11.95, w: 5.5, h: 3.5 },
+  { kind: "shopSign", x: 3, y: 8.6, z: -11.9, w: 7 },
+  ...CAFE_TABLES.map(([x, z]) => ({ kind: "cafeTable", x, z })),
+  ...CAFE_CHAIRS,
+  ...CAFE_TABLES.map(([x, z]) => ({ kind: "pendant", x, y: 11, z, drop: 3.6, color: "#2f4a3a" })),
+  { kind: "window", x: -13.95, y: 1.6, z: -2, rot: Math.PI / 2, w: 6, h: 5.6, curtain: null },
+  { kind: "window", x: -13.95, y: 1.6, z: 5.5, rot: Math.PI / 2, w: 6, h: 5.6, curtain: null },
+  { kind: "door", style: "shop", x: -13.9, z: 10, rot: Math.PI / 2 },
+  { kind: "plant", x: 12.6, z: 10.4 },
+  { kind: "plant", x: -12.6, z: -10.4 },
+  { kind: "wallShelf", x: 13.85, y: 5.2, z: 2, rot: -Math.PI / 2, w: 6, seed: "cafe" },
+  { kind: "picture", x: 13.92, y: 4.6, z: 7.5, rot: -Math.PI / 2, w: 2.4, h: 1.8, seed: "cafeart" },
+  { kind: "clock", x: 13.92, y: 8.2, z: -5, rot: -Math.PI / 2 },
+];
+
 const TOWN_PIECES = [
   ...streetRow({
     side: -1,
@@ -612,58 +683,51 @@ export const LAYOUTS = {
       right: { x: 3, z: 3.4, rot: -1.0 },
       back: { x: 3, z: -6, rot: -0.3 },
       fire: { x: -1.6, z: -2.2, rot: -1.4 },
-      cabin: { x: 6.5, z: -11, rot: -0.4 },
-      logL: { x: -7.4, z: -3.5, rot: 0.9, seat: 0.9 },
-      logR: { x: -1.6, z: -0.7, rot: -0.9, seat: 0.9 },
+      cabin: { ...onPiece(CABIN, 2, 8.6), rot: CABIN.rot },
+      porch: { ...onPiece(CABIN, 2, 5.6), rot: CABIN.rot, y: DECK_HEIGHT },
+      logL: { x: -7.4, z: -3.5, rot: 0.9, seat: SEAT_HEIGHT },
+      logR: { x: -1.6, z: -0.7, rot: -0.9, seat: SEAT_HEIGHT },
+      stump: { x: -5.2, z: 1.6, rot: 2.97, seat: SEAT_HEIGHT },
     },
-    seats: ["logL", "logR"],
+    seats: ["logL", "logR", "stump"],
     beds: [],
-    blocks: [
-      { name: "the campfire", x: -4.5, z: -2.5, w: 3, d: 3, h: 2.5 },
-      { name: "a log", x: -7.7, z: -3.5, w: 4.2, d: 1.2, rot: 0.7, h: 0.9 },
-      { name: "a log", x: -1.5, z: -0.9, w: 4.2, d: 1.2, rot: -0.9, h: 0.9 },
-      { name: "the cabin", x: 9, z: -17, w: 10, d: 9, rot: -0.4, h: 11.2 },
-      // The pines at the edge of the clearing (their snowy branches hang low).
-      { name: "a pine", x: 18.27, z: 1.25, w: 8.23, d: 8.15, h: 12.75 },
-      { name: "a pine", x: 17.24, z: -8.38, w: 11.38, d: 11.44, h: 16.84 },
-      { name: "a pine", x: -16.02, z: -16.84, w: 7.66, d: 7.7, h: 14.21 },
-    ],
+    blocks: [],
     solids: [
-      // The campfire's ring of logs (the flames don't stop anything) and the two logs to sit on.
-      { x: -4.5, y: 0.3, z: -2.5, w: 2.6, h: 0.6, d: 2.6 },
-      { x: -7.7, y: 0.45, z: -3.5, w: 4, h: 0.9, d: 1, rot: 0.7 },
-      { x: -1.5, y: 0.45, z: -0.9, w: 4, h: 0.9, d: 1, rot: -0.9 },
-      // The cabin and its roof.
-      { x: 9, y: 3.8, z: -17, w: 10, h: 7.6, d: 8, rot: -0.4 },
-      { x: 9, y: 9.4, z: -17, w: 11.2, h: 3.6, d: 9.4, rot: -0.4 },
-      // The tall bare trunks nearest the clearing, measured from the built forest.
+      // The two tall bare trunks nearest the clearing (the forest's trunks are drawn in places.js).
       { x: -14.25, y: 12.02, z: -16.7, w: 0.63, h: 25.54, d: 0.63 },
       { x: -16.69, y: 15.53, z: -1.94, w: 0.82, h: 33.01, d: 0.82 },
-      // The pines around the clearing (trunk, then the snowy crown), measured from the built forest.
-      { x: 18.27, y: 1.55, z: 1.25, w: 1.09, h: 3.11, d: 1.09 },
-      { x: 18.35, y: 7.23, z: 1.43, w: 10.29, h: 11.03, d: 10.19 },
-      { x: 33.57, y: 1.7, z: -4.91, w: 1.19, h: 3.4, d: 1.19 },
-      { x: 33.71, y: 7.91, z: -5.07, w: 12.04, h: 12.08, d: 12.02 },
-      { x: 17.24, y: 2.05, z: -8.38, w: 1.44, h: 4.11, d: 1.44 },
-      { x: 17.46, y: 9.55, z: -8.53, w: 14.22, h: 14.59, d: 14.3 },
-      { x: -6.74, y: 1.68, z: -35.28, w: 1.18, h: 3.37, d: 1.18 },
-      { x: -6.55, y: 7.83, z: -35.38, w: 11.27, h: 11.95, d: 11.37 },
-      { x: -21.48, y: 1.38, z: -2.53, w: 0.97, h: 2.76, d: 0.97 },
-      { x: -21.42, y: 6.42, z: -2.36, w: 8.9, h: 9.81, d: 8.79 },
-      { x: 4.36, y: 1.66, z: -35.37, w: 1.16, h: 3.32, d: 1.16 },
-      { x: 4.5, y: 7.73, z: -35.2, w: 11.73, h: 11.8, d: 11.7 },
-      { x: 41.46, y: 1.8, z: -7, w: 1.26, h: 3.59, d: 1.26 },
-      { x: 41.66, y: 8.36, z: -6.89, w: 12.13, h: 12.76, d: 12.22 },
-      { x: -16.02, y: 1.73, z: -16.84, w: 1.21, h: 3.47, d: 1.21 },
-      { x: -15.92, y: 8.06, z: -16.74, w: 9.57, h: 12.3, d: 9.62 },
-      { x: 24.91, y: 2.66, z: 8.45, w: 1.86, h: 5.32, d: 1.86 },
-      { x: 25.04, y: 12.37, z: 8.34, w: 14.22, h: 18.88, d: 14.37 },
-      { x: -1.52, y: 2.04, z: -56.41, w: 1.43, h: 4.09, d: 1.43 },
-      { x: -1.36, y: 9.51, z: -56.21, w: 14.39, h: 14.52, d: 14.35 },
     ],
+    pieces: FOREST_PIECES,
     bounds: { minX: -15, maxX: 15, minZ: -15, maxZ: 12 },
     wide: { pos: [2, 6.5, 24], target: [0, 4.5, -8] },
     surface: [-6.6, 0.9, -3.6],
+  },
+  cafe: {
+    spots: {
+      center: { x: 0, z: 9, rot: 0 },
+      left: { x: -4, z: 9.4, rot: 1.0 },
+      right: { x: 4, z: 9.4, rot: -1.0 },
+      back: { x: -2.5, z: -2.4, rot: 0.3 },
+      counter: { x: 1, z: -3.3, rot: Math.PI },
+      barista: { x: 3.5, z: -8.2, rot: 0 },
+      door: { x: -12.2, z: 10, rot: -Math.PI / 2 },
+      window: { x: -12.2, z: -3.6, rot: -Math.PI / 2 },
+      ...Object.fromEntries(
+        CAFE_CHAIRS.map((c, i) => [
+          `seat${i + 1}`,
+          { x: c.x, z: c.z, rot: c.rot, seat: SEAT_HEIGHT },
+        ]),
+      ),
+    },
+    seats: ["seat1", "seat2", "seat3", "seat4", "seat5", "seat6"],
+    beds: [],
+    blocks: [],
+    solids: [],
+    pieces: CAFE_PIECES,
+    bounds: { minX: -12.6, maxX: 12.6, minZ: -10.6, maxZ: 10.6 },
+    walls: { minX: -14, maxX: 14, minZ: -12, maxZ: 12 },
+    wide: { pos: [4, 7.5, 15.5], target: [-1, 3.5, -5] },
+    surface: [-0.5, 3.12, -5.2],
   },
 };
 

@@ -81,6 +81,14 @@ export function bush(p) {
     m.scale.set(c.r, c.r * 0.82, c.r);
     g.add(m);
   });
+  if (p.snow) {
+    const snow = paint("#f2f6ff", { roughness: 0.95 });
+    b.clumps.forEach((c, i) => {
+      const cap = part(lump(`bs${(p.seed ?? 0) + i}`, 1, 0.1), snow, c.x, c.y + c.r * 0.45, c.z);
+      cap.scale.set(c.r * 0.75, c.r * 0.32, c.r * 0.75);
+      g.add(cap);
+    });
+  }
   if (b.flowers) {
     const petal = paint(b.flowers, { roughness: 0.6 });
     const bloom = cachedGeometry("bloom", () => new THREE.IcosahedronGeometry(0.2, 0));
@@ -234,7 +242,19 @@ export function rock(p) {
     0,
   );
   m.scale.set(s * 0.9, s * 0.42, s * 0.75);
-  return group(m);
+  const g = group(m);
+  if (p.snow) {
+    const cap = part(
+      lump(`rockSnow${p.seed ?? 0}`, 1, 0.12),
+      paint("#f2f6ff", { roughness: 0.95 }),
+      0,
+      s * 0.6,
+      0,
+    );
+    cap.scale.set(s * 0.7, s * 0.16, s * 0.58);
+    g.add(cap);
+  }
+  return g;
 }
 
 export function pond(p) {

@@ -1,11 +1,13 @@
 // The place kit: builds a layout's pieces. shapes.js says what each piece takes up (physics, footprint, raised
 // ground); the kit-*.js files say how it looks. Each built piece is one group in the place, its meshes merged by
 // material (freeze), so a street of detailed houses still draws quickly.
+import * as forest from "./kit-forest.js";
 import * as garden from "./kit-garden.js";
 import * as street from "./kit-house.js";
 import * as kitchen from "./kit-kitchen.js";
 import * as room from "./kit-room.js";
 import * as school from "./kit-school.js";
+import * as shop from "./kit-shop.js";
 import { bench, slide, swingSet } from "./props.js";
 import { freeze } from "./util.js";
 
@@ -48,7 +50,12 @@ const BUILDERS = {
   wardrobe: room.wardrobe,
   beanbag: room.beanbag,
   window: room.wallWindow,
-  door: (p, ctx) => (p.style === "classroom" ? school.classroomDoor(p) : room.door(p, ctx)),
+  door: (p, ctx) =>
+    p.style === "classroom"
+      ? school.classroomDoor(p)
+      : p.style === "shop"
+        ? shop.shopDoor(p)
+        : room.door(p, ctx),
   picture: room.picture,
   clock: room.clock,
   ceilingLight: room.ceilingLight,
@@ -64,7 +71,23 @@ const BUILDERS = {
   trashCan: school.trashCan,
   teacherDesk: school.teacherDesk,
   board: school.board,
+  pine: forest.pine,
+  cabin: forest.cabin,
+  campfire: forest.campfire,
+  log: forest.log,
+  stump: forest.stump,
+  snowMound: forest.snowMound,
+  sled: forest.sled,
+  serviceCounter: shop.serviceCounter,
+  backCounter: shop.backCounter,
+  menuBoard: shop.menuBoard,
+  shopSign: shop.shopSign,
+  brickPanel: shop.brickPanel,
+  cafeTable: shop.cafeTable,
 };
+
+/** Kinds that move by themselves (their `userData.update(t)`): left unmerged, and the place updates them. */
+const ANIMATED = new Set(["campfire"]);
 
 /** Kinds built in place coordinates (a fence's ends, string lights' posts), not around their own origin. */
 const IN_PLACE = new Set(["fence", "stringLights"]);
@@ -80,7 +103,7 @@ export function buildPiece(piece, ctx) {
     g.position.set(piece.x ?? 0, piece.y ?? 0, piece.z ?? 0);
     g.rotation.y = piece.rot ?? 0;
   }
-  freeze(g);
+  if (!ANIMATED.has(piece.kind)) freeze(g);
   g.userData.piece = piece;
   return g;
 }

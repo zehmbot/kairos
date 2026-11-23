@@ -198,7 +198,8 @@ someone, try another `angle` or `shot`, or move people (`at`).
 | `town` | a street of real-size houses with porches, garages, picket fences, mailboxes, parked cars, lantern lamps; stories happen in front of "the house" (spots `gate`, `porch`, `driveway`) | the sun or moon; street lamps once it's dark |
 | `park` | slide, swings, bench, sandbox, picnic table, pond, flower beds, trees | the sun (low and warm in the evening); lamp posts at night |
 | `backyard` | the back of a house: a deck with garden chairs, a table and a barbecue, string lights, a lawn, a big tree, a trampoline, a wooden fence | the sun; the door lamp and string lights in the evening and at night |
-| `forest` | snow, pines, a campfire with logs, a cabin, northern lights | the flickering campfire at night |
+| `cafe` | a counter with a pastry case and the register (`counter`, `barista`), a coffee machine, a menu board, three small tables (`seat1` to `seat6`), street windows | daylight from the windows; lamps over the tables in the evening and at night |
+| `forest` | snow, pines, a campfire with logs and a stump to sit on, a log cabin with a porch (`porch`), smoke from its chimney, a woodpile, a sled, northern lights | the flickering campfire at night, the cabin's lit window |
 
 - **Light:** `day` clear, `evening` warm and golden with lamps on, `night` cool with lamps, windows and fire
   glowing. A story moving from day to night is a strong shape. Keep a place's light within one moment of the story.

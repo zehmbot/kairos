@@ -229,35 +229,6 @@ export function lockerTexture() {
 
 // ---------- Outdoors ----------
 
-/** A pine tree from stacked cones, optionally with snow on it. */
-export function pine(seed, scale = 1, snowy = false) {
-  const random = rng(seed);
-  const g = group(block(0.7, 2, 0.7, "#4a3426", 0, 0, 0));
-  const green = paint(snowy ? "#1f3b32" : "#2f6b45", { roughness: 0.9 });
-  const snow = paint("#e8f0ff", { roughness: 0.95 });
-  for (let i = 0; i < 4; i++) {
-    const r = 2.6 - i * 0.55;
-    const cone = mesh(
-      cachedGeometry(`cone${i}`, () => new THREE.ConeGeometry(r, 2.6, 7)),
-      green,
-    );
-    cone.position.y = 2.4 + i * 1.5;
-    cone.rotation.y = random() * Math.PI;
-    g.add(cone);
-    if (snowy) {
-      const cap = mesh(
-        cachedGeometry(`snowcap${i}`, () => new THREE.ConeGeometry(r * 0.62, 1.0, 7)),
-        snow,
-      );
-      cap.position.y = 3.1 + i * 1.5;
-      cap.rotation.y = cone.rotation.y;
-      g.add(cap);
-    }
-  }
-  g.scale.setScalar(scale * (0.8 + random() * 0.5));
-  return g;
-}
-
 export function bench() {
   const wood = paint("#a0683e", { roughness: 0.7 });
   const iron = paint("#2b2f3a", { roughness: 0.5 });
@@ -318,50 +289,6 @@ export function swingSet() {
   return g;
 }
 
-export function cabin(lit) {
-  const logs = canvasTexture(
-    "logs",
-    128,
-    (ctx, s) => {
-      ctx.fillStyle = "#6b4630";
-      ctx.fillRect(0, 0, s, s);
-      ctx.fillStyle = "rgba(0,0,0,0.3)";
-      for (let y = 0; y < s; y += 20) ctx.fillRect(0, y, s, 4);
-    },
-    { repeat: [2, 2] },
-  );
-  // Walls about 2.6 m high: a real 2.1 m door fits under the roof.
-  const wall = 7.6;
-  const g = group(
-    block(10, wall, 8, null, 0, 0, 0, { material: paint("#ffffff", { map: logs }), radius: 0.2 }),
-  );
-  const roof = mesh(
-    cachedGeometry("cabinRoof", () => {
-      const shape = new THREE.Shape();
-      shape.moveTo(-6, 0);
-      shape.lineTo(0, 3.6);
-      shape.lineTo(6, 0);
-      shape.closePath();
-      const geometry = new THREE.ExtrudeGeometry(shape, { depth: 9.4, bevelEnabled: false });
-      geometry.translate(0, 0, -4.7);
-      return geometry;
-    }),
-    paint("#eef3ff", { roughness: 0.95 }),
-  );
-  roof.position.y = wall;
-  g.add(roof);
-  const pane = mesh(roundedBox(2.2, 2, 0.2, 0.05), lit ? glow("#ffb45e", 1.5) : paint("#2a3040"), {
-    cast: false,
-  });
-  pane.position.set(-2.4, 4.2, 4.05);
-  g.add(pane);
-  const frontDoor = door("#4a2f20");
-  frontDoor.position.set(2, 0, 4.05);
-  g.add(frontDoor);
-  return g;
-}
-
-/** A campfire. Its flames flicker with `update(t)`. */
 export function campfire() {
   const g = group();
   for (let i = 0; i < 4; i++) {

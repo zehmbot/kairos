@@ -50,6 +50,33 @@ export function houseSpec(p) {
   };
 }
 
+/**
+ * The log cabin's sizes (front faces +z): log walls, a snowy gable roof, a porch along the front, the door and the
+ * window, a stone chimney rising through the roof, and a woodpile against its right side.
+ */
+export function cabinSpec(p) {
+  const w = p.w ?? 10;
+  const d = p.d ?? 8;
+  const wall = 7.6;
+  return {
+    w,
+    d,
+    wall,
+    rise: 3.6,
+    porch: { d: 3, roofY: 7.2 },
+    doorX: 2,
+    windowX: -2.4,
+    chimney: { x: -3.2, z: -1.5, w: 1.6, top: wall + 5.2 },
+    woodpile: { x: w / 2 + 1.3, z: 0.5, w: 2.2, h: 2.2, d: 3.6 },
+  };
+}
+
+/** A pine's size: `scale` makes it bigger (1: a trunk 0.7 wide and a crown 5.2 wide, 8.2 tall). */
+export function pineSpec(p) {
+  const s = p.scale ?? 1;
+  return { s, trunkH: 2.4 * s, crownY0: 1.1 * s, crownY1: 8.2 * s, crownW: 5.2 * s };
+}
+
 /** A round tree's trunk and the clumps of its crown, from its seed and scale. */
 export function treeSpec(p) {
   const random = rng(`tree${p.seed ?? 0}`);
@@ -584,6 +611,155 @@ const SHAPES = {
     blocks: [{ name: "the teacher's desk", x: 0, z: 0, w: 5.4, d: 2.8, h: 2.2 }],
     raised: [],
   }),
+
+  // ---------- The forest ----------
+  pine(p) {
+    const t = pineSpec(p);
+    return {
+      solids: [
+        { x: 0, y: t.trunkH / 2, z: 0, w: 0.7 * t.s, h: t.trunkH, d: 0.7 * t.s },
+        {
+          x: 0,
+          y: (t.crownY0 + t.crownY1) / 2,
+          z: 0,
+          w: t.crownW * 0.85,
+          h: t.crownY1 - t.crownY0,
+          d: t.crownW * 0.85,
+        },
+      ],
+      // Its snowy branches hang low: walks go around the whole crown.
+      blocks: [{ name: "a pine", x: 0, z: 0, w: t.crownW * 0.8, d: t.crownW * 0.8, h: t.crownY1 }],
+      raised: [],
+    };
+  },
+  cabin(p) {
+    const c = cabinSpec(p);
+    const front = c.d / 2;
+    const solids = [
+      { x: 0, y: c.wall / 2, z: 0, w: c.w, h: c.wall, d: c.d },
+      { x: 0, y: c.wall + c.rise / 2, z: 0, w: c.w * 1.0, h: c.rise, d: c.d * 1.05 },
+      { x: 0, y: DECK_HEIGHT / 2, z: front + c.porch.d / 2, w: c.w, h: DECK_HEIGHT, d: c.porch.d },
+      {
+        x: 0,
+        y: c.porch.roofY + 0.2,
+        z: front + c.porch.d / 2,
+        w: c.w + 0.6,
+        h: 0.4,
+        d: c.porch.d + 0.4,
+      },
+      {
+        x: c.chimney.x,
+        y: (c.wall - 1 + c.chimney.top) / 2,
+        z: c.chimney.z,
+        w: c.chimney.w,
+        h: c.chimney.top - c.wall + 1,
+        d: c.chimney.w,
+      },
+      {
+        x: c.woodpile.x,
+        y: c.woodpile.h / 2,
+        z: c.woodpile.z,
+        w: c.woodpile.w,
+        h: c.woodpile.h,
+        d: c.woodpile.d,
+      },
+    ];
+    const blocks = [
+      { name: "the cabin", x: 0, z: 0, w: c.w + 0.6, d: c.d + 0.6, h: c.wall + c.rise },
+      {
+        name: "the woodpile",
+        x: c.woodpile.x,
+        z: c.woodpile.z,
+        w: c.woodpile.w + 0.2,
+        d: c.woodpile.d + 0.2,
+        h: c.woodpile.h,
+      },
+    ];
+    for (const side of [-1, 1]) {
+      const x = side * (c.w / 2 - 0.35);
+      const z = front + c.porch.d - 0.35;
+      solids.push({
+        x,
+        y: (DECK_HEIGHT + c.porch.roofY) / 2,
+        z,
+        w: 0.5,
+        h: c.porch.roofY - DECK_HEIGHT,
+        d: 0.5,
+      });
+      blocks.push({ name: "a porch post", x, z, w: 0.8, d: 0.8, h: c.porch.roofY });
+    }
+    return {
+      solids,
+      blocks,
+      raised: [{ x: 0, z: front + c.porch.d / 2, w: c.w, d: c.porch.d, y: DECK_HEIGHT }],
+    };
+  },
+  campfire: () => ({
+    solids: [{ x: 0, y: 0.3, z: 0, w: 2.6, h: 0.6, d: 2.6 }],
+    blocks: [{ name: "the campfire", x: 0, z: 0, w: 3, d: 3, h: 2.5 }],
+    raised: [],
+  }),
+  /** A log lying along x, to sit on (its top at the figures' knee height). */
+  log: (p) => ({
+    solids: [{ x: 0, y: SEAT_HEIGHT / 2, z: 0, w: p.w ?? 4, h: SEAT_HEIGHT, d: SEAT_HEIGHT + 0.1 }],
+    blocks: [{ name: "a log", x: 0, z: 0, w: (p.w ?? 4) + 0.2, d: 1.1, h: SEAT_HEIGHT }],
+    raised: [],
+  }),
+  snowMound: (p) => {
+    const r = p.r ?? 2;
+    return {
+      solids: [{ x: 0, y: r * 0.25, z: 0, w: r * 1.7, h: r * 0.5, d: r * 1.4 }],
+      blocks: [{ name: "a snow mound", x: 0, z: 0, w: r * 1.8, d: r * 1.5, h: r * 0.55 }],
+      raised: [],
+    };
+  },
+  stump: () => ({
+    solids: [{ x: 0, y: SEAT_HEIGHT / 2, z: 0, w: 1.5, h: SEAT_HEIGHT, d: 1.5 }],
+    blocks: [{ name: "the stump", x: 0, z: 0, w: 1.6, d: 1.6, h: SEAT_HEIGHT }],
+    raised: [],
+  }),
+  sled: () => ({
+    solids: [{ x: 0, y: 0.45, z: 0, w: 1.7, h: 0.9, d: 3.8 }],
+    blocks: [{ name: "the sled", x: 0, z: 0, w: 1.8, d: 4, h: 0.9 }],
+    raised: [],
+  }),
+
+  // ---------- The café ----------
+  /** The service counter (its front faces +z), with a pastry case and a register on top. */
+  serviceCounter: (p) => {
+    const w = p.w ?? 12;
+    return {
+      solids: [
+        { x: 0, y: 1.55, z: 0, w, h: 3.1, d: 2.2 },
+        { x: w / 4, y: 3.8, z: 0, w: 3.4, h: 1.4, d: 1.8 },
+        { x: -w / 2 + 1.5, y: 3.6, z: 0, w: 1.4, h: 1, d: 1.2 },
+      ],
+      blocks: [{ name: "the counter", x: 0, z: 0, w: w + 0.2, d: 2.4, h: 3.1 }],
+      raised: [],
+    };
+  },
+  /** The back counter against the wall, with the coffee machine on it and open shelves of cups above. */
+  backCounter: (p) => {
+    const w = p.w ?? 14;
+    return {
+      solids: [
+        { x: 0, y: 1.33, z: 0, w, h: 2.65, d: 1.9 },
+        { x: -2, y: 3.6, z: -0.2, w: 2.6, h: 1.9, d: 1.5 },
+        { x: 0, y: 6.2, z: -0.45, w: w - 1, h: 2.4, d: 1.0 },
+      ],
+      blocks: [{ name: "the back counter", x: 0, z: 0, w, d: 2.1, h: 2.65 }],
+      raised: [],
+    };
+  },
+  cafeTable: () => ({
+    solids: [
+      { x: 0, y: 2.08, z: 0, w: 2.6, h: 0.24, d: 2.6 },
+      { x: 0, y: 1, z: 0, w: 0.5, h: 2, d: 0.5 },
+      { x: 0, y: 0.08, z: 0, w: 1.6, h: 0.16, d: 1.6 },
+    ],
+    blocks: [{ name: "a table", x: 0, z: 0, w: 2.6, d: 2.6, h: 2.2 }],
+    raised: [],
+  }),
 };
 
 /** Kinds that hang on walls or ceilings, or lie flat: nothing to bump into (no physics, no footprint). */
@@ -597,6 +773,9 @@ export const NO_PHYSICS = new Set([
   "wallShelf",
   "board",
   "bulletinBoard",
+  "menuBoard",
+  "shopSign",
+  "brickPanel",
 ]);
 for (const kind of NO_PHYSICS) {
   SHAPES[kind] = () => ({ solids: [], blocks: [], raised: [] });

@@ -563,3 +563,29 @@ export function granite(color = "#d9d4cc", repeat = [2, 1]) {
     );
   });
 }
+
+/** Log walls: round logs stacked one on another, shaded so they look round, with dark gaps between them. */
+export function logs(color = "#7a5236", repeat = [1, 1]) {
+  return surface(`logs:${color}`, 256, repeat, (ctx, s, fill) => {
+    const random = rng(`logs${color}`);
+    const rows = 6;
+    const h = s / rows;
+    for (let r = 0; r < rows; r++) {
+      const y = r * h;
+      const tone = (random() - 0.5) * 0.12;
+      const grad = ctx.createLinearGradient(0, y, 0, y + h);
+      grad.addColorStop(0, fill(shade(color, -0.35 + tone), 40));
+      grad.addColorStop(0.3, fill(shade(color, 0.08 + tone), 210));
+      grad.addColorStop(0.7, fill(shade(color, tone), 190));
+      grad.addColorStop(1, fill(shade(color, -0.45 + tone), 30));
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, y, s, h);
+      for (let g = 0; g < 6; g++) {
+        ctx.fillStyle = fill(shade(color, -0.25), 120);
+        ctx.globalAlpha = 0.35;
+        ctx.fillRect(random() * s, y + h * (0.25 + random() * 0.5), 20 + random() * 50, 1.5);
+      }
+      ctx.globalAlpha = 1;
+    }
+  });
+}

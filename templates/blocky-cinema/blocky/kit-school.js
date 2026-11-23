@@ -64,15 +64,20 @@ export function classroomDoor(p) {
       { cast: false },
     ),
   );
-  const sign = canvasTexture(`roomSign:${p.label ?? "Room 4"}`, 128, (ctx, s) => {
-    ctx.fillStyle = "#29366f";
-    ctx.fillRect(0, 0, s, s / 2);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 34px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(p.label ?? "Room 4", s / 2, s / 4);
-  });
+  const sign = canvasTexture(
+    `roomSign:${p.label ?? "Room 4"}`,
+    256,
+    (ctx, s, ht) => {
+      ctx.fillStyle = "#29366f";
+      ctx.fillRect(0, 0, s, ht);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 40px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(p.label ?? "Room 4", s / 2, ht / 2 + 2);
+    },
+    { height: 64 },
+  );
   const plate = part(
     new THREE.PlaneGeometry(2.2, 0.55),
     paint("#ffffff", { map: sign, roughness: 0.5 }),
@@ -296,35 +301,41 @@ export function teacherDesk() {
 export function board(p) {
   const w = p.w ?? 14;
   const h = p.h ?? 5.4;
-  const lesson = canvasTexture(`lesson:${p.lesson ?? "fractions"}`, 512, (ctx, s) => {
-    ctx.fillStyle = "#fbfcfd";
-    ctx.fillRect(0, 0, s, s);
-    ctx.lineCap = "round";
-    ctx.textBaseline = "top";
-    ctx.fillStyle = "#29366f";
-    ctx.font = "bold 46px sans-serif";
-    ctx.fillText("Today: Fractions", 30, 24);
-    ctx.fillStyle = "#b13e53";
-    ctx.font = "40px sans-serif";
-    ctx.fillText("1/2 + 1/4 = 3/4", 40, 110);
-    ctx.fillStyle = "#257179";
-    ctx.fillText("Homework: page 12", 40, 175);
-    // A pie cut in quarters.
-    ctx.strokeStyle = "#29366f";
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.arc(400, 330, 70, 0, Math.PI * 2);
-    ctx.moveTo(330, 330);
-    ctx.lineTo(470, 330);
-    ctx.moveTo(400, 260);
-    ctx.lineTo(400, 400);
-    ctx.stroke();
-    ctx.fillStyle = "rgba(239,125,87,0.6)";
-    ctx.beginPath();
-    ctx.moveTo(400, 330);
-    ctx.arc(400, 330, 66, -Math.PI / 2, Math.PI / 2);
-    ctx.fill();
-  });
+  const lesson = canvasTexture(
+    `lesson:${p.lesson ?? "fractions"}`,
+    1024,
+    (ctx, s, ht) => {
+      ctx.fillStyle = "#fbfcfd";
+      ctx.fillRect(0, 0, s, ht);
+      ctx.lineCap = "round";
+      ctx.textBaseline = "top";
+      ctx.fillStyle = "#29366f";
+      ctx.font = "bold 62px sans-serif";
+      ctx.fillText("Today: Fractions", 50, 36);
+      ctx.fillStyle = "#b13e53";
+      ctx.font = "54px sans-serif";
+      ctx.fillText("1/2 + 1/4 = 3/4", 70, 150);
+      ctx.fillStyle = "#257179";
+      ctx.fillText("Homework: page 12", 70, 245);
+      // A pie cut in quarters, one half colored in.
+      const [cx, cy, r] = [s - 200, ht / 2, Math.min(130, ht / 2 - 40)];
+      ctx.fillStyle = "rgba(239,125,87,0.6)";
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r - 4, -Math.PI / 2, Math.PI / 2);
+      ctx.fill();
+      ctx.strokeStyle = "#29366f";
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.moveTo(cx - r, cy);
+      ctx.lineTo(cx + r, cy);
+      ctx.moveTo(cx, cy - r);
+      ctx.lineTo(cx, cy + r);
+      ctx.stroke();
+    },
+    { height: Math.round((1024 * h) / w) },
+  );
   const frame = paint("#c9ccd2", { roughness: 0.3, metalness: 0.7 });
   return group(
     part(

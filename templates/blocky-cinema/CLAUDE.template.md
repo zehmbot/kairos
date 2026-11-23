@@ -61,7 +61,7 @@ export const SHOTS = [
 
 ```js
 {
-  place: "home",            // home, bedroom, kitchen, school, classroom, town, park, backyard, forest
+  place: "home",            // home, bedroom, kitchen, school, classroom, cafe, town, park, backyard, forest
   light: "evening",         // day, evening, night (each place has its own default)
   shot: "close",            // wide, full, medium, close, xclose, ots, low, high, insert
   who: ["milo", "ruby"],    // who is in the shot; the first one is the focus
@@ -164,8 +164,9 @@ something goes wrong: a walk into furniture, a throw that misses, things that ne
   with a wider lens. Ask for the shot you want (`shot`, `angle`, `move`); if a frame still hides someone, try
   another `angle` or move people.
 - **The light** has a reason in every place: lamps with soft shadows indoors in the evening and at night, the
-  kitchen's lamp over the table, the school's and the classroom's ceiling panels, the sun or moon outside (with drifting clouds, and a big moon at night), the street
-  lamps once it's dark, the backyard's door lamp and string lights, the campfire in the forest at night.
+  kitchen's lamp over the table, the café's lamps over its tables, the school's and the classroom's ceiling
+  panels, the sun or moon outside (with drifting clouds, and a big moon at night), the street lamps once it's
+  dark, the backyard's door lamp and string lights, the campfire and the cabin's window in the forest at night.
 - **Looks:** the preview uses a lighter look (standard), frames and renders the richest (cinematic), and a
   computer drawing without a graphics card the lightest (draft). Only the finish changes, never what happens.
   `SETTINGS.look` (`"draft"`, `"standard"`, `"cinematic"`) forces one; leave it unset.
@@ -242,7 +243,10 @@ heart.
     - **park:** `slide`, `bench`, `picnicL`, `picnicR` (the picnic table's benches), `pond`, `sandbox`;
     - **backyard** (behind a house: a deck, a lawn, a wooden fence): `door` (the back door), `patio`, `grill`,
       `tree`, `trampoline`, `gate`, `chair1`, `chair2` (garden chairs on the deck);
-    - **forest:** `fire`, `cabin`, `logL`, `logR`.
+    - **cafe** (a counter with a pastry case, a coffee machine, a menu board, three small tables): `counter` (a
+      customer at the counter), `barista` (behind it), `door`, `window`, `seat1` to `seat6` (the tables' chairs);
+    - **forest** (snow, pines, a campfire, a log cabin with a porch): `fire`, `cabin` (before its porch), `porch`,
+      `logL`, `logR`, `stump` (the logs and the stump are seats).
   - **Without `at`:**
     - one person stands in the center;
     - two face each other;
@@ -291,10 +295,11 @@ heart.
 - **poses and places:** `poses.js` (with the gaits, sitting down and standing up), `places.js` (each place's
   ground, light and pieces), `layouts.js` (each place's spots, walls and `pieces`: what stands there);
 - **the place kit:** `shapes.js` (what each kind of piece takes up: its physics boxes, its footprint, raised ground
-  like porches and decks), `kit.js` with `kit-house.js`, `kit-garden.js`, `kit-room.js`, `kit-kitchen.js` and
-  `kit-school.js` (how houses, cars, lamps, fences, trees, garden things, furniture, kitchens and classrooms
-  look), `textures.js` (wood, siding, shingles, bricks, grass,
-  asphalt, concrete, sand... made by code), `sky.js` (the sky with clouds and the moon, and the far hills);
+  like porches and decks), `kit.js` with `kit-house.js`, `kit-garden.js`, `kit-room.js`, `kit-kitchen.js`,
+  `kit-school.js`, `kit-forest.js` and `kit-shop.js` (how houses, cars, lamps, fences, trees, garden things,
+  furniture, kitchens, classrooms, the forest and the café look), `textures.js` (wood, siding, shingles, bricks,
+  grass, asphalt, concrete, sand, logs... made by code), `sky.js` (the sky with clouds and the moon, and the far
+  hills);
 - **moving:** `motion.js` (where everyone is in each shot: the walks, jumps and actions, planned once);
 - **acting:** `animation.js` (the poses of jumps, punches, falls, getting up, carrying, throwing, reactions),
   `figure.js` (anyone's whole body at any moment), `rig.js` (the joints as numbers, arms aimed by IK);

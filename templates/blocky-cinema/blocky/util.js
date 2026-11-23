@@ -170,15 +170,23 @@ export function block(w, h, d, color, x = 0, y = 0, z = 0, options = {}) {
 
 const textures = new Map();
 
-/** A texture drawn once on a canvas (floors, walls, signs). `draw(ctx, size)` paints it. */
-export function canvasTexture(key, size, draw, { repeat = [1, 1], srgb = true } = {}) {
-  const id = `${key}:${repeat.join("x")}`;
+/**
+ * A texture drawn once on a canvas (floors, walls, signs). `draw(ctx, size, height)` paints it. A canvas is square
+ * unless `height` says otherwise: a sign or a board gets its own proportions, so its words aren't stretched.
+ */
+export function canvasTexture(
+  key,
+  size,
+  draw,
+  { repeat = [1, 1], srgb = true, height = size } = {},
+) {
+  const id = `${key}:${repeat.join("x")}:${height}`;
   let texture = textures.get(id);
   if (!texture) {
     const canvas = document.createElement("canvas");
     canvas.width = size;
-    canvas.height = size;
-    draw(canvas.getContext("2d"), size);
+    canvas.height = height;
+    draw(canvas.getContext("2d"), size, height);
     texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;

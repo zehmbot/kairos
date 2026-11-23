@@ -19,6 +19,7 @@ const PLACES = [
   "kitchen",
   "school",
   "classroom",
+  "cafe",
   "town",
   "park",
   "backyard",

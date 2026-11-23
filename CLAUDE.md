@@ -89,7 +89,7 @@ templates' `template.json` (the template editor, `src/web/templateForm.ts`: ques
 and saved ids are kept, so earlier briefs still match); Kairos' templates can only be duplicated.
 
 **Blocky Cinema** (`templates/blocky-cinema/`, its guide the `kairos-blocky-cinema` skill; places: home, bedroom,
-kitchen, school, classroom, town, park, backyard, forest) is a template with an
+kitchen, school, classroom, cafe, town, park, backyard, forest) is a template with an
 engine: Claude writes the shot list in `story.js` (places, shot types, the cast, faces, poses, walks, actions,
 things, effects, captions) and `blocky/*.js` turns it into frames: three.js toy figures with drawn faces, six places
 with day/evening/night light, framing computed for any film size, word-by-word captions and icons on a 2D layer, and
@@ -169,10 +169,13 @@ Its engine:
   `kit-garden.js`: trees, bushes, flower beds, fences, the pond, park and garden things; `kit-room.js`: sofas,
   tables with things on them, beds, bookcases, wardrobes, windows with curtains, doors, clocks, ceiling lights;
   `kit-kitchen.js`: counters, the fridge, the pendant lamp; `kit-school.js`: lockers, the classroom door, boards,
-  desks). Every place is built this way; wall things (`NO_PHYSICS` in `shapes.js`: windows, doors, pictures,
+  desks; `kit-forest.js`: pines, the log cabin, the campfire, logs, a stump, snow mounds, a sled; `kit-shop.js`:
+  the café's counters, menu board, sign and tables). Every place is built this way; wall things (`NO_PHYSICS` in `shapes.js`: windows, doors, pictures,
   boards...) have no physics and the Places sheet doesn't ask them for any.
 - **Detail without the cost:** each built piece merges its meshes by material (`freeze` in `util.js`), so a
-  street of detailed houses draws in about as many calls as before. Textures are made by code (`textures.js`: a
+  street of detailed houses draws in about as many calls as before. A piece that moves by itself (the campfire's
+  flames: `ANIMATED` in `kit.js`) stays unmerged, and its place calls its `userData.update(t)`. Signs and boards
+  draw their words on a canvas of their own shape (`canvasTexture`'s `height`), so nothing is stretched. Textures are made by code (`textures.js`: a
   color map and a bump map from one seed), and `kit-parts.js` keeps their scale in the world on any box or plane.
 - **The sky** (`sky.js`, `makeSky(look)`): a gradient, the sun's glow, clouds moving with `t`, stars and a big
   moon at night; `backdrop()` rings outdoor places with hills and a tree line.

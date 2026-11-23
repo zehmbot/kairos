@@ -48,7 +48,7 @@ function groundStrip(x, z0, z1, w, material) {
  * A gable roof over a w × d box, its ridge along x, `rise` high, overhanging by `over`: two shingled slopes, the
  * gable ends in the wall's siding, white rakes and fascias, a ridge cap. Its origin is the top of the walls.
  */
-function gableRoof(w, d, rise, roof, wall, over = 0.9) {
+export function gableRoof(w, d, rise, roof, wall, over = 0.9) {
   const g = group();
   const white = trim();
   const run = d / 2 + over;

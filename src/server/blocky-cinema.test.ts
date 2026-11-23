@@ -432,6 +432,22 @@ const TOUR = {
     },
     { shot: "close", who: ["zee", "bo"], say: "and Zee gasped." },
     {
+      place: "cafe",
+      light: "day",
+      shot: "wide",
+      who: ["nadia", "zee"],
+      at: { nadia: "barista" },
+      go: { zee: { from: "center", to: "counter" } },
+      say: "At the cafe, Zee walked up to the counter",
+    },
+    { shot: "medium", who: ["zee", "nadia"], say: "and ordered the biggest cupcake they had." },
+    {
+      shot: "full",
+      who: ["zee"],
+      go: { zee: "seat2" },
+      say: "Then he sat down at the table by the window to eat every crumb.",
+    },
+    {
       place: "park",
       light: "day",
       shot: "full",
