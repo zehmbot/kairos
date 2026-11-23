@@ -1,4 +1,4 @@
-import { type PointerEvent, useRef, useState } from "react";
+import { type PointerEvent, useEffect, useRef, useState } from "react";
 import {
   MARK_COLOR,
   MARK_OUTLINE,
@@ -8,6 +8,9 @@ import {
 } from "../../shared/marks.ts";
 import type { NoteShape, NoteTool } from "../../shared/types.ts";
 import { minDrag, type Point, shapeFromDrag, toFilmPoint } from "../player/marks.ts";
+
+/** On screen, marks are never thinner than this (CSS pixels): a tall film shown small would make them hairlines. */
+const MIN_SCREEN_STROKE = 3;
 
 interface MarksLayerProps {
   width: number;
@@ -46,7 +49,8 @@ function renderElement(element: MarkElement, color: string, key: number) {
 
 /**
  * Note marks over the film, in film pixels (the SVG is stretched over the scaled preview).
- * Looks the same as the marks in note pictures: both use `markGeometry` from src/shared/marks.ts.
+ * Drawn like the marks in note pictures (both use `markGeometry` from src/shared/marks.ts), but never thinner than
+ * MIN_SCREEN_STROKE on screen, so they stay clear when the film is shown small.
  */
 export function MarksLayer({ width, height, shapes, drawing }: MarksLayerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -60,7 +64,19 @@ export function MarksLayer({ width, height, shapes, drawing }: MarksLayerProps) 
     dragRef.current = points;
     setDrag(points);
   };
-  const stroke = markStroke(width, height);
+  // How wide the layer shows on screen: a small preview gets thicker marks (in film pixels).
+  const [shownWidth, setShownWidth] = useState(0);
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const observer = new ResizeObserver((entries) => {
+      setShownWidth(entries[0]?.contentRect.width ?? 0);
+    });
+    observer.observe(svg);
+    return () => observer.disconnect();
+  }, []);
+  const toFilm = shownWidth > 0 ? width / shownWidth : 1;
+  const stroke = Math.max(markStroke(width, height), MIN_SCREEN_STROKE * toFilm);
 
   const pointFrom = (event: PointerEvent) => {
     const box = svgRef.current?.getBoundingClientRect();
