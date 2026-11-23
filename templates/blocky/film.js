@@ -19,13 +19,11 @@ window.KAIROS_RESHAPE = true;
 
 // Kairos waits for this (the caption font and the film's voices) before taking pictures. Then each place in the
 // story shows as a scene on the Kairos timeline, Kairos knows how long the story lasts, the effects' sounds go on
-// the timeline's Effects lane, the Sheets tab lists the engine's places, and a render can write the captions'
-// words as subtitles.
+// the timeline's Effects lane, and a render can write the captions' words as subtitles.
 window.READY = engine.ready.then(() => {
   window.KAIROS_SCENES = engine.scenes;
   window.KAIROS_LENGTH = engine.duration;
   window.KAIROS_SOUNDS = engine.sounds;
-  window.KAIROS_PLACES = engine.places;
   window.KAIROS_CAPTIONS = engine.captions;
 });
 window.renderOut = (t) => engine.render(t);

@@ -61,7 +61,6 @@ import { ReferencesPanel } from "../components/ReferencesPanel.tsx";
 import { RenderDialog } from "../components/RenderDialog.tsx";
 import { SaveTemplateDialog } from "../components/SaveTemplateDialog.tsx";
 import { ShapeSwitch } from "../components/ShapeSwitch.tsx";
-import { SheetsPanel } from "../components/SheetsPanel.tsx";
 import { SideTabs } from "../components/SideTabs.tsx";
 import { isOwnSound, SoundPanel } from "../components/SoundPanel.tsx";
 import { Timeline } from "../components/Timeline.tsx";
@@ -76,15 +75,7 @@ import { filmRender, jobStatus } from "../renderText.ts";
 import { useNow } from "../useNow.ts";
 import { useVoiceSummary } from "../voiceSummary.ts";
 
-const SIDE_TABS: readonly SideTab[] = [
-  "claude",
-  "notes",
-  "sound",
-  "voice",
-  "references",
-  "brief",
-  "sheets",
-];
+const SIDE_TABS: readonly SideTab[] = ["claude", "notes", "sound", "voice", "references", "brief"];
 const NO_TRACKS: readonly AudioTrack[] = [];
 
 /**
@@ -236,8 +227,6 @@ export function FilmPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   // How long the film says its story lasts (a Blocky film follows its voices).
   const [storyLength, setStoryLength] = useState<number | null>(null);
-  // The places the film's engine can show (Blocky), for the Sheets tab.
-  const [places, setPlaces] = useState<string[] | null>(null);
   // What the film can do for an export (reframe itself, give its captions), and the shape you're looking at it in
   // (null: its own). Both belong to this film only.
   const [abilitiesOf, setAbilitiesOf] = useState<{ id: string; abilities: FilmAbilities }>({
@@ -463,7 +452,6 @@ export function FilmPage() {
           noteMarks={openNotes}
           onStoryLength={setStoryLength}
           onSounds={onSounds}
-          onPlaces={setPlaces}
           onAbilities={onAbilities}
           video={config.video.map((clip) => ({
             ...clip,
@@ -581,7 +569,6 @@ export function FilmPage() {
   const moreTabs = [
     { id: "references" as const, label: "References", count: references.data?.length ?? 0 },
     ...(film.data.hasBrief ? [{ id: "brief" as const, label: "Brief" }] : []),
-    ...(film.data.hasSheets ? [{ id: "sheets" as const, label: "Cast and places" }] : []),
   ];
   const shownTab = [...tabs, ...moreTabs].some((entry) => entry.id === tab) ? tab : "claude";
 
@@ -856,9 +843,6 @@ export function FilmPage() {
                 {shownTab === "references" && <ReferencesPanel filmId={film.data.id} />}
                 {shownTab === "brief" && film.data.hasBrief && (
                   <BriefPanel filmId={film.data.id} onClaude={() => setTab("claude")} />
-                )}
-                {shownTab === "sheets" && film.data.hasSheets && (
-                  <SheetsPanel filmId={film.data.id} places={places} />
                 )}
               </SideTabs>
             </div>

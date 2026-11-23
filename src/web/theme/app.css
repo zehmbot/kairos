@@ -2858,19 +2858,6 @@ video.asset-media {
   padding-block: 4px;
 }
 
-/* ---------- Sheets (Blocky): every character, pose, face, prop and place on a picture ---------- */
-
-.sheet-link {
-  display: block;
-}
-
-.sheet-image {
-  display: block;
-  width: 100%;
-  height: auto;
-  background: var(--bg);
-}
-
 /* ---------- Claude at work: the loading screen over the preview, the Claude tab ---------- */
 
 .claude-buddy {

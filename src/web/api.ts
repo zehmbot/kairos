@@ -1,6 +1,6 @@
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { CHECKS_HEADER, type FilmSound } from "../shared/film-protocol.ts";
+import type { FilmSound } from "../shared/film-protocol.ts";
 import {
   ApiErrorSchema,
   AssetSchema,
@@ -678,34 +678,6 @@ export function useSaveAudio(filmId: string) {
     mutationFn: (audio: AudioTrack[]) =>
       call(z.unknown(), `${filmUrl(filmId)}/audio`, sendJson("PUT", { audio })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.film(filmId) }),
-  });
-}
-
-/**
- * A sheet of a Blocky film (cast, poses, faces, props, places): the picture's address and the problems its checks
- * found. Under the film's key, so it is drawn again when the film's files change.
- */
-export function useSheet(filmId: string, name: string, place?: string) {
-  return useQuery({
-    queryKey: ["films", filmId, "sheet", name, place ?? ""],
-    queryFn: async () => {
-      const query = new URLSearchParams({ name, ...(place ? { place } : {}) });
-      const response = await fetch(`${filmUrl(filmId)}/sheet?${query}`);
-      if (!response.ok) {
-        const answer = (await response.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(answer?.message ?? `The hub answered ${response.status}.`);
-      }
-      const header = response.headers.get(CHECKS_HEADER);
-      let checks: string[] = [];
-      try {
-        checks = header ? (JSON.parse(decodeURIComponent(header)) as string[]) : [];
-      } catch {
-        checks = [];
-      }
-      return { url: URL.createObjectURL(await response.blob()), checks };
-    },
-    staleTime: 30_000,
-    retry: false,
   });
 }
 

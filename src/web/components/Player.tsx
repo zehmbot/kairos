@@ -44,8 +44,6 @@ interface PlayerProps {
   onStoryLength?: (length: number | null) => void;
   /** The effect sounds the film places, each time it loads (null when it doesn't say). */
   onSounds?: (sounds: FilmSound[] | null) => void;
-  /** The places the film's engine can show, each time it loads (null when it doesn't say). */
-  onPlaces?: (places: string[] | null) => void;
   /** What the film can do for an export (reframe itself, give its captions), once it has loaded. */
   onAbilities?: (abilities: FilmAbilities) => void;
   ref?: Ref<PlayerHandle>;
@@ -104,7 +102,6 @@ export function Player({
   timeline,
   onStoryLength,
   onSounds,
-  onPlaces,
   onAbilities,
   video = NO_CLIPS,
   ref,
@@ -112,7 +109,6 @@ export function Player({
   const player = useFilmPlayer({ src, fps, duration });
   useEffect(() => onStoryLength?.(player.length), [onStoryLength, player.length]);
   useEffect(() => onSounds?.(player.sounds), [onSounds, player.sounds]);
-  useEffect(() => onPlaces?.(player.places), [onPlaces, player.places]);
   useEffect(() => {
     if (player.abilities) onAbilities?.(player.abilities);
   }, [onAbilities, player.abilities]);

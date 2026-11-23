@@ -988,7 +988,7 @@ export function createEngine({ width: W, height: H, story, captions: showCaption
     get sounds() {
       return sounds;
     },
-    /** The places this engine can show (the Sheets tab lists them). */
+    /** The places this engine can show (the places sheet draws any of them). */
     places: PLACE_NAMES,
     /** The words the captions show, timed (after `ready`: the voices'): `[{ text, start, end }]`, for subtitles. */
     get captions() {

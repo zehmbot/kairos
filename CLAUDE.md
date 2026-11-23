@@ -110,9 +110,8 @@ cap and a range in `JOINTS`; `apply(pose)` clamps and reports what a pose asked 
 `sheet.html` + `blocky/sheet.js` draw the cast, poses, faces, props or a place on one 1920×1080 picture and leave
 the problems their checks found (unsized or mis-sized props, joints past their limits, parts off the body, doors,
 tables and seats at the wrong size) in `window.KAIROS_CHECKS`. The film server adds the bridge to a film's other
-top-level pages, `GET /api/films/:id/sheet` draws one with the camera (problems in `x-kairos-checks`), the film
-page's Cast and places tab (under More) shows them (`hasSheets`; its places come from the engine, `window.KAIROS_PLACES`, sent with
-`ready`), and Claude uses `kairos_sheet`. **The voice leads:** `blocky/voice.js`
+top-level pages, `GET /api/films/:id/sheet` draws one with the camera (problems in `x-kairos-checks`), and Claude
+uses `kairos_sheet` (`hasSheets`). Sheets are Claude's own checks: the film page doesn't show them. **The voice leads:** `blocky/voice.js`
 reads the film's voices while it loads (`kairos.json` clips, `voice/script.json`, `voice/lines.json`), and
 `blocky/timing.js` cuts the shots on the voice's real words (below). Captions show those words, and the speaker's
 mouth moves on them. The story's length goes to `window.KAIROS_LENGTH`: the bridge sends it with `ready`, the film
@@ -230,8 +229,8 @@ the middle of each (at most 36) and tiles them into sheets in `.kairos/reference
 Claude sees them with `kairos_references` (6 sheets per page), and the library with `kairos_assets` and
 `kairos_use_asset`.
 
-On the film page, the side column has tabs (Claude, Notes, Voice, Sound, and under More: References, Brief, Cast and
-places; the last one shown is remembered per film, and a film opened for the first time shows Claude). The header
+On the film page, the side column has tabs (Claude, Notes, Voice, Sound, and under More: References and Brief; the
+last one shown is remembered per film, and a film opened for the first time shows Claude). The header
 keeps Add and Render; Open Claude here, Open folder, Save as template and Delete film are in its More menu
 (`PixelMenu`). The drawing tools above the picture show with the Notes tab. On wide screens the page fills the window (`App.tsx` keeps `--main-h`) and both columns
 scroll by themselves, so a long side tab never pushes the timeline away. The video keeps its size. Files dropped anywhere on the page, or added with **Add**, go where they fit: dropped on the Sound or

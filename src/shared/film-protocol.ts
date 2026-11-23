@@ -43,11 +43,6 @@ export const FilmMessageSchema = z.discriminatedUnion("type", [
     length: z.number().positive().optional(),
     /** The effect sounds the film places (`window.KAIROS_SOUNDS`), when it says. */
     sounds: z.array(FilmSoundSchema).max(2000).optional(),
-    /** The places the film's engine can show (`window.KAIROS_PLACES`), when it says. */
-    places: z
-      .array(z.string().regex(/^[A-Za-z0-9_-]{1,40}$/))
-      .max(60)
-      .optional(),
     /** The film draws itself at any size it's asked (`window.KAIROS_RESHAPE`): it can go out in other shapes. */
     reshape: z.boolean().optional(),
     /** The film gives the captions it shows (`window.KAIROS_CAPTIONS`) and leaves them out when asked. */
