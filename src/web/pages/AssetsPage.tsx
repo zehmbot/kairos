@@ -42,6 +42,8 @@ export function AssetsPage() {
   const add = (files: File[]) =>
     uploads.send(files, (file) => `/api/assets?name=${encodeURIComponent(file.name)}`);
   const list = (assets.data ?? []).filter((asset) => filter === "all" || asset.kind === filter);
+  // An empty library shows Import files in its middle: then it's not in the header too (one main button).
+  const empty = assets.isSuccess && assets.data.length === 0;
 
   const importButton = (
     <FileButton accept={ACCEPT} onFiles={add} disabled={uploads.busy} variant="primary">
@@ -61,7 +63,7 @@ export function AssetsPage() {
       {!hasWorkspace ? (
         <PixelPanel title="Library">
           <p>
-            Your assets live in your workspace folder. Choose it on the{" "}
+            Your assets live in your films folder. Choose it on the{" "}
             <Link to="/films">Films page</Link> first.
           </p>
         </PixelPanel>
@@ -74,7 +76,7 @@ export function AssetsPage() {
                 <PixelButton variant="ghost" icon="folder" onClick={() => openFolder.mutate()}>
                   Folder
                 </PixelButton>
-                {importButton}
+                {!empty && importButton}
               </div>
             }
           >
@@ -82,7 +84,7 @@ export function AssetsPage() {
               <UploadStatus status={uploads.status} error={uploads.error} />
               {done && <Notice title="Added">{done}</Notice>}
               {assets.isError && <p className="field-error">{assets.error.message}</p>}
-              {assets.isSuccess && assets.data.length === 0 ? (
+              {empty ? (
                 <EmptyState icon="folder" title="No assets yet" actions={importButton}>
                   Drag files here, or import them: pictures, videos, sounds and fonts. Then use them
                   in any film.
@@ -207,6 +209,7 @@ function AssetCard({ asset, onUsed }: { asset: Asset; onUsed: (message: string) 
         ) : (
           <div className="note-actions">
             <PixelButton
+              variant="ghost"
               data-size="small"
               icon="plus"
               disabled={usable.length === 0}

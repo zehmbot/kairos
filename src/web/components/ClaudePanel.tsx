@@ -3,6 +3,7 @@ import type { ClaudeTurn } from "../../shared/types.ts";
 import { useAskClaude, useClaude, useFilmClaude, useStopClaude } from "../api.ts";
 import { claudeTitle, useFilmActivity } from "./ClaudeAtWork.tsx";
 import { ClaudeBuddy } from "./ClaudeBuddy.tsx";
+import { Hint } from "./InfoTip.tsx";
 import { PixelButton } from "./PixelButton.tsx";
 import { PixelPanel } from "./PixelPanel.tsx";
 
@@ -111,10 +112,9 @@ export function ClaudePanel({
                 }
               }}
             />
-            <p className="hint">
-              Claude works in the background, on your Claude plan, and remembers what it made. The
-              preview shows when it's done.
-            </p>
+            <Hint more="On your Claude plan. Claude remembers what it made, and the preview shows the change when it's done.">
+              Claude works in the background.
+            </Hint>
             <div className="claude-panel-actions">
               <PixelButton type="submit" disabled={!installed || busy || !text.trim()}>
                 Ask Claude

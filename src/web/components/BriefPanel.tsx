@@ -1,14 +1,20 @@
 import { useState } from "react";
-import { useBrief, useSaveBrief } from "../api.ts";
+import { useBrief, useFilmClaude, useSaveBrief } from "../api.ts";
 import { answersOf, firstMissing, initialAnswers } from "../brief.ts";
 import { BriefFields } from "./BriefFields.tsx";
 import { PixelButton } from "./PixelButton.tsx";
 import { PixelPanel } from "./PixelPanel.tsx";
 
-/** What the user asked for when they made the film, with Edit brief. Claude reads it as brief.md. */
-export function BriefPanel({ filmId }: { filmId: string }) {
+/**
+ * What you asked for when you made the film, with Edit brief. Claude reads it as brief.md. Until Claude has made
+ * the film, it points to the Claude tab's Make it from the brief.
+ */
+export function BriefPanel({ filmId, onClaude }: { filmId: string; onClaude: () => void }) {
   const brief = useBrief(filmId, true);
   const save = useSaveBrief(filmId);
+  const turns = useFilmClaude(filmId).data?.turns ?? [];
+  // Made from the brief, or changed by Claude since (the film exists).
+  const made = turns.some((turn) => turn.outcome === "done");
   const [editing, setEditing] = useState(false);
   const [values, setValues] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -81,8 +87,12 @@ export function BriefPanel({ filmId }: { filmId: string }) {
             ))}
           </dl>
           <p className="hint">
-            Made with the {data.templateName} template. Next: press Open Claude here and say "Make
-            this film from the brief." After editing the brief, ask Claude to update the film.
+            Made with the {data.templateName} template.{" "}
+            {made ? "After editing the brief, ask Claude in the " : "Next: in the "}
+            <button type="button" className="link-button" onClick={onClaude}>
+              Claude tab
+            </button>
+            {made ? " to update the film." : ", press Make it from the brief."}
           </p>
         </div>
       )}

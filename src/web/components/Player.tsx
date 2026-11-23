@@ -338,9 +338,6 @@ export function Player({
           {formatTimecode(t)}
           <span className="timecode-total"> / {formatTimecode(duration)}</span>
         </output>
-        <span className="frame-count">
-          f {frame + 1} / {total}
-        </span>
         {scene && <span className="px-tag">{scene.name}</span>}
       </div>
       {timeline?.({

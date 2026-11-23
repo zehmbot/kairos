@@ -73,7 +73,7 @@ export function TemplatesPage() {
       >
         {!hasWorkspace ? (
           <p>
-            Your templates live in your workspace folder. Choose it on the{" "}
+            Your templates live in your films folder. Choose it on the{" "}
             <Link to="/films">Films page</Link> first.
           </p>
         ) : templates.isPending ? (

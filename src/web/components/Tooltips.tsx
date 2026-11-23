@@ -5,6 +5,9 @@ import { placeTip, type TipPlace } from "../tooltip.ts";
 /** How long the pointer rests on a button before its name shows (ms). The keyboard shows it at once. */
 const WAIT = 350;
 
+/** Tips longer than this many letters are sentences. */
+const LONG = 48;
+
 interface Shown {
   text: string;
   anchor: Element;
@@ -98,6 +101,8 @@ export function Tooltips() {
       className="px-tip"
       role="tooltip"
       data-side={place?.side}
+      // A sentence (the rest of a hint) wraps, in the text font; a button's name stays on one line.
+      data-long={shown.text.length > LONG ? "" : undefined}
       style={
         place ? { left: place.left, top: place.top } : { left: 0, top: 0, visibility: "hidden" }
       }

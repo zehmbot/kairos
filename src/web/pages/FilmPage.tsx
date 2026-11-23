@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { talkSpans, voiceSpans } from "../../shared/duck.ts";
-import { exportSize, isReshaped, shapeOf, showingQuery, withQuery } from "../../shared/export.ts";
+import {
+  exportSize,
+  isReshaped,
+  shapeName,
+  shapeOf,
+  showingQuery,
+  withQuery,
+} from "../../shared/export.ts";
 import { type FilmAbilities, type FilmSound, NO_ABILITIES } from "../../shared/film-protocol.ts";
 import { mediaKindOf } from "../../shared/media.ts";
 import type { AudioTrack, FilmShape, Note } from "../../shared/types.ts";
@@ -34,7 +41,7 @@ import {
 } from "../components/AddToFilm.tsx";
 import { BackLink } from "../components/BackLink.tsx";
 import { BriefPanel } from "../components/BriefPanel.tsx";
-import { ClaudeAtWork, ClaudeEnded } from "../components/ClaudeAtWork.tsx";
+import { ClaudeAtWork, ClaudeEnded, useFilmActivity } from "../components/ClaudeAtWork.tsx";
 import { ClaudePanel } from "../components/ClaudePanel.tsx";
 import { DeleteFilmDialog } from "../components/DeleteFilmDialog.tsx";
 import { DropZone } from "../components/DropZone.tsx";
@@ -62,7 +69,7 @@ import { groupFiles, type Purpose, purposesFor } from "../filmAdd.ts";
 import { useHubEvent, useHubReconnect } from "../hubEvents.ts";
 import { filmFileUrl } from "../player/audioSync.ts";
 import { noteCovers } from "../player/marks.ts";
-import { formatLength, frameCount, timeOf } from "../player/time.ts";
+import { formatLength, timeOf } from "../player/time.ts";
 import { useNoteDraft } from "../player/useNoteDraft.ts";
 import { filmRender, jobStatus } from "../renderText.ts";
 import { useNow } from "../useNow.ts";
@@ -103,9 +110,25 @@ function useFilmTab(id: string): [SideTab, (tab: SideTab) => void] {
   return [tab, set];
 }
 
+/** How long a story length must hold before the film is fitted to it (a page that reloads says it again). */
+const FIT_AFTER_MS = 1500;
+
+/** The story length you went back from with Undo, per film: Kairos doesn't fit the film to it again. */
+const keptKey = (filmId: string) => `kairos.length-kept.${filmId}`;
+
+function readKept(filmId: string): number | null {
+  try {
+    const value = Number(localStorage.getItem(keptKey(filmId)));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * The story lasts longer or shorter than the film (a Blocky film follows its voices): one click fits the film, so
- * the end is never cut off in the video.
+ * A film that times itself (Blocky follows its voices) says how long its story lasts. When the film's length
+ * differs, Kairos fits it by itself and says so, with Undo; after Undo, one click fits it again. Nothing shows
+ * while Claude works on the film: the story is still changing.
  */
 function StoryLength({
   filmId,
@@ -117,9 +140,58 @@ function StoryLength({
   duration: number;
 }) {
   const change = useChangeFilm(filmId);
-  if (story === null) return null;
-  const fit = Math.round(story * 10) / 10;
-  if (Math.abs(fit - duration) < 0.05) return null;
+  const { mutate } = change;
+  const working = Boolean(useFilmActivity(filmId).activity);
+  const [kept, setKept] = useState(() => readKept(filmId));
+  const [fitted, setFitted] = useState<{ from: number; to: number } | null>(null);
+  const fit = story === null ? null : Math.round(story * 10) / 10;
+  const differs = fit !== null && Math.abs(fit - duration) >= 0.05;
+  const fitByItself = differs && !working && kept !== fit && !change.isPending && !change.error;
+
+  useEffect(() => {
+    if (!fitByItself || fit === null) return;
+    const timer = setTimeout(
+      () => mutate({ duration: fit }, { onSuccess: () => setFitted({ from: duration, to: fit }) }),
+      FIT_AFTER_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [fitByItself, fit, duration, mutate]);
+
+  if (working) return null;
+
+  if (fitted && !differs) {
+    const undo = () => {
+      // Kept first, so the film isn't fitted again the moment it's back.
+      setKept(fitted.to);
+      try {
+        localStorage.setItem(keptKey(filmId), String(fitted.to));
+      } catch {}
+      mutate({ duration: fitted.from }, { onSuccess: () => setFitted(null) });
+    };
+    return (
+      <div className="story-length" role="status">
+        <p>
+          The film now lasts {formatLength(fitted.to)}, as long as its story (it was{" "}
+          {formatLength(fitted.from)}).
+        </p>
+        <PixelButton
+          variant="ghost"
+          data-size="small"
+          icon="undo"
+          disabled={change.isPending}
+          onClick={undo}
+        >
+          Undo
+        </PixelButton>
+        <PixelButton variant="ghost" data-size="small" onClick={() => setFitted(null)}>
+          OK
+        </PixelButton>
+      </div>
+    );
+  }
+
+  // After Undo (or when fitting failed): one click fits it.
+  if (!differs || fit === null || (kept !== fit && !change.error)) return null;
   return (
     <div className="story-length" role="status">
       <p>
@@ -130,7 +202,7 @@ function StoryLength({
         variant="ghost"
         data-size="small"
         disabled={change.isPending}
-        onClick={() => change.mutate({ duration: fit })}
+        onClick={() => mutate({ duration: fit })}
       >
         Make it {formatLength(fit)}
       </PixelButton>
@@ -450,8 +522,11 @@ export function FilmPage() {
           ]}
         />
         <p className="hint preview-hint">
-          To change this film, ask Claude in the Claude tab, or press Open Claude here and say what
-          you want in the terminal. The preview updates every time Claude saves a file.
+          To change this film, ask Claude in the{" "}
+          <button type="button" className="link-button" onClick={() => setTab("claude")}>
+            Claude tab
+          </button>
+          . The preview updates every time Claude saves a file.
         </p>
       </div>
     );
@@ -504,22 +579,20 @@ export function FilmPage() {
           <BackLink to="/films" label="All films" />
           <div className="film-title-row">
             <h1>{config?.title ?? film.data.id}</h1>
-            {config && <span className="px-tag">{config.status}</span>}
             <p className="film-meta">
               {config ? (
                 <>
-                  {config.width} × {config.height} ·{" "}
+                  <span data-tip={`${config.width} × ${config.height}`}>{shapeName(config)}</span> ·{" "}
+                  {formatLength(config.duration)} ·{" "}
                   <button
                     type="button"
                     className="film-meta-button"
-                    title="Change the frame rate"
+                    data-tip="Change the frame rate"
                     onClick={() => setRateOpen(true)}
                   >
                     {config.fps} fps
                     <PixelIcon name="pen" size={16} />
-                  </button>{" "}
-                  · {formatLength(config.duration)} · {frameCount(config.duration, config.fps)}{" "}
-                  frames
+                  </button>
                 </>
               ) : (
                 path
@@ -606,7 +679,12 @@ export function FilmPage() {
           />
           {askClaude.isError && <p className="field-error">{askClaude.error.message}</p>}
           {config && (
-            <StoryLength filmId={film.data.id} story={storyLength} duration={config.duration} />
+            <StoryLength
+              key={film.data.id}
+              filmId={film.data.id}
+              story={storyLength}
+              duration={config.duration}
+            />
           )}
           {(savePicture.isPending || savePicture.data || savePicture.error) && (
             <p
@@ -741,7 +819,9 @@ export function FilmPage() {
                   />
                 )}
                 {shownTab === "references" && <ReferencesPanel filmId={film.data.id} />}
-                {shownTab === "brief" && film.data.hasBrief && <BriefPanel filmId={film.data.id} />}
+                {shownTab === "brief" && film.data.hasBrief && (
+                  <BriefPanel filmId={film.data.id} onClaude={() => setTab("claude")} />
+                )}
                 {shownTab === "sheets" && film.data.hasSheets && (
                   <SheetsPanel filmId={film.data.id} places={places} />
                 )}

@@ -89,6 +89,8 @@ Kairos' own are in `templates/`, the user's in `<workspace>/templates/`. New fil
 was answered. Save as template copies a film without `.kairos/`, `renders/`, hidden files and the brief, puts the
 title placeholders back in quoted script strings and `<title>`, and keeps the brief's form. Film cards show a
 frame from `.kairos/thumb.png` (`src/server/thumbnails.ts`), taken again when the film's top-level files change.
+`PictureKeeper` takes them ahead of time (films without one after start, a changed film once it has been quiet for
+20 s, never while Claude works on it or a render runs), and a card keeps its old picture until the new one loads.
 
 Kairos' `starter` (`BLANK_TEMPLATE_ID`) is the **blank film**: New film's "Blank film" choice, and the files a new
 template starts from. It is never shown as a template card. The **Templates page** edits only the user's own

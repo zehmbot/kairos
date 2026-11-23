@@ -5,7 +5,8 @@ import { PixelIcon } from "./PixelIcon.tsx";
 export function TopBar() {
   const health = useHealth();
   const state = health.isPending ? "checking" : health.isSuccess ? "online" : "offline";
-  const label = { checking: "Checking hub", online: "Hub online", offline: "Hub offline" }[state];
+  // Nothing to say while Kairos runs; a clear warning when it doesn't answer.
+  const label = { checking: "Starting...", online: null, offline: "Kairos isn't running" }[state];
 
   return (
     <header className="topbar">
@@ -14,10 +15,12 @@ export function TopBar() {
         <span className="logo-word">KAIROS</span>
       </Link>
       <div className="topbar-spacer" />
-      <output className="status" data-state={state}>
-        <span className="status-dot" />
-        {label}
-      </output>
+      {label && (
+        <output className="status" data-state={state}>
+          <span className="status-dot" />
+          {label}
+        </output>
+      )}
     </header>
   );
 }

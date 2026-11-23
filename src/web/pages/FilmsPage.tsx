@@ -68,7 +68,7 @@ export function FilmsPage() {
           </Notice>
         </PixelPanel>
       ) : !hasWorkspace ? (
-        <PixelPanel title="Set up your workspace">
+        <PixelPanel title="Choose your films folder">
           <div className="stack">
             <p>
               Kairos keeps all your films in one folder on this computer. Choose that folder, or

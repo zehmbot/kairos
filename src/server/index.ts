@@ -37,6 +37,7 @@ import { workspaceRoutes } from "./routes/workspace.ts";
 import { allowedHostsFor, requestGuard } from "./security.ts";
 import { claudeSkillsDir, Skills } from "./skills.ts";
 import { Studio } from "./studio.ts";
+import { PictureKeeper } from "./thumbnails.ts";
 import { acceptUploads } from "./uploads.ts";
 import { Writers } from "./writer.ts";
 
@@ -193,6 +194,27 @@ filmRoutes(app, studio, {
       ),
 });
 
+// Film card pictures, taken ahead of time so the Films page has them right away.
+const renderBusy = () =>
+  renderer
+    .jobs()
+    .some((job) => job.state === "queued" || job.state === "running" || job.state === "joining");
+const pictures = camera.browser
+  ? new PictureKeeper({
+      filmsDir: () => studio.filmsDir,
+      take: filmPicture({ studio, camera, filmServerUrl }),
+      busy: (filmId) => Boolean(activity.get(filmId)) || renderBusy(),
+    })
+  : null;
+if (pictures) {
+  studio.events.subscribe((event) => {
+    if (event.type === "films-changed") pictures.changed(event.ids);
+    if (event.type === "workspace-changed") void pictures.sweep();
+  });
+  // A little after start, when the hub has settled.
+  setTimeout(() => void pictures.sweep(), 15_000).unref();
+}
+
 if (existsSync(webDir)) {
   await app.register(fastifyStatic, { root: webDir });
   // Single-page app: unknown non-API paths get index.html so client routes work on reload.
@@ -247,6 +269,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     studio.close();
     activity.close();
+    pictures?.close();
     Promise.allSettled([
       jobs.close(),
       renderer.close(),

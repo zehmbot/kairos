@@ -124,6 +124,8 @@ export function useFilmPlayer({ src, fps, duration }: FilmPlayerOptions) {
     s.inflight = false;
     s.pending = s.frame;
     setLoading(true);
+    // The old page's story length no longer holds: the new page says its own with `ready`.
+    setLength(null);
     setPageError(null);
     setFrameError(null);
     post({ kairos: 1, type: "hello" });

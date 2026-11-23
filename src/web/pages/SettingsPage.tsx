@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   useCamera,
   useClaude,
@@ -12,34 +13,19 @@ import { PixelPanel } from "../components/PixelPanel.tsx";
 import { VoiceSettings } from "../components/VoiceSettings.tsx";
 import { WorkspacePicker } from "../components/WorkspacePicker.tsx";
 
+/** What you set up first (Claude, voices, your films folder), then the computer's details, folded away. */
 export function SettingsPage() {
-  const health = useHealth();
   const workspace = useWorkspace();
-  const camera = useCamera();
 
   return (
     <div className="page">
       <div className="page-head">
         <h1>Settings</h1>
-        <p>How Kairos runs on this computer.</p>
+        <p>Connect Claude, add your voice key, and choose where your films live.</p>
       </div>
-      <PixelPanel title="Hub">
-        {health.isSuccess ? (
-          <dl className="kv">
-            <dt>Status</dt>
-            <dd>Online</dd>
-            <dt>Version</dt>
-            <dd>{health.data.version}</dd>
-            <dt>Address</dt>
-            <dd>{health.data.url}</dd>
-            <dt>Mode</dt>
-            <dd>{health.data.dev ? "Development" : "Normal"}</dd>
-          </dl>
-        ) : (
-          <p>{health.isPending ? "Checking the hub..." : "The hub is not reachable."}</p>
-        )}
-      </PixelPanel>
-      <PixelPanel title="Workspace">
+      <ClaudePanel />
+      <VoiceSettings />
+      <PixelPanel title="Films folder">
         {workspace.data ? (
           <div className="stack">
             <p>The folder where Kairos keeps your films. Films already in it show up right away.</p>
@@ -49,35 +35,10 @@ export function SettingsPage() {
             />
           </div>
         ) : (
-          <p>{workspace.isPending ? "Checking..." : "The hub is not reachable."}</p>
+          <p>{workspace.isPending ? "Checking..." : "Kairos isn't running."}</p>
         )}
       </PixelPanel>
-      <PixelPanel title="Frame camera">
-        {camera.data?.browser ? (
-          <div className="stack">
-            <p>
-              Kairos takes the pictures of your notes with this browser, hidden in the background.
-            </p>
-            <dl className="kv">
-              <dt>Browser</dt>
-              <dd>{camera.data.browser.name}</dd>
-              <dt>Path</dt>
-              <dd>{camera.data.browser.path}</dd>
-            </dl>
-          </div>
-        ) : camera.data ? (
-          <Notice title="No browser found">
-            Kairos could not find Google Chrome or Microsoft Edge on this computer. Notes still
-            work, but without pictures. Install one of them (or set KAIROS_BROWSER to a browser's
-            path), then restart Kairos.
-          </Notice>
-        ) : (
-          <p>{camera.isPending ? "Checking..." : "The hub is not reachable."}</p>
-        )}
-      </PixelPanel>
-      <ExportPanel />
-      <VoiceSettings />
-      <ClaudePanel />
+      <ComputerPanel />
     </div>
   );
 }
@@ -107,9 +68,8 @@ function ClaudePanel() {
       {status?.cli ? (
         <div className="stack">
           <p>
-            Connect Kairos to Claude Code so Claude can read your notes with their pictures, look at
-            any frame to check its work, and mark notes fixed. This adds Kairos to Claude Code for
-            all your projects, and turns on the Kairos skills (see the Skills page).
+            Connect so Claude can read your notes, look at any frame and make your films. It also
+            turns on Kairos' guides for Claude (Skills page).
           </p>
           <dl className="kv">
             <dt>Claude Code</dt>
@@ -125,40 +85,93 @@ function ClaudePanel() {
           code.claude.com), then come back to this page.
         </Notice>
       ) : (
-        <p>{claude.isPending ? "Looking for Claude Code..." : "The hub is not reachable."}</p>
+        <p>{claude.isPending ? "Looking for Claude Code..." : "Kairos isn't running."}</p>
       )}
     </PixelPanel>
   );
 }
 
-/** ffmpeg and the encoders that work here. */
-function ExportPanel() {
+/**
+ * Kairos itself, the browser that takes pictures of frames and ffmpeg for videos: one line, and the details when
+ * you open it. A missing browser or ffmpeg shows even when it's closed.
+ */
+function ComputerPanel() {
+  const health = useHealth();
+  const camera = useCamera();
   const info = useExportInfo();
-  const data = info.data;
+  const [open, setOpen] = useState(false);
+  const browser = camera.data?.browser ?? null;
+  const ffmpeg = info.data?.ffmpeg ?? null;
+  const summary = [
+    health.data ? `Kairos ${health.data.version}` : null,
+    browser ? `${browser.name} for pictures` : null,
+    ffmpeg ? `ffmpeg ${ffmpeg.version.split("-")[0]} for videos` : null,
+  ].filter(Boolean);
+
   return (
-    <PixelPanel title="Video export">
-      {data?.ffmpeg ? (
-        <div className="stack">
-          <p>
-            Kairos makes videos with ffmpeg. Renders use the first encoder below that you allow.
-          </p>
+    <PixelPanel
+      title="This computer"
+      actions={
+        <PixelButton variant="ghost" onClick={() => setOpen((now) => !now)} aria-expanded={open}>
+          {open ? "Hide details" : "Details"}
+        </PixelButton>
+      }
+    >
+      <div className="stack">
+        {!health.isSuccess && !health.isPending && (
+          <Notice title="Kairos isn't running">
+            Start it again with npm start (or npm run dev), then reload this page.
+          </Notice>
+        )}
+        {camera.data && !browser && (
+          <Notice title="No browser found">
+            Kairos could not find Google Chrome or Microsoft Edge on this computer. Notes still
+            work, but without pictures. Install one of them (or set KAIROS_BROWSER to a browser's
+            path), then restart Kairos.
+          </Notice>
+        )}
+        {info.data && !ffmpeg && (
+          <Notice title="ffmpeg is missing">
+            Kairos uses ffmpeg to turn films into videos. Install it (on Windows: winget install
+            Gyan.FFmpeg, on macOS: brew install ffmpeg), then restart Kairos.
+          </Notice>
+        )}
+        {!open ? (
+          <p className="hint">{summary.length ? summary.join(" · ") : "Checking..."}</p>
+        ) : (
           <dl className="kv">
-            <dt>ffmpeg</dt>
-            <dd>Version {data.ffmpeg.version}</dd>
-            <dt>Path</dt>
-            <dd>{data.ffmpeg.path}</dd>
-            <dt>Encoders</dt>
-            <dd>{data.encoders.map((encoder) => encoder.name).join(", ") || "None work"}</dd>
+            {health.data && (
+              <>
+                <dt>Kairos</dt>
+                <dd>
+                  Version {health.data.version} · {health.data.url}
+                  {health.data.dev ? " · development" : ""}
+                </dd>
+              </>
+            )}
+            {browser && (
+              <>
+                <dt>Pictures</dt>
+                <dd>
+                  {browser.name}, hidden in the background: {browser.path}
+                </dd>
+              </>
+            )}
+            {ffmpeg && info.data && (
+              <>
+                <dt>Videos</dt>
+                <dd>
+                  ffmpeg {ffmpeg.version}: {ffmpeg.path}
+                </dd>
+                <dt>Encoders</dt>
+                <dd>
+                  {info.data.encoders.map((encoder) => encoder.name).join(", ") || "None work"}
+                </dd>
+              </>
+            )}
           </dl>
-        </div>
-      ) : data ? (
-        <Notice title="ffmpeg is missing">
-          Kairos uses ffmpeg to turn films into videos. Install it (on Windows: winget install
-          Gyan.FFmpeg, on macOS: brew install ffmpeg), then restart Kairos.
-        </Notice>
-      ) : (
-        <p>{info.isPending ? "Checking the video tools..." : "The hub is not reachable."}</p>
-      )}
+        )}
+      </div>
     </PixelPanel>
   );
 }

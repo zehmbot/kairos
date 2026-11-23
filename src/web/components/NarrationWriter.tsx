@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { NARRATION_LANGUAGES, type WriteNarration, type WriterState } from "../../shared/types.ts";
 import { useScript, useStartWriter, useStopWriter, useWriter } from "../api.ts";
+import { Hint } from "./InfoTip.tsx";
 import { PixelButton } from "./PixelButton.tsx";
 import { PixelPanel } from "./PixelPanel.tsx";
 
@@ -96,12 +97,11 @@ export function NarrationWriter({ filmId, hasKey }: { filmId: string; hasKey: bo
               write();
             }}
           >
-            <p className="hint">
-              Claude Code watches the film and writes what the voices say, fitted to each moment. It
-              runs in the background (about a minute, on your Claude plan) and never changes the
-              film.
-              {yours > 0 && ` Your own lines (${yours}) stay: Claude writes around them.`}
-            </p>
+            <Hint
+              more={`Claude watches the film and fits each line to its moment. It runs in the background (about a minute, on your Claude plan) and never changes the film.${yours > 0 ? ` Your own lines (${yours}) stay: Claude writes around them.` : ""}`}
+            >
+              Claude writes what the voices say.{yours > 0 && " Your own lines stay."}
+            </Hint>
             <div className="writer-grid">
               <label htmlFor={ids.style} className="field-label">
                 Style

@@ -3,6 +3,7 @@ import { exportSize, SHAPE_USES, SHORTS_MAX_SECONDS, shapeOf } from "../../share
 import { FILM_SHAPES, type FilmShape, type RenderQuality } from "../../shared/types.ts";
 import { useExportInfo, useStartRender } from "../api.ts";
 import { formatLength } from "../player/time.ts";
+import { Hint, InfoTip } from "./InfoTip.tsx";
 import { Notice } from "./Notice.tsx";
 import { PixelButton } from "./PixelButton.tsx";
 
@@ -114,10 +115,9 @@ export function RenderDialog({
         <h2 id={headingId} className="dialog-title">
           Render {title}
         </h2>
-        <p className="hint">
-          Kairos draws every frame and saves an MP4 video in the film's renders folder. You can keep
-          working while it renders.
-        </p>
+        <Hint more="Kairos draws every frame and saves an MP4 video in the film's renders folder. You'll find it on the Renders page.">
+          You can keep working while it renders.
+        </Hint>
 
         {info.isPending ? (
           <p>Checking the video tools...</p>
@@ -167,10 +167,9 @@ export function RenderDialog({
 
             {elsewhere &&
               (reshape ? (
-                <p className="hint">
-                  The film frames every shot again for this shape: nothing is cut off. It comes out
-                  at {out.width} × {out.height}.
-                </p>
+                <Hint more="The film frames every shot again for this shape: nothing is cut off.">
+                  Every shot is framed for {out.width} × {out.height}.
+                </Hint>
               ) : (
                 <fieldset className="choice-picker">
                   <legend className="field-label">
@@ -202,31 +201,36 @@ export function RenderDialog({
 
             <fieldset className="choice-picker">
               <legend className="field-label">Words</legend>
-              <label className="check-row">
-                <input
-                  type="checkbox"
-                  checked={words && subtitles}
-                  disabled={!words}
-                  onChange={(event) => setSubtitles(event.target.checked)}
-                />
-                <span>
-                  {words
-                    ? "A subtitles file (.srt) next to the video, from the words it says. YouTube and TikTok take it as captions viewers can turn on."
-                    : "A subtitles file needs words: this film has no voice with word timings yet."}
-                </span>
-              </label>
-              {captions && (
+              <div className="check-line">
                 <label className="check-row">
                   <input
                     type="checkbox"
-                    checked={inPicture}
-                    onChange={(event) => setInPicture(event.target.checked)}
+                    checked={words && subtitles}
+                    disabled={!words}
+                    onChange={(event) => setSubtitles(event.target.checked)}
                   />
-                  <span>
-                    Captions in the picture. Off: a clean picture, for when the platform shows the
-                    subtitles instead.
-                  </span>
+                  <span>A subtitles file (.srt)</span>
                 </label>
+                <InfoTip
+                  text={
+                    words
+                      ? "Saved next to the video, from the words it says. YouTube and TikTok take it as captions viewers can turn on."
+                      : "It needs words: this film has no voice with word timings yet."
+                  }
+                />
+              </div>
+              {captions && (
+                <div className="check-line">
+                  <label className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={inPicture}
+                      onChange={(event) => setInPicture(event.target.checked)}
+                    />
+                    <span>Captions in the picture</span>
+                  </label>
+                  <InfoTip text="Off: a clean picture, for when the platform shows the subtitles instead." />
+                </div>
               )}
             </fieldset>
 
@@ -249,17 +253,19 @@ export function RenderDialog({
               </div>
             </fieldset>
             {card ? (
-              <label className="check-row">
-                <input
-                  type="checkbox"
-                  checked={gpu}
-                  onChange={(event) => setGpu(event.target.checked)}
+              <div className="check-line">
+                <label className="check-row">
+                  <input
+                    type="checkbox"
+                    checked={gpu}
+                    onChange={(event) => setGpu(event.target.checked)}
+                  />
+                  <span>Use the graphics card</span>
+                </label>
+                <InfoTip
+                  text={`${card.name}. Fast, and films get their richest look. Off: the processor draws and encodes the video, slower, with a lighter look.`}
                 />
-                <span>
-                  Use the graphics card ({card.name}). Fast, and films get their richest look. Off:
-                  the processor draws and encodes the video, slower, with a lighter look.
-                </span>
-              </label>
+              </div>
             ) : (
               <p className="hint">No graphics card encoder found: the CPU encodes the video.</p>
             )}

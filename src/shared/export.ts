@@ -33,6 +33,12 @@ export function shapeOf({ width, height }: Size): FilmShape | null {
   return null;
 }
 
+/** A film's shape in one word (Wide, Tall, Square), or its size for any other shape ("1080 × 1350"). */
+export function shapeName(size: Size): string {
+  const shape = shapeOf(size);
+  return shape ? SHAPE_USES[shape].short : `${size.width} × ${size.height}`;
+}
+
 /** The size a film goes out at: its own when it already has that shape (or none is asked), else the shape's. */
 export function exportSize(film: Size, shape?: FilmShape | null): Size {
   if (!shape || shapeOf(film) === shape) return { width: film.width, height: film.height };
